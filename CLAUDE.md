@@ -11,6 +11,8 @@
 - `docs/decisions.md` — 아키텍처 의사결정 기록 (ADR). 선택지, 트레이드오프, 결정 근거
 - `docs/setup.md` — 개발 환경 셋업 (런타임, 의존성, 실행 방법)
 - `docs/forbidden-engine.md` — 금기어 판정 엔진 (3단계 파이프라인, 테스트 결과)
+- `docs/websocket-integration.md` — WebSocket 통합 (메시지 흐름, 게임 상태 모델)
+- `docs/phase2-client.md` — Phase 2 클라이언트 구현 기록 (R3F, 맵, 캐릭터, 시야)
 - `docs/progress.md` — 진행 상황 및 TODO 트래킹
 - `/docs` 디렉토리 내 추가되는 모든 .md 파일도 참조 대상
 
