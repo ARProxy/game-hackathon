@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from fastapi import WebSocket
 
+from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
 from app.game.session import session_manager
 from app.game.state import PlayerRole
@@ -164,12 +165,16 @@ class ConnectionManager:
             "source_answers": answers,
         })
 
+        # 라운드 데이터 생성 (프롭 배치, 미션)
+        round_data = generate_round(forbidden_words)
+
         # 게임 시작
         session = session_manager.get_or_create(room_id)
         session.setup_game(forbidden_words)
         await self.broadcast(room_id, {
             "type": "game_started",
             "state": session.state.to_dict(),
+            "round": round_to_dict(round_data),
         })
 
     async def _handle_start_game(

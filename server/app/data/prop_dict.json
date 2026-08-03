@@ -1,0 +1,106 @@
+{
+  "열쇠": {
+    "id": "key",
+    "name": "열쇠",
+    "tags": ["shiny", "small", "metal", "door-related", "holdable", "gold"],
+    "descriptions": ["반짝이는", "작은", "금속", "문을 열 때 쓰는", "손에 쥘 수 있는"],
+    "mesh": "key",
+    "color": "#FFD700",
+    "scale": 0.4,
+    "decoys": [
+      {"id": "coin", "name": "동전", "tags": ["shiny", "small", "metal", "round"], "color": "#C0C0C0", "mesh": "coin", "scale": 0.3},
+      {"id": "pin", "name": "핀", "tags": ["shiny", "small", "metal", "thin"], "color": "#B0B0B0", "mesh": "pin", "scale": 0.3}
+    ]
+  },
+  "커피": {
+    "id": "coffee",
+    "name": "커피",
+    "tags": ["brown", "warm", "drink", "cup", "round", "holdable"],
+    "descriptions": ["갈색", "따뜻한", "마시는 것", "컵에 담긴", "둥근"],
+    "mesh": "cup",
+    "color": "#6F4E37",
+    "scale": 0.4,
+    "decoys": [
+      {"id": "teacup", "name": "찻잔", "tags": ["warm", "drink", "cup", "round"], "color": "#8FBC8F", "mesh": "cup", "scale": 0.35},
+      {"id": "bottle", "name": "물병", "tags": ["drink", "tall", "round"], "color": "#87CEEB", "mesh": "cylinder", "scale": 0.35}
+    ]
+  },
+  "빨간": {
+    "id": "red_obj",
+    "name": "빨간 물건",
+    "tags": ["red", "bright", "colored", "noticeable"],
+    "descriptions": ["빨간", "눈에 띄는", "강렬한 색", "사과 색", "소방차 색"],
+    "mesh": "sphere",
+    "color": "#FF2020",
+    "scale": 0.4,
+    "decoys": [
+      {"id": "orange_obj", "name": "주황 물건", "tags": ["orange", "bright", "colored"], "color": "#FF8C00", "mesh": "sphere", "scale": 0.4},
+      {"id": "pink_obj", "name": "분홍 물건", "tags": ["pink", "bright", "colored"], "color": "#FF69B4", "mesh": "sphere", "scale": 0.4}
+    ]
+  },
+  "책": {
+    "id": "book",
+    "name": "책",
+    "tags": ["flat", "rectangular", "paper", "readable", "holdable"],
+    "descriptions": ["납작한", "네모난", "읽을 수 있는", "종이로 된"],
+    "mesh": "box",
+    "color": "#2E4057",
+    "scale": 0.4,
+    "decoys": [
+      {"id": "notebook", "name": "공책", "tags": ["flat", "rectangular", "paper"], "color": "#F5F5DC", "mesh": "box", "scale": 0.35},
+      {"id": "folder", "name": "폴더", "tags": ["flat", "rectangular", "holdable"], "color": "#4682B4", "mesh": "box", "scale": 0.35}
+    ]
+  },
+  "시계": {
+    "id": "clock",
+    "name": "시계",
+    "tags": ["round", "time", "ticking", "wall", "numbered"],
+    "descriptions": ["둥근", "시간을 알려주는", "째깍거리는", "숫자가 있는"],
+    "mesh": "clock",
+    "color": "#FFFFF0",
+    "scale": 0.5,
+    "decoys": [
+      {"id": "compass", "name": "나침반", "tags": ["round", "numbered", "small"], "color": "#CD853F", "mesh": "disc", "scale": 0.35},
+      {"id": "mirror", "name": "거울", "tags": ["round", "shiny", "reflective"], "color": "#E0E0E0", "mesh": "disc", "scale": 0.4}
+    ]
+  },
+  "우산": {
+    "id": "umbrella",
+    "name": "우산",
+    "tags": ["long", "rain", "holdable", "pointy", "foldable"],
+    "descriptions": ["긴", "비 올 때 쓰는", "접을 수 있는", "뾰족한"],
+    "mesh": "umbrella",
+    "color": "#4169E1",
+    "scale": 0.5,
+    "decoys": [
+      {"id": "stick", "name": "막대기", "tags": ["long", "thin", "holdable"], "color": "#8B4513", "mesh": "cylinder", "scale": 0.3},
+      {"id": "bat", "name": "방망이", "tags": ["long", "holdable", "thick"], "color": "#DEB887", "mesh": "cylinder", "scale": 0.35}
+    ]
+  },
+  "노트북": {
+    "id": "laptop",
+    "name": "노트북",
+    "tags": ["flat", "rectangular", "screen", "electronic", "foldable"],
+    "descriptions": ["납작한", "화면이 있는", "접을 수 있는", "전자기기"],
+    "mesh": "box",
+    "color": "#708090",
+    "scale": 0.5,
+    "decoys": [
+      {"id": "tablet", "name": "태블릿", "tags": ["flat", "screen", "electronic"], "color": "#2F4F4F", "mesh": "box", "scale": 0.4},
+      {"id": "board", "name": "보드", "tags": ["flat", "rectangular"], "color": "#F5F5F5", "mesh": "box", "scale": 0.45}
+    ]
+  },
+  "파란": {
+    "id": "blue_obj",
+    "name": "파란 물건",
+    "tags": ["blue", "bright", "colored", "cool"],
+    "descriptions": ["파란", "시원한 색", "하늘 색", "바다 색"],
+    "mesh": "sphere",
+    "color": "#1E90FF",
+    "scale": 0.4,
+    "decoys": [
+      {"id": "green_obj", "name": "초록 물건", "tags": ["green", "bright", "colored"], "color": "#32CD32", "mesh": "sphere", "scale": 0.4},
+      {"id": "purple_obj", "name": "보라 물건", "tags": ["purple", "bright", "colored"], "color": "#9370DB", "mesh": "sphere", "scale": 0.4}
+    ]
+  }
+}

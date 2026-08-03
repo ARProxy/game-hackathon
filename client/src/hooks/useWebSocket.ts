@@ -18,6 +18,7 @@ export default function useWebSocket() {
     setConnected,
     setPhase,
     setForbiddenWords,
+    setRoundData,
     freezePlayer,
     unfreezePlayer,
     addSubtitle,
@@ -58,8 +59,10 @@ export default function useWebSocket() {
         break
 
       case 'game_started':
-        // reveal이 끝나면 App에서 playing으로 전환하므로 여기서는 금기어만 동기화
         setForbiddenWords(data.state.forbidden_words)
+        if (data.round) {
+          setRoundData(data.round.props, data.round.missions, data.round.spell_words)
+        }
         break
 
       case 'freeze':
@@ -88,7 +91,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, setForbiddenWords, freezePlayer, unfreezePlayer, addSubtitle])
+  }, [setPhase, setForbiddenWords, setRoundData, freezePlayer, unfreezePlayer, addSubtitle])
 
   const send = useCallback((message: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

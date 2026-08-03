@@ -17,6 +17,26 @@ export interface PlayerState {
   position: { x: number; z: number }
 }
 
+export interface PropData {
+  prop_id: string
+  name: string
+  color: string
+  mesh: string
+  scale: number
+  position: { x: number; z: number }
+  is_real: boolean
+  zone: string
+  forbidden_word: string
+  tags: string[]
+  descriptions: string[]
+}
+
+export interface MissionData {
+  mission_id: number
+  forbidden_word: string
+  clue_word: string
+}
+
 export interface FreezeEvent {
   playerId: string
   matchedWord: string
@@ -37,6 +57,18 @@ interface GameStore {
   forbiddenWords: string[]
   players: Record<string, PlayerState>
 
+  // 라운드 데이터 (미션, 프롭)
+  props: PropData[]
+  missions: MissionData[]
+  spellWords: string[]
+  currentMissionIndex: number
+  acquiredClues: string[]
+
+  // 프롭 상호작용
+  nearbyPropId: string | null  // 플레이어 근처 프롭
+  inspectingPropId: string | null  // AI 동료가 조사 중인 프롭
+  removedPropIds: string[]  // 획득/제거된 프롭
+
   // 빙결 이벤트 (연출용)
   lastFreezeEvent: FreezeEvent | null
 
@@ -50,6 +82,12 @@ interface GameStore {
   setRoom: (roomId: string, playerId: string) => void
   setPhase: (phase: GamePhase) => void
   setForbiddenWords: (words: string[]) => void
+  setRoundData: (props: PropData[], missions: MissionData[], spellWords: string[]) => void
+  acquireClue: (clueWord: string) => void
+  advanceMission: () => void
+  setNearbyProp: (propId: string | null) => void
+  setInspectingProp: (propId: string | null) => void
+  removeProp: (propId: string) => void
   updatePlayer: (playerId: string, update: Partial<PlayerState>) => void
   freezePlayer: (event: FreezeEvent) => void
   unfreezePlayer: (playerId: string) => void
@@ -65,6 +103,14 @@ const initialState = {
   playerId: '',
   phase: 'lobby' as GamePhase,
   forbiddenWords: [],
+  props: [] as PropData[],
+  missions: [] as MissionData[],
+  spellWords: [] as string[],
+  currentMissionIndex: 0,
+  acquiredClues: [] as string[],
+  nearbyPropId: null as string | null,
+  inspectingPropId: null as string | null,
+  removedPropIds: [] as string[],
   players: {},
   lastFreezeEvent: null,
   isSpeaking: false,
@@ -82,6 +128,28 @@ export const useGameStore = create<GameStore>((set) => ({
   setPhase: (phase) => set({ phase }),
 
   setForbiddenWords: (words) => set({ forbiddenWords: words }),
+
+  setRoundData: (props, missions, spellWords) =>
+    set({ props, missions, spellWords, currentMissionIndex: 0, acquiredClues: [] }),
+
+  acquireClue: (clueWord) =>
+    set((state) => ({
+      acquiredClues: [...state.acquiredClues, clueWord],
+    })),
+
+  advanceMission: () =>
+    set((state) => ({
+      currentMissionIndex: state.currentMissionIndex + 1,
+    })),
+
+  setNearbyProp: (propId) => set({ nearbyPropId: propId }),
+
+  setInspectingProp: (propId) => set({ inspectingPropId: propId }),
+
+  removeProp: (propId) =>
+    set((state) => ({
+      removedPropIds: [...state.removedPropIds, propId],
+    })),
 
   updatePlayer: (playerId, update) =>
     set((state) => ({

@@ -16,6 +16,12 @@ export default function HUD() {
   const lastFreezeEvent = useGameStore((s) => s.lastFreezeEvent)
   const connected = useGameStore((s) => s.connected)
   const subtitles = useGameStore((s) => s.subtitles)
+  const nearbyPropId = useGameStore((s) => s.nearbyPropId)
+  const inspectingPropId = useGameStore((s) => s.inspectingPropId)
+  const missions = useGameStore((s) => s.missions)
+  const currentMissionIndex = useGameStore((s) => s.currentMissionIndex)
+  const acquiredClues = useGameStore((s) => s.acquiredClues)
+  const spellWords = useGameStore((s) => s.spellWords)
 
   return (
     <div style={{
@@ -70,7 +76,87 @@ export default function HUD() {
             </div>
           </div>
         )}
+
+        {/* 미션 진행 */}
+        {phase === 'playing' && missions.length > 0 && (
+          <div style={{
+            background: 'rgba(82, 229, 255, 0.1)',
+            border: '1px solid rgba(82, 229, 255, 0.3)',
+            borderRadius: 8,
+            padding: '8px 12px',
+          }}>
+            <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
+              미션 {Math.min(currentMissionIndex + 1, missions.length)} / {missions.length}
+            </div>
+            <div style={{ fontSize: 13 }}>
+              {currentMissionIndex < missions.length
+                ? '물건을 찾아 조사하세요'
+                : '단서를 모두 모았습니다!'}
+            </div>
+            {acquiredClues.length > 0 && (
+              <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
+                단서: {acquiredClues.map((c) => `"${c}"`).join(' ')}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 최종 주문 페이즈 */}
+        {phase === 'final_spell' && (
+          <div style={{
+            background: 'rgba(182, 255, 61, 0.15)',
+            border: '1px solid rgba(182, 255, 61, 0.4)',
+            borderRadius: 8,
+            padding: '8px 12px',
+          }}>
+            <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
+              최종 주문
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#B6FF3D' }}>
+              "{spellWords.join(' ')}"
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
+              Space를 누르고 주문을 외치세요!
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* E키 조사 힌트 — 프롭 근처일 때 */}
+      {phase === 'playing' && nearbyPropId && !inspectingPropId && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'rgba(0, 0, 0, 0.7)',
+          border: '1px solid rgba(82, 229, 255, 0.5)',
+          borderRadius: 8,
+          padding: '8px 16px',
+          fontSize: 14,
+          color: '#52E5FF',
+        }}>
+          E키로 조사
+        </div>
+      )}
+
+      {/* 조사 중 표시 */}
+      {inspectingPropId && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'rgba(0, 0, 0, 0.7)',
+          border: '1px solid rgba(182, 255, 61, 0.5)',
+          borderRadius: 8,
+          padding: '8px 16px',
+          fontSize: 14,
+          color: '#B6FF3D',
+        }}>
+          조사 중...
+        </div>
+      )}
 
       {/* 하단 중앙 — 마이크 + 자막 */}
       <div style={{
