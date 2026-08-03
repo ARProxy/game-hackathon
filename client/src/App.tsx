@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { Canvas } from '@react-three/fiber'
 import * as THREE from 'three'
 import Map from './game/Map'
@@ -6,15 +6,24 @@ import Structures from './game/Structures'
 import Player, { type PlayerHandle } from './game/Player'
 import CameraFollow from './game/CameraFollow'
 import PlayerLight from './game/PlayerLight'
+import HUD from './components/HUD'
+import { useGameStore } from './stores/gameStore'
+import useWebSocket from './hooks/useWebSocket'
+import useSpeech from './hooks/useSpeech'
 import './App.css'
 
 function Scene() {
   const playerRef = useRef<PlayerHandle>(null)
-  const groupRef = useRef<THREE.Group>(null)
+
+  const playerGroupRef = {
+    get current() {
+      return playerRef.current?.getGroup() ?? null
+    },
+  }
 
   return (
     <>
-      {/* 전역 조명 — 어둡게 (시야 밖은 거의 안 보임) */}
+      {/* 조명 — 전역은 어둡게, 플레이어 주변만 밝게 */}
       <ambientLight intensity={0.08} />
       <directionalLight position={[5, 10, 5]} intensity={0.15} />
 
@@ -22,31 +31,72 @@ function Scene() {
       <Structures />
       <Player ref={playerRef} position={[0, 0, 0]} />
 
-      <PlayerLight
-        targetRef={{
-          get current() {
-            return playerRef.current?.getGroup() ?? null
-          },
-        }}
-      />
+      <PlayerLight targetRef={playerGroupRef} />
+      <CameraFollow targetRef={playerGroupRef} />
 
-      <CameraFollow
-        targetRef={{
-          get current() {
-            return playerRef.current?.getGroup() ?? null
-          },
-        }}
-      />
-
-      {/* 축 헬퍼 (디버깅용) */}
       <axesHelper args={[5]} />
     </>
   )
 }
 
+function GameController() {
+  const { connect, send, disconnect } = useWebSocket()
+  const { phase, connected, setRoom } = useGameStore()
+
+  // 자동 연결
+  useEffect(() => {
+    const roomId = `solo-${Date.now()}`
+    const playerId = `player-${Math.random().toString(36).slice(2, 8)}`
+    setRoom(roomId, playerId)
+    connect(roomId, playerId)
+
+    return () => disconnect()
+  }, [])
+
+  // 연결 후 자동 게임 시작
+  useEffect(() => {
+    if (connected && phase === 'lobby') {
+      // MVP: 기본 금기어로 즉시 시작
+      send({
+        type: 'start_game',
+        payload: { forbidden_words: ['열쇠', '커피', '빨간'] },
+      })
+    }
+  }, [connected, phase, send])
+
+  // Push-to-Talk 음성 입력
+  useSpeech({
+    onStart: () => {
+      useGameStore.getState().setSpeaking(true)
+    },
+    onEnd: () => {
+      useGameStore.getState().setSpeaking(false)
+    },
+    onInterim: (transcript) => {
+      useGameStore.getState().setLastTranscript(transcript)
+      // interim은 자막 표시용, 서버에는 안 보냄
+    },
+    onFinal: (transcript) => {
+      useGameStore.getState().setLastTranscript(transcript)
+      useGameStore.getState().addSubtitle(
+        useGameStore.getState().playerId,
+        transcript,
+      )
+      // 서버에 전송 → 금기어 판정
+      send({
+        type: 'speech',
+        payload: { transcript, is_final: true },
+      })
+    },
+  })
+
+  return null
+}
+
 function App() {
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#07090D' }}>
+      <GameController />
       <Canvas
         orthographic
         camera={{
@@ -58,6 +108,7 @@ function App() {
       >
         <Scene />
       </Canvas>
+      <HUD />
     </div>
   )
 }
