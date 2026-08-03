@@ -6,6 +6,8 @@ import Structures from './game/Structures'
 import Player, { type PlayerHandle } from './game/Player'
 import CameraFollow from './game/CameraFollow'
 import PlayerLight from './game/PlayerLight'
+import Seeker from './game/Seeker'
+import Partner from './game/Partner'
 import HUD from './components/HUD'
 import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
@@ -30,6 +32,8 @@ function Scene() {
       <Map />
       <Structures />
       <Player ref={playerRef} position={[0, 0, 0]} />
+      <Partner playerRef={playerGroupRef} />
+      <Seeker />
 
       <PlayerLight targetRef={playerGroupRef} />
       <CameraFollow targetRef={playerGroupRef} />
