@@ -9,6 +9,8 @@
 - `docs/ai-tech.md` — AI 활용 기술 문서 (아키텍처, 기술 스택, AI 통합 방식)
 - `docs/local-ai-architecture.md` — 무과금 로컬 AI 아키텍처 (장비 구성, 실행 모드, STT/LLM 구성)
 - `docs/decisions.md` — 아키텍처 의사결정 기록 (ADR). 선택지, 트레이드오프, 결정 근거
+- `docs/setup.md` — 개발 환경 셋업 (런타임, 의존성, 실행 방법)
+- `docs/forbidden-engine.md` — 금기어 판정 엔진 (3단계 파이프라인, 테스트 결과)
 - `docs/progress.md` — 진행 상황 및 TODO 트래킹
 - `/docs` 디렉토리 내 추가되는 모든 .md 파일도 참조 대상
 
