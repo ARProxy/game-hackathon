@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from fastapi import WebSocket
 
+from app.ai.onboarding import extract_forbidden_words
 from app.game.session import session_manager
 from app.game.state import PlayerRole
 
@@ -55,6 +56,8 @@ class ConnectionManager:
             await self._handle_speech(room_id, player_id, payload)
         elif msg_type == "action":
             await self._handle_action(room_id, player_id, payload)
+        elif msg_type == "onboarding_complete":
+            await self._handle_onboarding(room_id, player_id, payload)
         elif msg_type == "start_game":
             await self._handle_start_game(room_id, player_id, payload)
         else:
@@ -147,6 +150,27 @@ class ConnectionManager:
                     "RESCUE: room=%s rescuer=%s target=%s",
                     room_id, player_id, target_id,
                 )
+
+    async def _handle_onboarding(
+        self, room_id: str, player_id: str, payload: dict
+    ) -> None:
+        answers = payload.get("answers", [])
+        forbidden_words = extract_forbidden_words(answers, count=3)
+
+        # 금기어 채집 결과를 클라이언트에 전달
+        await self.broadcast(room_id, {
+            "type": "forbidden_words_ready",
+            "forbidden_words": forbidden_words,
+            "source_answers": answers,
+        })
+
+        # 게임 시작
+        session = session_manager.get_or_create(room_id)
+        session.setup_game(forbidden_words)
+        await self.broadcast(room_id, {
+            "type": "game_started",
+            "state": session.state.to_dict(),
+        })
 
     async def _handle_start_game(
         self, room_id: str, player_id: str, payload: dict

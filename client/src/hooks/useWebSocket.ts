@@ -52,8 +52,13 @@ export default function useWebSocket() {
 
   const handleMessage = useCallback((data: any) => {
     switch (data.type) {
+      case 'forbidden_words_ready':
+        setForbiddenWords(data.forbidden_words)
+        setPhase('reveal')
+        break
+
       case 'game_started':
-        setPhase('playing')
+        // reveal이 끝나면 App에서 playing으로 전환하므로 여기서는 금기어만 동기화
         setForbiddenWords(data.state.forbidden_words)
         break
 

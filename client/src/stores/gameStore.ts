@@ -7,7 +7,7 @@
 
 import { create } from 'zustand'
 
-export type GamePhase = 'lobby' | 'onboarding' | 'playing' | 'final_spell' | 'result'
+export type GamePhase = 'lobby' | 'onboarding' | 'reveal' | 'playing' | 'final_spell' | 'result'
 export type PlayerStatus = 'alive' | 'frozen' | 'eliminated'
 
 export interface PlayerState {

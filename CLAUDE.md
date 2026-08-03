@@ -13,6 +13,7 @@
 - `docs/forbidden-engine.md` — 금기어 판정 엔진 (3단계 파이프라인, 테스트 결과)
 - `docs/websocket-integration.md` — WebSocket 통합 (메시지 흐름, 게임 상태 모델)
 - `docs/phase2-client.md` — Phase 2 클라이언트 구현 기록 (R3F, 맵, 캐릭터, 시야)
+- `docs/phase3-gameloop.md` — Phase 3 게임 루프 연결 (음성, 빙결, 술래, 동료, HUD)
 - `docs/progress.md` — 진행 상황 및 TODO 트래킹
 - `/docs` 디렉토리 내 추가되는 모든 .md 파일도 참조 대상
 
