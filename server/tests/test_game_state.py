@@ -1,0 +1,112 @@
+"""게임 상태 모델 테스트"""
+
+import time
+
+import pytest
+
+from app.game.state import (
+    GamePhase,
+    GameState,
+    MissionClue,
+    Player,
+    PlayerRole,
+    PlayerStatus,
+    Position,
+)
+
+
+class TestPlayer:
+    def test_initial_state(self):
+        p = Player(player_id="p1", role=PlayerRole.HUMAN)
+        assert p.status == PlayerStatus.ALIVE
+        assert not p.is_frozen
+        assert p.frozen_at is None
+
+    def test_freeze(self):
+        p = Player(player_id="p1", role=PlayerRole.HUMAN)
+        p.freeze()
+        assert p.is_frozen
+        assert p.status == PlayerStatus.FROZEN
+        assert p.frozen_at is not None
+
+    def test_unfreeze(self):
+        p = Player(player_id="p1", role=PlayerRole.HUMAN)
+        p.freeze()
+        p.unfreeze()
+        assert not p.is_frozen
+        assert p.status == PlayerStatus.ALIVE
+        assert p.frozen_at is None
+
+    def test_eliminate(self):
+        p = Player(player_id="p1", role=PlayerRole.HUMAN)
+        p.eliminate()
+        assert p.status == PlayerStatus.ELIMINATED
+        assert not p.is_frozen
+
+
+class TestGameState:
+    @pytest.fixture
+    def state(self):
+        s = GameState(room_id="test")
+        s.add_player("human1", PlayerRole.HUMAN)
+        s.add_player("ai1", PlayerRole.AI_PARTNER)
+        s.add_player("seeker1", PlayerRole.SEEKER)
+        return s
+
+    def test_add_player(self, state):
+        assert len(state.players) == 3
+        assert state.get_player("human1").role == PlayerRole.HUMAN
+        assert state.get_player("seeker1").role == PlayerRole.SEEKER
+
+    def test_get_nonexistent_player(self, state):
+        assert state.get_player("nobody") is None
+
+    def test_alive_non_seeker_count(self, state):
+        assert state.alive_non_seeker_count() == 2  # human1 + ai1
+
+    def test_alive_count_after_freeze(self, state):
+        state.get_player("human1").freeze()
+        assert state.alive_non_seeker_count() == 1  # ai1만
+
+    def test_all_frozen_false(self, state):
+        assert not state.all_non_seeker_frozen_or_eliminated()
+
+    def test_all_frozen_true(self, state):
+        state.get_player("human1").freeze()
+        state.get_player("ai1").freeze()
+        assert state.all_non_seeker_frozen_or_eliminated()
+
+    def test_all_eliminated_also_counts(self, state):
+        state.get_player("human1").eliminate()
+        state.get_player("ai1").eliminate()
+        assert state.all_non_seeker_frozen_or_eliminated()
+
+    def test_mixed_frozen_eliminated(self, state):
+        state.get_player("human1").freeze()
+        state.get_player("ai1").eliminate()
+        assert state.all_non_seeker_frozen_or_eliminated()
+
+    def test_freeze_timeout_none_expired(self, state):
+        state.get_player("human1").freeze()
+        assert state.check_freeze_timeout() == []
+
+    def test_freeze_timeout_expired(self, state):
+        p = state.get_player("human1")
+        p.freeze()
+        p.frozen_at = time.time() - 31  # 31초 전에 빙결
+        timed_out = state.check_freeze_timeout()
+        assert "human1" in timed_out
+
+    def test_to_dict(self, state):
+        state.forbidden_words = ["열쇠", "커피"]
+        state.phase = GamePhase.PLAYING
+        d = state.to_dict()
+        assert d["room_id"] == "test"
+        assert d["phase"] == "playing"
+        assert d["forbidden_words"] == ["열쇠", "커피"]
+        assert "human1" in d["players"]
+        assert d["players"]["human1"]["role"] == "human"
+
+    def test_initial_phase_is_lobby(self):
+        s = GameState(room_id="new")
+        assert s.phase == GamePhase.LOBBY

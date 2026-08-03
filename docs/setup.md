@@ -93,9 +93,44 @@ cd server
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
 # http://localhost:8000/health → {"status": "ok"}
 ```
+
+> **주의**: `--reload-dir app`을 반드시 지정할 것. 없으면 `.venv` 내부 파일 변경까지 감시하여 서버가 무한 재시작된다.
+
+### 수동 WebSocket 테스트
+
+터미널 2개로 테스트:
+
+**터미널 1 — 서버:**
+```bash
+cd server && source .venv/bin/activate
+uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
+```
+
+**터미널 2 — WebSocket 클라이언트:**
+```bash
+cd server && source .venv/bin/activate
+python -m websockets ws://localhost:8000/ws/test/player1
+```
+
+접속 후 아래 JSON을 한 줄씩 입력 (중괄호 2개 닫기 주의):
+
+```json
+{"type":"start_game","payload":{"forbidden_words":["열쇠","커피","빨간"]}}
+```
+→ `game_started` 응답
+
+```json
+{"type":"speech","payload":{"transcript":"반짝이는 물건 확인해줘","is_final":true}}
+```
+→ `speech_safe` 응답
+
+```json
+{"type":"speech","payload":{"transcript":"열쇠를 가져와","is_final":true}}
+```
+→ `freeze` + `game_over` 응답
 
 ---
 
