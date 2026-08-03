@@ -12,6 +12,7 @@ import Partner from './game/Partner'
 import HUD from './components/HUD'
 import Onboarding from './components/Onboarding'
 import ForbiddenReveal from './components/ForbiddenReveal'
+import ResultScreen from './components/ResultScreen'
 import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
@@ -99,6 +100,12 @@ function GameController() {
           type: 'speech',
           payload: { transcript, is_final: true },
         })
+      } else if (currentPhase === 'final_spell') {
+        // 주문 판정 — 서버에 전송
+        send({
+          type: 'spell',
+          payload: { spell_text: transcript },
+        })
       }
     },
   })
@@ -182,6 +189,7 @@ function App() {
         <Scene />
       </Canvas>
       <HUD />
+      <ResultScreen />
     </div>
   )
 }

@@ -21,6 +21,7 @@ class GameSession:
     def __init__(self, room_id: str) -> None:
         self.state = GameState(room_id=room_id)
         self.engine = ForbiddenWordEngine(DEFAULT_FORBIDDEN_WORDS)
+        self.spell_words: list[str] = []
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""

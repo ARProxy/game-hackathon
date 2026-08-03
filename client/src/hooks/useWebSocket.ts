@@ -84,6 +84,15 @@ export default function useWebSocket() {
         addSubtitle(data.player_id, data.transcript)
         break
 
+      case 'spell_success':
+        setPhase('result')
+        addSubtitle('system', '주문 성공! 탈출구가 열립니다!')
+        break
+
+      case 'spell_failed':
+        addSubtitle('system', `주문이 달라요! 빠진 단서: ${data.missing.join(', ')}`)
+        break
+
       case 'game_over':
         setPhase('result')
         break

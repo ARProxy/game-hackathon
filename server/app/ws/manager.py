@@ -8,6 +8,7 @@ from fastapi import WebSocket
 
 from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
+from app.ai.spell import check_spell
 from app.game.session import session_manager
 from app.game.state import PlayerRole
 
@@ -59,6 +60,8 @@ class ConnectionManager:
             await self._handle_action(room_id, player_id, payload)
         elif msg_type == "onboarding_complete":
             await self._handle_onboarding(room_id, player_id, payload)
+        elif msg_type == "spell":
+            await self._handle_spell(room_id, player_id, payload)
         elif msg_type == "start_game":
             await self._handle_start_game(room_id, player_id, payload)
         else:
@@ -171,11 +174,35 @@ class ConnectionManager:
         # 게임 시작
         session = session_manager.get_or_create(room_id)
         session.setup_game(forbidden_words)
+        session.spell_words = round_data.spell_words
         await self.broadcast(room_id, {
             "type": "game_started",
             "state": session.state.to_dict(),
             "round": round_to_dict(round_data),
         })
+
+    async def _handle_spell(
+        self, room_id: str, player_id: str, payload: dict
+    ) -> None:
+        spell_text = payload.get("spell_text", "")
+        session = session_manager.get_or_create(room_id)
+
+        result = check_spell(spell_text, session.spell_words)
+
+        if result["success"]:
+            await self.broadcast(room_id, {
+                "type": "spell_success",
+                "player_id": player_id,
+                "matched": result["matched"],
+                "transcript": result["transcript"],
+            })
+        else:
+            await self.send_to(room_id, player_id, {
+                "type": "spell_failed",
+                "matched": result["matched"],
+                "missing": result["missing"],
+                "transcript": result["transcript"],
+            })
 
     async def _handle_start_game(
         self, room_id: str, player_id: str, payload: dict
