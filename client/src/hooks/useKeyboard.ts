@@ -10,18 +10,28 @@ export default function useKeyboard() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.matches('input, textarea, [contenteditable="true"]')) {
+        keys.current.clear()
+        return
+      }
       keys.current.add(e.code)
     }
     const onKeyUp = (e: KeyboardEvent) => {
       keys.current.delete(e.code)
     }
+    const clearKeys = () => keys.current.clear()
 
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', clearKeys)
+    document.addEventListener('focusin', clearKeys)
 
     return () => {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', clearKeys)
+      document.removeEventListener('focusin', clearKeys)
     }
   }, [])
 

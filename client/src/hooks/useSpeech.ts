@@ -86,6 +86,8 @@ export default function useSpeech({
   // Q키 Push-to-Talk
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.matches('input, textarea, [contenteditable="true"]')) return
       if (e.code === 'KeyQ' && !e.repeat) {
         startListening()
       }

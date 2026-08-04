@@ -6,7 +6,131 @@
  * - 빙결 알림
  */
 
-import { useGameStore } from '../stores/gameStore'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useGameStore, type GamePhase } from '../stores/gameStore'
+import { sendGameMessage } from '../hooks/useWebSocket'
+
+function TextSpeechFallback({ phase, connected }: { phase: GamePhase; connected: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+  const available = phase === 'playing' || phase === 'final_spell'
+
+  const close = () => {
+    setOpen(false)
+    setText('')
+  }
+
+  const openInput = useCallback(() => {
+    if (!available) return
+    if (document.pointerLockElement) void document.exitPointerLock()
+    setOpen(true)
+  }, [available])
+
+  useEffect(() => {
+    if (!available) close()
+  }, [available])
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus()
+  }, [open])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const isEditable = target?.matches('input, textarea, [contenteditable="true"]')
+      if (!open && available && event.key === 'Enter' && !isEditable) {
+        event.preventDefault()
+        openInput()
+      } else if (open && event.key === 'Escape') {
+        event.preventDefault()
+        close()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [available, open, openInput])
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    const transcript = text.trim()
+    if (!transcript || !connected) return
+
+    useGameStore.getState().setLastTranscript(transcript)
+    if (phase === 'playing') {
+      useGameStore.getState().addSubtitle(useGameStore.getState().playerId, transcript)
+      sendGameMessage({ type: 'speech', payload: { transcript, is_final: true } })
+    } else if (phase === 'final_spell') {
+      sendGameMessage({ type: 'spell', payload: { spell_text: transcript } })
+    }
+    close()
+  }
+
+  if (!available) return null
+
+  return open ? (
+    <form onSubmit={submit} style={{
+      display: 'flex',
+      gap: 8,
+      width: 'min(560px, calc(100vw - 32px))',
+      pointerEvents: 'auto',
+    }}>
+      <input
+        ref={inputRef}
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder={phase === 'final_spell' ? '최종 주문을 입력하세요' : '말할 내용을 입력하세요'}
+        aria-label={phase === 'final_spell' ? '최종 주문 입력' : '텍스트 발화 입력'}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          border: '1px solid rgba(82, 229, 255, 0.7)',
+          borderRadius: 10,
+          background: 'rgba(7, 9, 13, 0.94)',
+          color: 'white',
+          padding: '11px 13px',
+          fontSize: 16,
+          outline: 'none',
+        }}
+      />
+      <button type="submit" disabled={!text.trim() || !connected} style={{
+        border: 0,
+        borderRadius: 10,
+        padding: '0 18px',
+        background: '#52E5FF',
+        color: '#071016',
+        fontWeight: 800,
+        cursor: 'pointer',
+        opacity: !text.trim() || !connected ? 0.45 : 1,
+      }}>
+        전송
+      </button>
+      <button type="button" onClick={close} aria-label="텍스트 입력 취소" style={{
+        border: '1px solid rgba(255,255,255,0.25)',
+        borderRadius: 10,
+        padding: '0 13px',
+        background: 'rgba(255,255,255,0.08)',
+        color: 'white',
+        cursor: 'pointer',
+      }}>
+        취소
+      </button>
+    </form>
+  ) : (
+    <button type="button" onClick={openInput} style={{
+      pointerEvents: 'auto',
+      border: '1px solid rgba(255,255,255,0.3)',
+      borderRadius: 18,
+      background: 'rgba(7, 9, 13, 0.82)',
+      color: 'white',
+      padding: '7px 14px',
+      fontSize: 12,
+      cursor: 'pointer',
+    }}>
+      ⌨ {phase === 'final_spell' ? '주문 입력' : '텍스트로 말하기'} <span style={{ opacity: 0.55 }}>Enter</span>
+    </button>
+  )
+}
 
 export default function HUD() {
   const phase = useGameStore((s) => s.phase)
@@ -226,6 +350,8 @@ export default function HUD() {
         }}>
           {isSpeaking ? '🎤 듣는 중...' : 'Q를 누르고 말하세요'}
         </div>
+
+        <TextSpeechFallback phase={phase} connected={connected} />
       </div>
 
       {/* 빙결 알림 — 화면 중앙 */}
