@@ -346,6 +346,7 @@ export default function HUD() {
                       “{missions[currentMissionIndex]?.forbidden_word}” 이름은 절대 말하지 마세요.
                     </strong>
                     <br />외형이나 쓰임새 특징을 2개 이상 조합해 동료에게 설명하세요.
+                    <br /><span style={{ color: '#FF8BAD' }}>말할 때마다 술래가 현재 위치를 듣습니다.</span>
                   </>
                 : '단서를 모두 모았습니다!'}
             </div>
