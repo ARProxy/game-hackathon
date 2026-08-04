@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 
 from app.ai.forbidden import ForbiddenWordEngine
 from app.ai.mission import Mission, RoundData
+from app.game.authority import MovementSample
 from app.game.state import GamePhase, GameState, PlayerRole
 
 logger = logging.getLogger(__name__)
@@ -24,6 +26,11 @@ GATE_POSITIONS: dict[str, dict[str, float]] = {
     "gate_main": {"x": 38.5, "z": 27.5},
     "gate_gym": {"x": 38.0, "z": -22.5},
 }
+ROLE_SPAWNS: dict[PlayerRole, tuple[float, float]] = {
+    PlayerRole.HUMAN: (-9.8, -22.0),
+    PlayerRole.AI_PARTNER: (-16.0, -2.0),
+    PlayerRole.SEEKER: (26.0, -27.0),
+}
 
 
 class GameSession:
@@ -36,6 +43,7 @@ class GameSession:
         self.inspected_prop_ids: set[str] = set()
         self.active_gate_id = ""
         self.gate_arrived_player_ids: set[str] = set()
+        self.position_samples: dict[str, MovementSample] = {}
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
@@ -53,6 +61,12 @@ class GameSession:
             self.state.add_player(DEFAULT_AI_PARTNER_ID, PlayerRole.AI_PARTNER)
         if self.state.get_player(DEFAULT_SEEKER_ID) is None:
             self.state.add_player(DEFAULT_SEEKER_ID, PlayerRole.SEEKER)
+        now = time.monotonic()
+        for player in self.state.players.values():
+            x, z = ROLE_SPAWNS[player.role]
+            player.position.x = x
+            player.position.z = z
+            self.position_samples[player.player_id] = MovementSample(x, z, now)
         self.state.forbidden_words = words
         self.engine.update_words(words)
         self.state.phase = GamePhase.PLAYING

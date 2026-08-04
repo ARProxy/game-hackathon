@@ -7,6 +7,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.game.authority import MovementSample
+
+
+def allow_elapsed_movement(session, player_id: str, seconds: float = 20.0) -> None:
+    sample = session.position_samples[player_id]
+    session.position_samples[player_id] = MovementSample(
+        sample.x, sample.z, sample.timestamp - seconds
+    )
 from app.game.state import GamePhase
 
 
@@ -47,7 +55,7 @@ class TestSpeechJudgment:
             ping = ws.receive_json()
             data = ws.receive_json()
             assert ping["type"] == "sound_ping"
-            assert ping["position"] == {"x": 0.0, "z": 0.0}
+            assert ping["position"] == {"x": -9.8, "z": -22.0}
             assert data["type"] == "speech_safe"
             assert data["transcript"] == "반짝이는 물건 확인해줘"
 
@@ -56,7 +64,7 @@ class TestSpeechJudgment:
             self._start_game(ws)
             ws.send_json({
                 "type": "action",
-                "payload": {"action_type": "move", "x": 8.5, "z": -4.25},
+                "payload": {"action_type": "move", "x": -9.3, "z": -21.7},
             })
             ws.send_json({
                 "type": "speech",
@@ -68,7 +76,7 @@ class TestSpeechJudgment:
             assert ping == {
                 "type": "sound_ping",
                 "player_id": "player1",
-                "position": {"x": 8.5, "z": -4.25},
+                "position": {"x": -9.3, "z": -21.7},
             }
             assert judgment["type"] == "speech_safe"
 
@@ -133,15 +141,43 @@ class TestActions:
             self._start_game(ws)
             ws.send_json({
                 "type": "action",
-                "payload": {"action_type": "move", "x": 5.0, "z": 3.0},
+                "payload": {"action_type": "move", "x": -9.3, "z": -21.8},
             })
             # 단일 플레이어는 exclude 되므로 broadcast 안 옴
             # 위치가 서버에 반영됐는지는 다른 플레이어가 확인해야 함
             # 여기서는 에러 없이 처리되는지만 확인
 
+    def test_move_rejects_instant_teleport_and_keeps_server_position(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/move-speed/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("move-speed")
+            player = session.state.get_player("player1")
+            assert player is not None
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "move", "x": 40.0, "z": 40.0},
+            })
+            assert ws.receive_json() == {
+                "type": "action_rejected",
+                "action_type": "move",
+                "reason": "implausible_movement",
+            }
+            assert (player.position.x, player.position.z) == (-9.8, -22.0)
+
     def test_ai_partner_can_rescue_human(self, client):
+        from app.game.session import session_manager
+
         with client.websocket_connect("/ws/room8/player1") as ws:
             self._start_game(ws)
+            session = session_manager.get_or_create("room8")
+            player = session.state.get_player("player1")
+            partner = session.state.get_player("partner")
+            assert player is not None and partner is not None
+            partner.position.x = player.position.x
+            partner.position.z = player.position.z
             ws.send_json({
                 "type": "speech",
                 "payload": {"transcript": "열쇠", "is_final": True},
@@ -192,15 +228,6 @@ class TestActions:
             ws.send_json({
                 "type": "action",
                 "payload": {
-                    "action_type": "actor_move",
-                    "actor_id": "partner",
-                    "x": 20.0,
-                    "z": 20.0,
-                },
-            })
-            ws.send_json({
-                "type": "action",
-                "payload": {
                     "action_type": "rescue",
                     "actor_id": "partner",
                     "target_id": "player1",
@@ -214,15 +241,10 @@ class TestActions:
             assert player.is_frozen
 
             # 다음 위치 동기화 뒤 같은 구조 요청을 재시도하면 정상 복구된다.
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "actor_move",
-                    "actor_id": "partner",
-                    "x": player.position.x,
-                    "z": player.position.z,
-                },
-            })
+            partner = session.state.get_player("partner")
+            assert partner is not None
+            partner.position.x = player.position.x
+            partner.position.z = player.position.z
             ws.send_json({
                 "type": "action",
                 "payload": {
@@ -235,8 +257,19 @@ class TestActions:
             assert player.status.value == "alive"
 
     def test_trap_freezes_at_reported_position(self, client):
+        from app.game.authority import MovementSample
+        from app.game.session import session_manager
+
         with client.websocket_connect("/ws/room9/player1") as ws:
             self._start_game(ws)
+            session = session_manager.get_or_create("room9")
+            player = session.state.get_player("player1")
+            assert player is not None
+            player.position.x = 7.5
+            player.position.z = -2.25
+            session.position_samples["player1"] = MovementSample(
+                7.5, -2.25, session.position_samples["player1"].timestamp
+            )
             ws.send_json({
                 "type": "action",
                 "payload": {
@@ -253,8 +286,16 @@ class TestActions:
             assert frozen["position"] == {"x": 7.5, "z": -2.25}
 
     def test_seeker_catch_eliminates_human_and_ends_game(self, client):
+        from app.game.session import session_manager
+
         with client.websocket_connect("/ws/room10/player1") as ws:
             self._start_game(ws)
+            session = session_manager.get_or_create("room10")
+            player = session.state.get_player("player1")
+            seeker = session.state.get_player("seeker")
+            assert player is not None and seeker is not None
+            seeker.position.x = player.position.x
+            seeker.position.z = player.position.z
             ws.send_json({
                 "type": "action",
                 "payload": {"action_type": "seeker_catch"},
@@ -271,8 +312,6 @@ class TestActions:
                 "type": "game_over",
                 "reason": "caught_by_seeker",
             }
-            from app.game.session import session_manager
-
             state = session_manager.get_or_create("room10").state
             assert state.get_player("player1").status.value == "eliminated"
             assert state.phase.value == "result"
@@ -282,15 +321,6 @@ class TestActions:
 
         with client.websocket_connect("/ws/catch-authority/player1") as ws:
             self._start_game(ws)
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "actor_move",
-                    "actor_id": "seeker",
-                    "x": 30.0,
-                    "z": 30.0,
-                },
-            })
             ws.send_json({
                 "type": "action",
                 "payload": {"action_type": "seeker_catch"},
@@ -303,6 +333,29 @@ class TestActions:
             }
             player = session_manager.get_or_create("catch-authority").state.get_player("player1")
             assert player is not None
+            assert player.status.value == "alive"
+
+    def test_seeker_catch_rejects_contact_through_wall(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/catch-wall/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("catch-wall")
+            player = session.state.get_player("player1")
+            seeker = session.state.get_player("seeker")
+            assert player is not None and seeker is not None
+            player.position.x, player.position.z = 0.0, -24.9
+            seeker.position.x, seeker.position.z = 0.0, -25.9
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "seeker_catch"},
+            })
+            assert ws.receive_json() == {
+                "type": "action_rejected",
+                "action_type": "seeker_catch",
+                "reason": "invalid_seeker_contact",
+            }
             assert player.status.value == "alive"
 
     def test_actor_move_rejects_human_role_spoof(self, client):
@@ -367,6 +420,7 @@ class TestEscapeFlow:
             session.spell_words = ["파란", "하늘", "별"]
             session.state.phase = GamePhase.FINAL_SPELL
             gate = session.active_gate_payload()
+            allow_elapsed_movement(session, "player1")
 
             ws.send_json({
                 "type": "action",
@@ -496,6 +550,7 @@ class TestEscapeFlow:
             session.spell_words = ["별"]
             session.state.phase = GamePhase.FINAL_SPELL
             gate = started["active_gate"]
+            allow_elapsed_movement(session, "player1")
 
             ws.send_json({
                 "type": "action",

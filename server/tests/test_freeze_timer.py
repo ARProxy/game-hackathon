@@ -82,6 +82,10 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
 
     async def test_rescue_cancels_timeout(self) -> None:
         await self._freeze()
+        player = self.session.state.get_player(self.player_id)
+        partner = self.session.state.get_player("partner")
+        partner.position.x = player.position.x  # type: ignore[union-attr]
+        partner.position.z = player.position.z  # type: ignore[union-attr]
         await self.manager.handle_message(self.room_id, self.player_id, {
             "type": "action",
             "payload": {
@@ -118,6 +122,10 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         await self._freeze()
         key = (self.room_id, self.player_id)
         task = self.manager._freeze_tasks[key]
+        player = self.session.state.get_player(self.player_id)
+        seeker = self.session.state.get_player("seeker")
+        seeker.position.x = player.position.x  # type: ignore[union-attr]
+        seeker.position.z = player.position.z  # type: ignore[union-attr]
 
         await self.manager.handle_message(self.room_id, self.player_id, {
             "type": "action",

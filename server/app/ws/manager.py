@@ -13,6 +13,13 @@ from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
 from app.ai.partner import match_partner_command
 from app.ai.spell import check_spell
+from app.game.authority import (
+    ACTOR_MAX_SPEED,
+    HUMAN_MAX_SPEED,
+    MovementSample,
+    has_clear_catch_line,
+    movement_is_plausible,
+)
 from app.game.session import session_manager
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 
@@ -163,8 +170,21 @@ class ConnectionManager:
         actor = session.state.get_player(actor_id) if actor_id else player
 
         if action_type == "move" and player and not player.is_frozen:
-            player.position.x = payload.get("x", player.position.x)
-            player.position.z = payload.get("z", player.position.z)
+            if (
+                session.state.phase not in {
+                    GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
+                }
+                or not self._accept_position_update(
+                    session, player, payload.get("x"), payload.get("z"),
+                    HUMAN_MAX_SPEED,
+                )
+            ):
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": "move",
+                    "reason": "implausible_movement",
+                })
+                return
             await self.broadcast(room_id, {
                 "type": "player_moved",
                 "player_id": player_id,
@@ -210,8 +230,16 @@ class ConnectionManager:
                 })
 
         elif action_type == "trap" and player and not player.is_frozen:
-            player.position.x = payload.get("x", player.position.x)
-            player.position.z = payload.get("z", player.position.z)
+            if not self._accept_position_update(
+                session, player, payload.get("x"), payload.get("z"),
+                HUMAN_MAX_SPEED,
+            ):
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": "trap",
+                    "reason": "implausible_movement",
+                })
+                return
             player.freeze()
             await self.broadcast(room_id, {
                 "type": "freeze",
@@ -248,6 +276,10 @@ class ConnectionManager:
                 and seeker.role == PlayerRole.SEEKER
                 and seeker.status == PlayerStatus.ALIVE
                 and self._players_within(seeker, player, 1.5)
+                and has_clear_catch_line(
+                    (seeker.position.x, seeker.position.z),
+                    (player.position.x, player.position.z),
+                )
             )
             if not valid_catch:
                 await self.send_to(room_id, player_id, {
@@ -267,6 +299,38 @@ class ConnectionManager:
             (first.position.x - second.position.x) ** 2
             + (first.position.z - second.position.z) ** 2
         ) <= radius ** 2
+
+    @staticmethod
+    def _accept_position_update(
+        session,
+        actor: Player,
+        x,
+        z,
+        max_speed: float,
+    ) -> bool:
+        if (
+            not isinstance(x, (int, float))
+            or not isinstance(z, (int, float))
+            or isinstance(x, bool)
+            or isinstance(z, bool)
+            or not math.isfinite(x)
+            or not math.isfinite(z)
+            or abs(x) > 64
+            or abs(z) > 64
+        ):
+            return False
+        checked_at = time.monotonic()
+        previous = session.position_samples.get(actor.player_id)
+        if previous and not movement_is_plausible(
+            previous, float(x), float(z), max_speed, checked_at
+        ):
+            return False
+        actor.position.x = float(x)
+        actor.position.z = float(z)
+        session.position_samples[actor.player_id] = MovementSample(
+            float(x), float(z), checked_at
+        )
+        return True
 
     async def _finish_seeker_catch(
         self, room_id: str, player_id: str, player: Player
@@ -308,22 +372,16 @@ class ConnectionManager:
             }
             and actor is not None
             and actor.role in {PlayerRole.AI_PARTNER, PlayerRole.SEEKER}
-            and isinstance(x, (int, float))
-            and isinstance(z, (int, float))
-            and math.isfinite(x)
-            and math.isfinite(z)
-            and abs(x) <= 64
-            and abs(z) <= 64
         )
-        if not valid:
+        if not valid or not self._accept_position_update(
+            session, actor, x, z, ACTOR_MAX_SPEED
+        ):
             await self.send_to(room_id, player_id, {
                 "type": "action_rejected",
                 "action_type": "actor_move",
                 "reason": "invalid_actor_position",
             })
             return
-        actor.position.x = float(x)
-        actor.position.z = float(z)
 
     async def _handle_gate_arrived(
         self,
@@ -390,6 +448,10 @@ class ConnectionManager:
             seeker
             and seeker.status == PlayerStatus.ALIVE
             and self._players_within(seeker, player, 1.5)
+            and has_clear_catch_line(
+                (seeker.position.x, seeker.position.z),
+                (player.position.x, player.position.z),
+            )
         ):
             await self._finish_seeker_catch(room_id, player_id, player)
             return

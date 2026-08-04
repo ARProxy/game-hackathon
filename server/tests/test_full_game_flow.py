@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.ai.mission import load_prop_dict
 from app.game.session import session_manager
+from app.game.authority import MovementSample
 from app.main import app
 
 
@@ -84,6 +85,11 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
         session = session_manager.get_or_create(room_id)
         assert session.state.phase.value == "final_spell"
         assert inspected["active_gate"] == active_gate
+
+        sample = session.position_samples[player_id]
+        session.position_samples[player_id] = MovementSample(
+            sample.x, sample.z, sample.timestamp - 20.0
+        )
 
         # 잠긴 활성 게이트 근처로 이동한 뒤 서버 도착 승인을 받는다.
         ws.send_json({
