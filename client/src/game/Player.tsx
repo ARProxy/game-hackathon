@@ -46,12 +46,16 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   useFrame(({ clock }) => {
     if (!rigidBodyRef.current || !visualRef.current) return
 
-    const playerId = useGameStore.getState().playerId
-    const playerState = useGameStore.getState().players[playerId]
+    const store = useGameStore.getState()
+    const playerId = store.playerId
+    const playerState = store.players[playerId]
     const isFrozen = playerState?.status === 'frozen'
+    const controlsEnabled = store.phase === 'playing'
+      || store.phase === 'final_spell'
+      || store.phase === 'escape'
 
-    // 빙결 시 정지
-    if (isFrozen) {
+    // 온보딩·결과 화면과 빙결 상태에서는 이동 및 위치 송신을 멈춘다.
+    if (isFrozen || !controlsEnabled) {
       rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true)
       const pos = rigidBodyRef.current.translation()
       visualRef.current.position.set(pos.x, pos.y - COLLIDER.offsetY, pos.z)

@@ -41,6 +41,14 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
     const playerState = store.players[playerId]
     const isFrozen = playerState?.status === 'frozen'
     const target = store.partnerTarget
+    const gameActive = store.phase === 'playing'
+      || store.phase === 'final_spell'
+      || store.phase === 'escape'
+
+    if (!gameActive) {
+      pos.y = 0
+      return
+    }
 
     if (isFrozen) {
       rescuing.current = true
@@ -128,7 +136,10 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 3)) * 0.05
     }
 
-    if (clock.elapsedTime - lastPositionSync.current >= 0.1) {
+    if (
+      (store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape')
+      && clock.elapsedTime - lastPositionSync.current >= 0.1
+    ) {
       sendGameMessage({
         type: 'action',
         payload: { action_type: 'actor_move', actor_id: 'partner', x: pos.x, z: pos.z },

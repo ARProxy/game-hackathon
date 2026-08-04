@@ -55,6 +55,14 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
     const store = useGameStore.getState()
     const freezeEvent = store.lastFreezeEvent
     const soundEvent = store.lastSoundEvent
+    const gameActive = store.phase === 'playing'
+      || store.phase === 'final_spell'
+      || store.phase === 'escape'
+
+    if (!gameActive) {
+      pos.y = 0
+      return
+    }
 
     // 주문 성공 시 기존 행동을 중단하고 선택된 탈출구부터 선점한다.
     if (store.phase === 'escape' && rushTarget && state.current !== 'rush' && state.current !== 'guard') {
@@ -101,7 +109,10 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
     }
 
     // 포획 판정 전에 최신 술래 위치를 서버에 전달한다.
-    if (clock.elapsedTime - lastPositionSync.current >= 0.1) {
+    if (
+      (store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape')
+      && clock.elapsedTime - lastPositionSync.current >= 0.1
+    ) {
       sendGameMessage({
         type: 'action',
         payload: { action_type: 'actor_move', actor_id: 'seeker', x: pos.x, z: pos.z },
