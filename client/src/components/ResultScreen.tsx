@@ -93,7 +93,7 @@ export default function ResultScreen() {
         textAlign: 'center',
       }}>
         <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 12 }}>
-          당신의 금기어는 온보딩 대화에서 추출되었습니다
+          온보딩 답변과 게임에서 표현 가능한 단어를 바탕으로 구성되었습니다
         </div>
         {sourceAnswers.length > 0 && (
           <div style={{

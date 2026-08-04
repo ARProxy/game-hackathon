@@ -52,7 +52,7 @@ export default function ForbiddenReveal({ words, onComplete }: ForbiddenRevealPr
         opacity: 0.5,
         marginBottom: 24,
       }}>
-        당신의 말에서 추출된
+        당신의 답변을 바탕으로 준비된
       </div>
 
       <div style={{
