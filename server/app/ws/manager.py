@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import time
 from dataclasses import dataclass, field
 
@@ -173,10 +174,23 @@ class ConnectionManager:
                 },
             }, exclude=player_id)
 
-        elif action_type == "rescue" and actor and not actor.is_frozen:
+        elif action_type == "actor_move":
+            await self._handle_actor_move(room_id, player_id, player, actor, payload)
+
+        elif action_type == "rescue":
             target_id = payload.get("target_id")
             target = session.state.get_player(target_id) if target_id else None
-            if target and target.is_frozen:
+            valid_rescue = (
+                session.state.phase != GamePhase.RESULT
+                and actor
+                and actor.role == PlayerRole.AI_PARTNER
+                and actor.status == PlayerStatus.ALIVE
+                and target
+                and target.role == PlayerRole.HUMAN
+                and target.is_frozen
+                and self._players_within(actor, target, 2.0)
+            )
+            if valid_rescue:
                 target.unfreeze()
                 self._cancel_freeze_timeout(room_id, target_id)
                 await self.broadcast(room_id, {
@@ -188,6 +202,12 @@ class ConnectionManager:
                     "RESCUE: room=%s rescuer=%s target=%s",
                     room_id, actor.player_id, target_id,
                 )
+            else:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": "rescue",
+                    "reason": "invalid_rescue",
+                })
 
         elif action_type == "trap" and player and not player.is_frozen:
             player.position.x = payload.get("x", player.position.x)
@@ -215,12 +235,27 @@ class ConnectionManager:
         elif action_type == "gate_arrived":
             await self._handle_gate_arrived(room_id, player_id, player, payload)
 
-        elif (
-            action_type == "seeker_catch"
-            and player
-            and player.role == PlayerRole.HUMAN
-            and player.status != PlayerStatus.ELIMINATED
-        ):
+        elif action_type == "seeker_catch":
+            seeker = session.state.get_player("seeker")
+            valid_catch = (
+                session.state.phase in {
+                    GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
+                }
+                and player
+                and player.role == PlayerRole.HUMAN
+                and player.status != PlayerStatus.ELIMINATED
+                and seeker
+                and seeker.role == PlayerRole.SEEKER
+                and seeker.status == PlayerStatus.ALIVE
+                and self._players_within(seeker, player, 1.5)
+            )
+            if not valid_catch:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": "seeker_catch",
+                    "reason": "invalid_seeker_contact",
+                })
+                return
             player.eliminate()
             session.state.phase = GamePhase.RESULT
             self._cancel_room_freeze_timeouts(room_id)
@@ -240,6 +275,49 @@ class ConnectionManager:
 
         elif action_type == "gate_escape":
             await self._handle_gate_escape(room_id, player_id, player, payload)
+
+    @staticmethod
+    def _players_within(first: Player, second: Player, radius: float) -> bool:
+        return (
+            (first.position.x - second.position.x) ** 2
+            + (first.position.z - second.position.z) ** 2
+        ) <= radius ** 2
+
+    async def _handle_actor_move(
+        self,
+        room_id: str,
+        player_id: str,
+        sender: Player | None,
+        actor: Player | None,
+        payload: dict,
+    ) -> None:
+        session = session_manager.get_or_create(room_id)
+        x = payload.get("x")
+        z = payload.get("z")
+        valid = (
+            sender is not None
+            and sender.role == PlayerRole.HUMAN
+            and session.state.phase in {
+                GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
+            }
+            and actor is not None
+            and actor.role in {PlayerRole.AI_PARTNER, PlayerRole.SEEKER}
+            and isinstance(x, (int, float))
+            and isinstance(z, (int, float))
+            and math.isfinite(x)
+            and math.isfinite(z)
+            and abs(x) <= 64
+            and abs(z) <= 64
+        )
+        if not valid:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "actor_move",
+                "reason": "invalid_actor_position",
+            })
+            return
+        actor.position.x = float(x)
+        actor.position.z = float(z)
 
     async def _handle_gate_arrived(
         self,

@@ -162,6 +162,78 @@ class TestActions:
             assert rescued["rescuer_id"] == "partner"
             assert rescued["target_id"] == "player1"
 
+    def test_rescue_rejects_spoofed_role_and_far_partner(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/rescue-authority/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("rescue-authority")
+            player = session.state.get_player("player1")
+            assert player is not None
+            player.freeze()
+
+            # 술래 actor_id로 구조를 위조해도 인간 상태는 바뀌지 않는다.
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "rescue",
+                    "actor_id": "seeker",
+                    "target_id": "player1",
+                },
+            })
+            assert ws.receive_json() == {
+                "type": "action_rejected",
+                "action_type": "rescue",
+                "reason": "invalid_rescue",
+            }
+            assert player.is_frozen
+
+            # 다음 위치 동기화 뒤 같은 구조 요청을 재시도하면 정상 복구된다.
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "actor_move",
+                    "actor_id": "partner",
+                    "x": player.position.x,
+                    "z": player.position.z,
+                },
+            })
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "rescue",
+                    "actor_id": "partner",
+                    "target_id": "player1",
+                },
+            })
+            assert ws.receive_json()["type"] == "rescued"
+            assert player.status.value == "alive"
+
+            # 실제 AI 동료라도 서버 위치가 멀면 구조할 수 없다.
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "actor_move",
+                    "actor_id": "partner",
+                    "x": 20.0,
+                    "z": 20.0,
+                },
+            })
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "rescue",
+                    "actor_id": "partner",
+                    "target_id": "player1",
+                },
+            })
+            assert ws.receive_json() == {
+                "type": "action_rejected",
+                "action_type": "rescue",
+                "reason": "invalid_rescue",
+            }
+            assert player.is_frozen
+
     def test_trap_freezes_at_reported_position(self, client):
         with client.websocket_connect("/ws/room9/player1") as ws:
             self._start_game(ws)
@@ -199,13 +271,57 @@ class TestActions:
                 "type": "game_over",
                 "reason": "caught_by_seeker",
             }
-
             from app.game.session import session_manager
 
             state = session_manager.get_or_create("room10").state
             assert state.get_player("player1").status.value == "eliminated"
             assert state.phase.value == "result"
 
+    def test_seeker_catch_rejects_far_server_position(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/catch-authority/player1") as ws:
+            self._start_game(ws)
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "actor_move",
+                    "actor_id": "seeker",
+                    "x": 30.0,
+                    "z": 30.0,
+                },
+            })
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "seeker_catch"},
+            })
+            rejected = ws.receive_json()
+            assert rejected == {
+                "type": "action_rejected",
+                "action_type": "seeker_catch",
+                "reason": "invalid_seeker_contact",
+            }
+            player = session_manager.get_or_create("catch-authority").state.get_player("player1")
+            assert player is not None
+            assert player.status.value == "alive"
+
+    def test_actor_move_rejects_human_role_spoof(self, client):
+        with client.websocket_connect("/ws/actor-spoof/player1") as ws:
+            self._start_game(ws)
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "actor_move",
+                    "actor_id": "player1",
+                    "x": 4.0,
+                    "z": 4.0,
+                },
+            })
+            assert ws.receive_json() == {
+                "type": "action_rejected",
+                "action_type": "actor_move",
+                "reason": "invalid_actor_position",
+            }
 
 class TestGameOver:
     def test_human_freeze_does_not_end_solo_team(self, client):

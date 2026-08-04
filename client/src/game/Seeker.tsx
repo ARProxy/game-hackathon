@@ -46,6 +46,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const camoActive = useRef(false)
   const stillTimer = useRef(0)
   const lastPos = useRef(new THREE.Vector3(18, 0, -18))
+  const lastPositionSync = useRef(0)
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return
@@ -97,6 +98,15 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
       case 'chase': chase(pos, delta); break
       case 'rush': rush(pos, delta); break
       case 'guard': break
+    }
+
+    // 포획 판정 전에 최신 술래 위치를 서버에 전달한다.
+    if (clock.elapsedTime - lastPositionSync.current >= 0.1) {
+      sendGameMessage({
+        type: 'action',
+        payload: { action_type: 'actor_move', actor_id: 'seeker', x: pos.x, z: pos.z },
+      })
+      lastPositionSync.current = clock.elapsedTime
     }
 
     // 접촉 판정은 서버에 한 번만 신고하고 결과 판정은 game_over 응답에 맡긴다.

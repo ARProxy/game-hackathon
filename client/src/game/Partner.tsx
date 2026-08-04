@@ -17,6 +17,7 @@ const FOLLOW_DISTANCE = 2.5
 const RESCUE_DISTANCE = 1.2
 const INSPECT_DISTANCE = 0.8
 const ORBIT_SPEED = 0.8
+const RESCUE_RETRY_SECONDS = 0.5
 
 interface PartnerProps {
   playerRef: React.RefObject<THREE.Group | null>
@@ -26,8 +27,9 @@ interface PartnerProps {
 export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const rescuing = useRef(false)
-  const rescueRequested = useRef(false)
+  const lastRescueRequestAt = useRef(-Infinity)
   const inspectRequestedFor = useRef<string | null>(null)
+  const lastPositionSync = useRef(0)
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current || !playerRef.current) return
@@ -47,11 +49,12 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       const dist = Math.sqrt(dx * dx + dz * dz)
 
       if (dist < RESCUE_DISTANCE) {
-        if (!rescueRequested.current) {
-          rescueRequested.current = sendGameMessage({
+        if (clock.elapsedTime - lastRescueRequestAt.current >= RESCUE_RETRY_SECONDS) {
+          const sent = sendGameMessage({
             type: 'action',
             payload: { action_type: 'rescue', actor_id: 'partner', target_id: playerId },
           })
+          if (sent) lastRescueRequestAt.current = clock.elapsedTime
         }
       } else {
         const speed = RESCUE_SPEED * delta
@@ -69,7 +72,7 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 10)) * 0.15
     } else if (target) {
       rescuing.current = false
-      rescueRequested.current = false
+      lastRescueRequestAt.current = -Infinity
       if (inspectRequestedFor.current !== target.propId) inspectRequestedFor.current = null
 
       const dx = target.position.x - pos.x
@@ -104,7 +107,7 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 7)) * 0.09
     } else {
       rescuing.current = false
-      rescueRequested.current = false
+      lastRescueRequestAt.current = -Infinity
       inspectRequestedFor.current = null
       const t = clock.getElapsedTime() * ORBIT_SPEED
       const targetX = playerPos.x + Math.cos(t) * FOLLOW_DISTANCE
@@ -123,6 +126,14 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       }
 
       pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 3)) * 0.05
+    }
+
+    if (clock.elapsedTime - lastPositionSync.current >= 0.1) {
+      sendGameMessage({
+        type: 'action',
+        payload: { action_type: 'actor_move', actor_id: 'partner', x: pos.x, z: pos.z },
+      })
+      lastPositionSync.current = clock.elapsedTime
     }
   })
 
