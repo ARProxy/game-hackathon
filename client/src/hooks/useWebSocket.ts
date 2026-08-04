@@ -30,6 +30,11 @@ export default function useWebSocket() {
     unfreezePlayer,
     eliminatePlayer,
     addSubtitle,
+    setPartnerTarget,
+    clearPartnerTarget,
+    removeProp,
+    acquireClue,
+    setCurrentMissionIndex,
   } = useGameStore()
 
   const connect = useCallback((roomId: string, playerId: string) => {
@@ -106,6 +111,38 @@ export default function useWebSocket() {
         })
         break
 
+      case 'partner_command':
+        setPartnerTarget({
+          propId: data.target_prop_id,
+          position: data.position,
+          utterance: data.utterance,
+        })
+        addSubtitle('partner', '알겠어. 네가 설명한 물건을 확인하러 갈게!')
+        break
+
+      case 'prop_inspected':
+        removeProp(data.prop_id)
+        clearPartnerTarget()
+        setCurrentMissionIndex(data.next_mission_index)
+        if (data.is_correct && data.clue) {
+          acquireClue(data.clue)
+          addSubtitle('partner', `찾았어! 단서 "${data.clue}" 획득!`)
+        } else {
+          addSubtitle('partner', '이 물건은 아니야. 다른 특징으로 설명해줘.')
+        }
+        if (data.all_complete) {
+          setPhase('final_spell')
+          addSubtitle('partner', '단서를 다 모았어! 주문을 외쳐!')
+        }
+        break
+
+      case 'action_rejected':
+        if (data.action_type === 'inspect_prop') {
+          clearPartnerTarget()
+          addSubtitle('partner', '지금은 그 물건을 확인할 수 없어.')
+        }
+        break
+
       case 'spell_success':
         setPhase('escape')
         addSubtitle('system', '주문 성공! 탈출구가 열립니다!')
@@ -126,7 +163,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle])
+  }, [setPhase, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex])
 
   const send = useCallback((message: object) => {
     sendGameMessage(message)

@@ -1,14 +1,9 @@
 /**
- * 미션 프롭 렌더링 + 근접 감지
- * - 플레이어가 가까이 가면 nearbyPropId 업데이트
+ * 미션 프롭 렌더링
  * - 제거된 프롭은 렌더링에서 제외
  */
 
-import { useFrame } from '@react-three/fiber'
-import * as THREE from 'three'
 import { useGameStore, type PropData } from '../stores/gameStore'
-
-const INTERACT_DISTANCE = 2.5
 
 function PropMesh({ prop }: { prop: PropData }) {
   const s = prop.scale
@@ -39,41 +34,10 @@ function PropMesh({ prop }: { prop: PropData }) {
   )
 }
 
-interface PropsProps {
-  playerRef: React.RefObject<THREE.Group | null>
-}
-
-export default function Props({ playerRef }: PropsProps) {
+export default function Props() {
   const props = useGameStore((s) => s.props)
   const phase = useGameStore((s) => s.phase)
   const removedPropIds = useGameStore((s) => s.removedPropIds)
-
-  // 매 프레임 근접 프롭 체크
-  useFrame(() => {
-    if (!playerRef.current || phase !== 'playing') return
-
-    const playerPos = playerRef.current.position
-    const store = useGameStore.getState()
-    let closestId: string | null = null
-    let closestDist = INTERACT_DISTANCE
-
-    for (const prop of store.props) {
-      if (store.removedPropIds.includes(prop.prop_id)) continue
-
-      const dx = prop.position.x - playerPos.x
-      const dz = prop.position.z - playerPos.z
-      const dist = Math.sqrt(dx * dx + dz * dz)
-
-      if (dist < closestDist) {
-        closestDist = dist
-        closestId = prop.prop_id
-      }
-    }
-
-    if (store.nearbyPropId !== closestId) {
-      store.setNearbyProp(closestId)
-    }
-  })
 
   if (phase !== 'playing' || props.length === 0) return null
 

@@ -103,7 +103,7 @@ function Scene({
             }
           }}
         />
-        <Props playerRef={playerGroupRef} />
+        <Props />
         <Player ref={playerRef} position={[SPAWNS.player[0], 1, SPAWNS.player[1]]} characterId={cast.runners[0]} />
         <Partner playerRef={playerGroupRef} characterId={cast.runners[1] ?? 'R05'} />
         <Seeker playerRef={playerGroupRef} rushTarget={gateTarget} />
@@ -141,7 +141,7 @@ function Scene({
 
 /* ─────────────────────────────────────────────
  * GameController
- * - 서버 연결, 온보딩, PTT, E키 조사, 게임 흐름 제어
+ * - 서버 연결, 온보딩, PTT, 게임 흐름 제어
  * - UI 렌더링 (온보딩, 금기어 발표)
  * ───────────────────────────────────────────── */
 function GameController() {
@@ -185,44 +185,6 @@ function GameController() {
       }
     },
   })
-
-  /* E키 — 프롭 조사 */
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (target?.matches('input, textarea, [contenteditable="true"]')) return
-      if (e.code !== 'KeyE') return
-      const store = useGameStore.getState()
-      if (store.phase !== 'playing' || !store.nearbyPropId || store.inspectingPropId) return
-
-      const prop = store.props.find((p) => p.prop_id === store.nearbyPropId)
-      if (!prop) return
-
-      store.setInspectingProp(prop.prop_id)
-      store.addSubtitle('partner', '확인해볼게!')
-
-      setTimeout(() => {
-        const s = useGameStore.getState()
-        if (prop.is_real) {
-          const mission = s.missions[s.currentMissionIndex]
-          s.acquireClue(mission?.clue_word || '빛')
-          s.removeProp(prop.prop_id)
-          s.advanceMission()
-          s.addSubtitle('partner', `맞아! 단서 "${mission?.clue_word}" 획득!`)
-          if (s.currentMissionIndex >= s.missions.length) {
-            s.setPhase('final_spell')
-            s.addSubtitle('partner', '단서를 다 모았어! 주문을 외쳐!')
-          }
-        } else {
-          s.removeProp(prop.prop_id)
-          s.addSubtitle('partner', '음... 이건 아닌 것 같아.')
-        }
-        s.setInspectingProp(null)
-      }, 1500)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
 
   const handleRevealComplete = useCallback(() => setPhase('playing'), [setPhase])
 

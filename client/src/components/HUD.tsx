@@ -140,8 +140,8 @@ export default function HUD() {
   const lastFreezeEvent = useGameStore((s) => s.lastFreezeEvent)
   const connected = useGameStore((s) => s.connected)
   const subtitles = useGameStore((s) => s.subtitles)
-  const nearbyPropId = useGameStore((s) => s.nearbyPropId)
   const inspectingPropId = useGameStore((s) => s.inspectingPropId)
+  const partnerTarget = useGameStore((s) => s.partnerTarget)
   const missions = useGameStore((s) => s.missions)
   const currentMissionIndex = useGameStore((s) => s.currentMissionIndex)
   const acquiredClues = useGameStore((s) => s.acquiredClues)
@@ -212,11 +212,29 @@ export default function HUD() {
             <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
               미션 {Math.min(currentMissionIndex + 1, missions.length)} / {missions.length}
             </div>
-            <div style={{ fontSize: 13 }}>
+            <div style={{ fontSize: 13, lineHeight: 1.45 }}>
               {currentMissionIndex < missions.length
-                ? '물건을 찾아 조사하세요'
+                ? <>
+                    <strong style={{ color: '#52E5FF' }}>
+                      “{missions[currentMissionIndex]?.forbidden_word}” 이름은 절대 말하지 마세요.
+                    </strong>
+                    <br />외형이나 쓰임새 특징을 2개 이상 조합해 동료에게 설명하세요.
+                  </>
                 : '단서를 모두 모았습니다!'}
             </div>
+            {partnerTarget && (
+              <div style={{
+                marginTop: 7,
+                paddingTop: 7,
+                borderTop: '1px solid rgba(82, 229, 255, 0.2)',
+                fontSize: 11,
+                color: inspectingPropId ? '#B6FF3D' : '#52E5FF',
+              }}>
+                {inspectingPropId
+                  ? 'AI 동료가 설명한 물건을 확인하고 있습니다...'
+                  : 'AI 동료가 설명을 이해하고 물건으로 이동 중입니다...'}
+              </div>
+            )}
             {acquiredClues.length > 0 && (
               <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
                 단서: {acquiredClues.map((c) => `"${c}"`).join(' ')}
@@ -262,24 +280,6 @@ export default function HUD() {
           </div>
         )}
       </div>
-
-      {/* E키 조사 힌트 — 프롭 근처일 때 */}
-      {phase === 'playing' && nearbyPropId && !inspectingPropId && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: 'rgba(0, 0, 0, 0.7)',
-          border: '1px solid rgba(82, 229, 255, 0.5)',
-          borderRadius: 8,
-          padding: '8px 16px',
-          fontSize: 14,
-          color: '#52E5FF',
-        }}>
-          E키로 조사
-        </div>
-      )}
 
       {/* 조사 중 표시 */}
       {inspectingPropId && (

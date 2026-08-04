@@ -25,11 +25,13 @@ export interface PropData {
   mesh: string
   scale: number
   position: { x: number; z: number }
-  is_real: boolean
   zone: string
-  forbidden_word: string
-  tags: string[]
-  descriptions: string[]
+}
+
+export interface PartnerTarget {
+  propId: string
+  position: { x: number; z: number }
+  utterance: string
 }
 
 export interface MissionData {
@@ -74,9 +76,9 @@ interface GameStore {
   acquiredClues: string[]
 
   // 프롭 상호작용
-  nearbyPropId: string | null  // 플레이어 근처 프롭
   inspectingPropId: string | null  // AI 동료가 조사 중인 프롭
   removedPropIds: string[]  // 획득/제거된 프롭
+  partnerTarget: PartnerTarget | null
 
   // 빙결 이벤트 (연출용)
   lastFreezeEvent: FreezeEvent | null
@@ -95,10 +97,11 @@ interface GameStore {
   setForbiddenWords: (words: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], spellWords: string[]) => void
   acquireClue: (clueWord: string) => void
-  advanceMission: () => void
-  setNearbyProp: (propId: string | null) => void
+  setCurrentMissionIndex: (index: number) => void
   setInspectingProp: (propId: string | null) => void
   removeProp: (propId: string) => void
+  setPartnerTarget: (target: PartnerTarget) => void
+  clearPartnerTarget: () => void
   updatePlayer: (playerId: string, update: Partial<PlayerState>) => void
   freezePlayer: (event: FreezeEvent) => void
   setLastSoundEvent: (event: SoundEvent) => void
@@ -123,9 +126,9 @@ const initialState = {
   spellWords: [] as string[],
   currentMissionIndex: 0,
   acquiredClues: [] as string[],
-  nearbyPropId: null as string | null,
   inspectingPropId: null as string | null,
   removedPropIds: [] as string[],
+  partnerTarget: null as PartnerTarget | null,
   players: {},
   lastFreezeEvent: null,
   lastSoundEvent: null,
@@ -149,26 +152,36 @@ export const useGameStore = create<GameStore>((set) => ({
   setForbiddenWords: (words) => set({ forbiddenWords: words }),
 
   setRoundData: (props, missions, spellWords) =>
-    set({ props, missions, spellWords, currentMissionIndex: 0, acquiredClues: [] }),
+    set({
+      props,
+      missions,
+      spellWords,
+      currentMissionIndex: 0,
+      acquiredClues: [],
+      removedPropIds: [],
+      partnerTarget: null,
+      inspectingPropId: null,
+    }),
 
   acquireClue: (clueWord) =>
     set((state) => ({
       acquiredClues: [...state.acquiredClues, clueWord],
     })),
 
-  advanceMission: () =>
-    set((state) => ({
-      currentMissionIndex: state.currentMissionIndex + 1,
-    })),
-
-  setNearbyProp: (propId) => set({ nearbyPropId: propId }),
+  setCurrentMissionIndex: (currentMissionIndex) => set({ currentMissionIndex }),
 
   setInspectingProp: (propId) => set({ inspectingPropId: propId }),
 
   removeProp: (propId) =>
     set((state) => ({
-      removedPropIds: [...state.removedPropIds, propId],
+      removedPropIds: state.removedPropIds.includes(propId)
+        ? state.removedPropIds
+        : [...state.removedPropIds, propId],
     })),
+
+  setPartnerTarget: (partnerTarget) => set({ partnerTarget }),
+
+  clearPartnerTarget: () => set({ partnerTarget: null, inspectingPropId: null }),
 
   updatePlayer: (playerId, update) =>
     set((state) => ({
