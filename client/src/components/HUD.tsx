@@ -58,7 +58,9 @@ function FrozenCountdown() {
         얼음! {remainingSeconds}
       </div>
       <div style={{ fontSize: 14, color: '#FF8BAD', marginTop: 6 }}>
-        “{freezeEvent.matchedWord}” 발화 · 0초가 되면 탈락합니다
+        {freezeEvent.matchedStage === 'trap'
+          ? '얼음 트랩 발동'
+          : `“${freezeEvent.matchedWord}” 발화`} · 0초가 되면 탈락합니다
       </div>
       <div style={{
         height: 5,
