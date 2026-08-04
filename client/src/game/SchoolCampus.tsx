@@ -2390,13 +2390,15 @@ export function GateFrame({ position, rotationY, selected = false, open = false,
     if (open && !prev.current) onActivated?.()
     prev.current = open
   }, [open, onActivated])
-  // 활성 시 기둥 발광 맥동 + 상승하는 빛기둥
+  // 선택된 게이트는 잠긴 동안 황색, 주문 성공 뒤 청록색 비콘으로 안내한다.
   useFrame((st) => {
     if (!beamRef.current) return
     const t = st.clock.elapsedTime
     const m = beamRef.current.material as THREE.MeshBasicMaterial
-    m.opacity = open ? 0.16 + 0.1 * Math.sin(t * 2.2) : 0
-    beamRef.current.scale.y = open ? 1 + 0.04 * Math.sin(t * 1.6) : 0.001
+    m.opacity = selected
+      ? (open ? 0.16 + 0.1 * Math.sin(t * 2.2) : 0.08 + 0.04 * Math.sin(t * 1.8))
+      : 0
+    beamRef.current.scale.y = selected ? 1 + 0.04 * Math.sin(t * 1.6) : 0.001
   })
   const glow = open ? 1.3 : selected ? 0.55 : 0.12
   const gateColor = open ? '#52E5FF' : selected ? '#FFD166' : '#52E5FF'
@@ -2415,9 +2417,11 @@ export function GateFrame({ position, rotationY, selected = false, open = false,
       {/* 탈출 지점 표식 — 멀리서도 보이는 빛기둥 (활성 시에만) */}
       <mesh ref={beamRef} position={[0, 6, 0]}>
         <cylinderGeometry args={[1.5, 1.5, 12, 12, 1, true]} />
-        <meshBasicMaterial color="#52E5FF" transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={gateColor} transparent opacity={0} depthWrite={false}
+          side={THREE.DoubleSide} fog={false} />
       </mesh>
-      {open && <pointLight position={[0, 2.6, 0]} intensity={14} distance={9} decay={1.5} color="#52E5FF" />}
+      {selected && <pointLight position={[0, 2.6, 0]} intensity={open ? 14 : 6}
+        distance={9} decay={1.5} color={gateColor} />}
       {([-1.5, 1.5] as const).map((x) => (
         <RigidBody key={x} type="fixed" position={[x, 1.7, 0]} colliders="cuboid">
           <mesh>
