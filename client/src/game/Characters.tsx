@@ -320,7 +320,7 @@ export function useNameTagTexture(ch: Character | undefined) {
     const t = new THREE.CanvasTexture(cv)
     t.colorSpace = THREE.SRGBColorSpace
     return t
-  }, [ch?.id])
+  }, [ch])
 }
 
 function PartMesh({ part, opacity, tint, tagMap }: {

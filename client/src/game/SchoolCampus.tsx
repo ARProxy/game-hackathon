@@ -67,7 +67,7 @@
  *   조명 톤 14 (warm 운동장·놀이터 / amber 골목·정문 / cool 건물)
  *   pickRound(seed) 하나로 트랩·게이트·열쇠가 결정적으로 정해진다
  */
-import { useEffect, useRef, useMemo } from 'react'
+import { useCallback, useEffect, useRef, useMemo } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
@@ -2572,19 +2572,22 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateO
   onGateEscape?: (id: string) => void
   elevatorY?: number
 }) {
-  const show = (f: FloorKey) => !visibleFloors || visibleFloors.includes(f)
+  const show = useCallback(
+    (f: FloorKey) => !visibleFloors || visibleFloors.includes(f),
+    [visibleFloors],
+  )
 
   const filteredBoxes = useMemo(
     () => BOXES.filter((b) => show(b.f)),
-    [visibleFloors],
+    [show],
   )
   const filteredCyls = useMemo(
     () => CYLS.filter((c) => show(c.f)),
-    [visibleFloors],
+    [show],
   )
   const filteredVisuals = useMemo(
     () => VISUALS.filter((v) => show(v.f)),
-    [visibleFloors],
+    [show],
   )
   const nonBoxVisuals = useMemo(
     () => filteredVisuals.filter((v) => v.t !== 'box'),
