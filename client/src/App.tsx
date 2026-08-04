@@ -167,6 +167,12 @@ function Scene({
 function GameController() {
   const { connect, send, disconnect } = useWebSocket()
   const { phase, connected, forbiddenWords, setRoom, setPhase } = useGameStore()
+  const playerStatus = useGameStore((state) => state.players[state.playerId]?.status)
+  const speechEnabled = phase === 'onboarding' || (
+    (phase === 'playing' || phase === 'final_spell')
+    && playerStatus !== 'frozen'
+    && playerStatus !== 'eliminated'
+  )
 
   /* 서버 자동 연결 */
   useEffect(() => {
@@ -192,6 +198,7 @@ function GameController() {
 
   /* Q키 Push-to-Talk */
   useSpeech({
+    enabled: speechEnabled,
     onStart: () => useGameStore.getState().setSpeaking(true),
     onEnd: () => useGameStore.getState().setSpeaking(false),
     onInterim: (t) => useGameStore.getState().setLastTranscript(t),

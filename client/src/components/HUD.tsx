@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { useGameStore, type GamePhase } from '../stores/gameStore'
+import { useGameStore, type GamePhase, type PlayerStatus } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import rescueContract from '../game/rescueContract.json'
 
@@ -134,15 +134,17 @@ function FrozenCountdown() {
   )
 }
 
-function TextSpeechFallback({ phase, connected, gateArrived }: {
+function TextSpeechFallback({ phase, connected, gateArrived, playerStatus }: {
   phase: GamePhase
   connected: boolean
   gateArrived: boolean
+  playerStatus: PlayerStatus | undefined
 }) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const available = phase === 'playing' || (phase === 'final_spell' && gateArrived)
+  const canInteract = playerStatus !== 'frozen' && playerStatus !== 'eliminated'
+  const available = canInteract && (phase === 'playing' || (phase === 'final_spell' && gateArrived))
 
   const close = () => {
     setOpen(false)
@@ -275,6 +277,7 @@ export default function HUD() {
   const acquiredClues = useGameStore((s) => s.acquiredClues)
   const spellWords = useGameStore((s) => s.spellWords)
   const gateArrived = useGameStore((s) => s.gateArrived)
+  const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
 
   return (
     <div style={{
@@ -498,7 +501,8 @@ export default function HUD() {
           {isSpeaking ? '🎤 듣는 중...' : 'Q를 누르고 말하세요'}
         </div>
 
-        <TextSpeechFallback phase={phase} connected={connected} gateArrived={gateArrived} />
+        <TextSpeechFallback phase={phase} connected={connected} gateArrived={gateArrived}
+          playerStatus={playerStatus} />
       </div>
 
       <FrozenCountdown />

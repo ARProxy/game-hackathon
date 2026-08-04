@@ -52,6 +52,7 @@ export default function useWebSocket() {
     finishGame,
     setForbiddenWords,
     setRoundData,
+    hydratePlayers,
     freezePlayer,
     setLastSoundEvent,
     unfreezePlayer,
@@ -123,6 +124,7 @@ export default function useWebSocket() {
       case 'game_started':
         startRound()
         setForbiddenWords(data.state.forbidden_words)
+        if (data.state.players) hydratePlayers(data.state.players)
         if (data.round) {
           setRoundData(data.round.props, data.round.missions, data.round.spell_words)
         }
@@ -237,7 +239,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
+  }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, hydratePlayers, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
 
   handleMessageRef.current = handleMessage
 

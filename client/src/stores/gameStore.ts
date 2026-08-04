@@ -112,6 +112,7 @@ interface GameStore {
   setForbiddenWords: (words: string[]) => void
   setSourceAnswers: (answers: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], spellWords: string[]) => void
+  hydratePlayers: (players: Record<string, Omit<PlayerState, 'playerId'>>) => void
   setActiveGate: (gate: ActiveGate) => void
   setGateArrived: (arrived: boolean) => void
   acquireClue: (clueWord: string) => void
@@ -203,6 +204,12 @@ export const useGameStore = create<GameStore>((set) => ({
       inspectingPropId: null,
       gateArrived: false,
     }),
+
+  hydratePlayers: (players) => set({
+    players: Object.fromEntries(
+      Object.entries(players).map(([playerId, player]) => [playerId, { playerId, ...player }]),
+    ),
+  }),
 
   setActiveGate: (activeGate) => set({ activeGate, gateArrived: false }),
 

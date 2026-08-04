@@ -8,6 +8,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 
 interface UseSpeechOptions {
+  enabled?: boolean
   onInterim?: (transcript: string) => void
   onFinal?: (transcript: string) => void
   onStart?: () => void
@@ -16,6 +17,7 @@ interface UseSpeechOptions {
 }
 
 export default function useSpeech({
+  enabled = true,
   onInterim,
   onFinal,
   onStart,
@@ -107,6 +109,10 @@ export default function useSpeech({
 
   // Q키 Push-to-Talk
   useEffect(() => {
+    if (!enabled) {
+      stopListening()
+      return
+    }
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
       if (target?.matches('input, textarea, [contenteditable="true"]')) return
@@ -129,7 +135,7 @@ export default function useSpeech({
       window.removeEventListener('keyup', onKeyUp)
       stopListening()
     }
-  }, [startListening, stopListening])
+  }, [enabled, startListening, stopListening])
 
   return { isListening: isListening.current, startListening, stopListening }
 }
