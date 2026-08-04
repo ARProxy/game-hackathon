@@ -14,6 +14,7 @@ import HUD from './components/HUD'
 import Onboarding from './components/Onboarding'
 import ForbiddenReveal from './components/ForbiddenReveal'
 import ResultScreen from './components/ResultScreen'
+import SoundController from './components/SoundController'
 import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
@@ -275,6 +276,7 @@ function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#07090D' }}>
+      <SoundController />
       <GameController />
 
       <Canvas
