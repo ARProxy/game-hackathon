@@ -10,6 +10,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGameStore } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
+import useSound from '../hooks/useSound'
 import { CharacterModel } from './Characters'
 
 type SeekerState = 'patrol' | 'alert' | 'chase' | 'rush' | 'guard'
@@ -21,6 +22,9 @@ const ALERT_DURATION = 1.5
 const CHASE_ARRIVE_DIST = 1.5
 const RUSH_ARRIVE_DIST = 1.4
 const CATCH_DISTANCE = 1.1
+const PROXIMITY_SOUND_RANGE = 18
+const PROXIMITY_SOUND_MIN_INTERVAL = 0.38
+const PROXIMITY_SOUND_MAX_INTERVAL = 1.55
 
 // 순찰 웨이포인트
 const WAYPOINTS: [number, number][] = [
@@ -35,6 +39,7 @@ interface SeekerProps {
 
 export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
+  const { playSeekerProximity } = useSound()
 
   const state = useRef<SeekerState>('patrol')
   const waypointIndex = useRef(0)
@@ -47,6 +52,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const stillTimer = useRef(0)
   const lastPos = useRef(new THREE.Vector3(18, 0, -18))
   const lastPositionSync = useRef(0)
+  const lastProximitySound = useRef(-Infinity)
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return
@@ -60,6 +66,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
       || store.phase === 'escape'
 
     if (!gameActive) {
+      lastProximitySound.current = -Infinity
       pos.y = 0
       return
     }
@@ -122,6 +129,24 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
 
     // 접촉 판정은 서버에 한 번만 신고하고 결과 판정은 game_over 응답에 맡긴다.
     const playerPos = playerRef.current?.position
+    const playerState = store.players[store.playerId]
+    const seekerState = Object.values(store.players).find((player) => player.role === 'seeker')
+    const actorsAreActive = (!playerState || playerState.status === 'alive')
+      && (!seekerState || seekerState.status === 'alive')
+    if (playerPos && actorsAreActive) {
+      const distance = Math.hypot(playerPos.x - pos.x, playerPos.z - pos.z)
+      const proximity = THREE.MathUtils.clamp(1 - distance / PROXIMITY_SOUND_RANGE, 0, 1)
+      const pulseInterval = THREE.MathUtils.lerp(
+        PROXIMITY_SOUND_MAX_INTERVAL,
+        PROXIMITY_SOUND_MIN_INTERVAL,
+        proximity,
+      )
+      if (proximity > 0 && clock.elapsedTime - lastProximitySound.current >= pulseInterval) {
+        playSeekerProximity(proximity)
+        lastProximitySound.current = clock.elapsedTime
+      }
+    }
+
     if (
       !catchSent.current &&
       playerPos &&

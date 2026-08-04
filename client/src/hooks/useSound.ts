@@ -102,5 +102,27 @@ export default function useSound() {
     tone(180, 0.3, 0.65, 0.11, 55, 'triangle')
   }, [tone])
 
-  return { playFreeze, playRescue, playGateOpen, playVictory, playDefeat }
+  const playSeekerProximity = useCallback((intensity: number) => {
+    const proximity = Math.min(1, Math.max(0, intensity))
+    if (proximity <= 0) return
+
+    // 가까울수록 묵직한 두 박자가 커지고, 짧은 휘파람 배음이 선명해진다.
+    const volume = 0.025 + proximity * 0.065
+    const baseFrequency = 58 + proximity * 20
+    tone(baseFrequency, 0, 0.13, volume, baseFrequency * 0.82, 'triangle')
+    tone(baseFrequency * 0.9, 0.16, 0.11, volume * 0.72, baseFrequency * 0.72, 'sine')
+    if (proximity >= 0.45) {
+      tone(520 + proximity * 150, 0.03, 0.19, 0.012 + proximity * 0.016,
+        430 + proximity * 110, 'sine')
+    }
+  }, [tone])
+
+  return {
+    playFreeze,
+    playRescue,
+    playGateOpen,
+    playVictory,
+    playDefeat,
+    playSeekerProximity,
+  }
 }
