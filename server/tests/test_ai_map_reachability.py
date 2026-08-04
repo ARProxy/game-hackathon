@@ -17,6 +17,58 @@ GRID_STEP = 0.5
 AI_RADIUS = 0.36
 MAP_MIN = -40.0
 MAP_MAX = 40.0
+GROUND_PATROL = [
+    (26.0, -27.0),
+    (23.5, -19.0),
+    (9.0, -1.5),
+    (-20.5, -6.0),
+    (-19.5, -3.5),
+    (-10.5, -3.5),
+    (-10.5, -22.5),
+    (-9.8, -23.0),
+    (-8.0, -27.2),
+    (-25.1, -20.0),
+    (-25.1, -11.0),
+    (-25.1, -27.2),
+    (-25.0, -27.0),
+    (-2.5, -27.0),
+    (-2.0, -27.2),
+    (4.0, -27.2),
+    (-8.5, -27.0),
+    (-8.5, -24.5),
+    (13.0, -24.5),
+    (13.0, -17.5),
+    (13.5, -17.5),
+    (13.5, -17.0),
+    (24.5, -17.0),
+    (24.5, -19.0),
+    (26.0, -20.0),
+    (25.5, -20.0),
+    (25.5, -19.5),
+    (23.0, -19.5),
+    (23.0, -18.5),
+    (22.5, -18.5),
+    (22.5, -17.0),
+    (21.5, -17.0),
+    (21.5, 19.5),
+    (13.5, 19.5),
+    (13.5, 22.0),
+    (12.5, 22.0),
+    (12.5, 23.0),
+    (-1.0, 23.0),
+    (-1.0, 30.5),
+    (-2.5, 30.5),
+    (-13.0, 30.5),
+    (-13.0, 34.5),
+    (-17.0, 34.5),
+    (-17.0, 28.0),
+    (-28.0, 8.0),
+    (-17.0, 5.0),
+    (24.5, 5.0),
+    (24.5, -19.0),
+    (26.0, -19.0),
+    (26.0, -26.0),
+]
 
 BOX_PATTERN = re.compile(
     r"\{ f: '(?P<floor>[^']+)', p: \[(?P<x>-?[\d.]+), (?P<y>-?[\d.]+), (?P<z>-?[\d.]+)\], "
@@ -93,6 +145,47 @@ def _reachable(
     return False
 
 
+def _locally_navigable(
+    start: tuple[float, float],
+    target: tuple[float, float],
+    obstacles: list[tuple[float, float, float, float, float]],
+    target_radius: float = 1.4,
+) -> bool:
+    """클라이언트 planAvoidedStep의 후보 순서를 재현해 실제 수렴을 확인한다."""
+    x, z = start
+    preferred_side = 1
+    step = 0.25
+    for _ in range(4000):
+        dx, dz = target[0] - x, target[1] - z
+        distance = math.hypot(dx, dz)
+        if distance <= target_radius:
+            return True
+        forward_x, forward_z = dx / distance, dz / distance
+        angles = (
+            0,
+            preferred_side * math.pi / 4,
+            preferred_side * math.pi / 2,
+            preferred_side * math.pi * 3 / 4,
+            math.pi,
+            -preferred_side * math.pi * 3 / 4,
+            -preferred_side * math.pi / 2,
+            -preferred_side * math.pi / 4,
+        )
+        moved = False
+        for angle in angles:
+            cos, sin = math.cos(angle), math.sin(angle)
+            direction_x = forward_x * cos + forward_z * sin
+            direction_z = -forward_x * sin + forward_z * cos
+            next_x, next_z = x + direction_x * step, z + direction_z * step
+            if not _blocked(next_x, next_z, obstacles):
+                x, z = next_x, next_z
+                moved = True
+                break
+        if not moved:
+            preferred_side *= -1
+    return False
+
+
 @pytest.mark.parametrize("target", [
     (-8.1, -33.6),   # 과학실 미션 후보 1
     (-10.95, -31.0), # 과학실 미션 후보 2
@@ -103,14 +196,17 @@ def test_partner_spawn_can_reach_required_targets(target: tuple[float, float]) -
     assert _reachable((-16.0, -2.0), target, _ground_obstacles())
 
 
-@pytest.mark.parametrize("target", [
-    (23.5, -19.0),  # 체육관 출구
-    (9.0, -1.5),    # 중앙 운동장
-    (-20.5, -6.0),  # 별관 앞
-    (-9.8, -23.0),  # 본관 현관
-    (13.5, 22.0),   # 운동장-골목 개구부
-    (-17.0, 28.0),  # 후문 골목
-    (-28.0, 8.0),   # 놀이터
-])
+@pytest.mark.parametrize("target", GROUND_PATROL[1:])
 def test_seeker_spawn_can_reach_major_patrol_points(target: tuple[float, float]) -> None:
     assert _reachable((26.0, -27.0), target, _ground_obstacles())
+
+
+@pytest.mark.parametrize(
+    ("start", "target"),
+    list(zip(GROUND_PATROL, GROUND_PATROL[1:] + GROUND_PATROL[:1])),
+)
+def test_seeker_local_avoidance_converges_on_major_patrol_points(
+    start: tuple[float, float],
+    target: tuple[float, float],
+) -> None:
+    assert _locally_navigable(start, target, _ground_obstacles())

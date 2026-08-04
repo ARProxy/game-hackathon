@@ -54,7 +54,7 @@ export default function Seeker({ playerRef, rushTarget, spawn, waypoints }: Seek
   const lastPos = useRef(new THREE.Vector3(spawn[0], 0, spawn[1]))
   const lastPositionSync = useRef(0)
   const lastProximitySound = useRef(-Infinity)
-  const avoidanceSide = useRef(-1)
+  const avoidanceSide = useRef(1)
 
   const fixedSolidFilters = rapier.QueryFilterFlags.EXCLUDE_SENSORS
     | rapier.QueryFilterFlags.ONLY_FIXED
