@@ -14,6 +14,8 @@ export default function ResultScreen() {
   const acquiredClues = useGameStore((s) => s.acquiredClues)
   const spellWords = useGameStore((s) => s.spellWords)
   const subtitles = useGameStore((s) => s.subtitles)
+  const outcome = useGameStore((s) => s.outcome)
+  const resultReason = useGameStore((s) => s.resultReason)
 
   if (phase !== 'result') return null
 
@@ -22,7 +24,12 @@ export default function ResultScreen() {
     (s) => s.text.includes('얼음') || s.text.includes('FREEZE')
   ).length
 
-  const isWin = acquiredClues.length >= spellWords.length
+  const isWin = outcome === 'win'
+  const failureMessage = resultReason === 'caught_by_seeker'
+    ? '탈출 직전 술래에게 잡혔습니다'
+    : resultReason === 'human_eliminated'
+      ? '30초 안에 구조받지 못했습니다'
+      : '다음에는 더 조심해서 말해보세요'
 
   const handleRestart = () => {
     useGameStore.getState().reset()
@@ -60,7 +67,7 @@ export default function ResultScreen() {
       }}>
         {isWin
           ? '술래를 피해 무사히 탈출했습니다'
-          : '다음에는 더 조심해서 말해보세요'}
+          : failureMessage}
       </div>
 
       {/* 통계 */}

@@ -233,3 +233,38 @@ class TestGameOver:
             assert state.get_player("partner").status.value == "alive"
             assert state.get_player("seeker").role.value == "seeker"
             assert not state.all_non_seeker_frozen_or_eliminated()
+
+
+class TestEscapeFlow:
+    def test_spell_then_gate_is_server_authoritative_win(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/room10/player1") as ws:
+            ws.send_json({
+                "type": "start_game",
+                "payload": {"forbidden_words": ["열쇠"]},
+            })
+            ws.receive_json()
+            session = session_manager.get_or_create("room10")
+            session.spell_words = ["파란", "하늘", "별"]
+
+            ws.send_json({
+                "type": "spell",
+                "payload": {"spell_text": "파란 하늘"},
+            })
+            spell = ws.receive_json()
+            assert spell["type"] == "spell_success"
+            assert session.state.phase.value == "escape"
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "gate_escape", "gate_id": "gate_main"},
+            })
+            won = ws.receive_json()
+            assert won == {
+                "type": "game_won",
+                "player_id": "player1",
+                "reason": "escaped",
+                "gate_id": "gate_main",
+            }
+            assert session.state.phase.value == "result"

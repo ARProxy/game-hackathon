@@ -22,6 +22,7 @@ export default function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const {
     setPhase,
+    finishGame,
     setForbiddenWords,
     setRoundData,
     freezePlayer,
@@ -115,13 +116,17 @@ export default function useWebSocket() {
         break
 
       case 'game_over':
-        setPhase('result')
+        finishGame('lose', data.reason ?? 'game_over')
+        break
+
+      case 'game_won':
+        finishGame('win', data.reason ?? 'escaped')
         break
 
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle])
+  }, [setPhase, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle])
 
   const send = useCallback((message: object) => {
     sendGameMessage(message)

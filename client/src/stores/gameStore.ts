@@ -9,6 +9,7 @@ import { create } from 'zustand'
 
 export type GamePhase = 'lobby' | 'onboarding' | 'reveal' | 'playing' | 'final_spell' | 'escape' | 'result'
 export type PlayerStatus = 'alive' | 'frozen' | 'eliminated'
+export type GameOutcome = 'win' | 'lose' | null
 
 export interface PlayerState {
   playerId: string
@@ -60,6 +61,8 @@ interface GameStore {
 
   // 게임 상태
   phase: GamePhase
+  outcome: GameOutcome
+  resultReason: string | null
   forbiddenWords: string[]
   players: Record<string, PlayerState>
 
@@ -88,6 +91,7 @@ interface GameStore {
   setConnected: (connected: boolean) => void
   setRoom: (roomId: string, playerId: string) => void
   setPhase: (phase: GamePhase) => void
+  finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], spellWords: string[]) => void
   acquireClue: (clueWord: string) => void
@@ -111,6 +115,8 @@ const initialState = {
   roomId: '',
   playerId: '',
   phase: 'lobby' as GamePhase,
+  outcome: null as GameOutcome,
+  resultReason: null as string | null,
   forbiddenWords: [],
   props: [] as PropData[],
   missions: [] as MissionData[],
@@ -136,6 +142,9 @@ export const useGameStore = create<GameStore>((set) => ({
   setRoom: (roomId, playerId) => set({ roomId, playerId }),
 
   setPhase: (phase) => set({ phase }),
+
+  finishGame: (outcome, resultReason) =>
+    set({ phase: 'result', outcome, resultReason }),
 
   setForbiddenWords: (words) => set({ forbiddenWords: words }),
 

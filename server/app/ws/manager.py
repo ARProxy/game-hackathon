@@ -219,6 +219,21 @@ class ConnectionManager:
                 room_id, player_id,
             )
 
+        elif (
+            action_type == "gate_escape"
+            and player
+            and player.status == PlayerStatus.ALIVE
+            and session.state.phase == GamePhase.ESCAPE
+        ):
+            session.state.phase = GamePhase.RESULT
+            self._cancel_room_freeze_timeouts(room_id)
+            await self.broadcast(room_id, {
+                "type": "game_won",
+                "player_id": player_id,
+                "reason": "escaped",
+                "gate_id": payload.get("gate_id"),
+            })
+
     def _schedule_freeze_timeout(self, room_id: str, player_id: str) -> None:
         """현재 빙결 세대에 대응하는 제한시간 task를 하나만 유지한다."""
         session = session_manager.get_or_create(room_id)
@@ -346,6 +361,7 @@ class ConnectionManager:
         result = check_spell(spell_text, session.spell_words)
 
         if result["success"]:
+            session.state.phase = GamePhase.ESCAPE
             await self.broadcast(room_id, {
                 "type": "spell_success",
                 "player_id": player_id,

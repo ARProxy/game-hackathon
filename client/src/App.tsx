@@ -80,8 +80,10 @@ function Scene({
           gateId={phase === 'escape' ? roundPlan.gate : undefined}
           onGateEnter={(id) => {
             if (phase === 'escape' && id === roundPlan.gate) {
-              useGameStore.getState().setPhase('result')
-              useGameStore.getState().addSubtitle('system', '탈출 성공!')
+              sendGameMessage({
+                type: 'action',
+                payload: { action_type: 'gate_escape', gate_id: id },
+              })
             }
           }}
           onTrapEnter={(id) => {

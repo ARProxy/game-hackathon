@@ -28,6 +28,7 @@ class GamePhase(str, Enum):
     ONBOARDING = "onboarding"
     PLAYING = "playing"
     FINAL_SPELL = "final_spell"
+    ESCAPE = "escape"
     RESULT = "result"
 
 
