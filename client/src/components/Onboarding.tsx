@@ -1,7 +1,7 @@
 /**
  * 온보딩 화면
  * - 2~3개 질문을 순서대로 출제
- * - 플레이어가 스페이스바로 답변 (useSpeech 재활용)
+ * - 플레이어가 Q키로 답변 (useSpeech 재활용)
  * - 답변 완료 → 서버에 전사 텍스트 전송 → 금기어 채집
  */
 
@@ -132,7 +132,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         </div>
 
         <div style={{ fontSize: 12, opacity: 0.4 }}>
-          Space를 누르고 말하세요
+          Q를 누르고 말하세요
         </div>
 
         {/* 텍스트 직접 입력 (폴백) */}
