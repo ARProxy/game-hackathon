@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 
 from fastapi import WebSocket
@@ -10,7 +12,7 @@ from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
 from app.ai.spell import check_spell
 from app.game.session import session_manager
-from app.game.state import PlayerRole
+from app.game.state import GamePhase, PlayerRole
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +26,7 @@ class Room:
 class ConnectionManager:
     def __init__(self) -> None:
         self.rooms: dict[str, Room] = {}
+        self._freeze_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
 
     async def connect(
         self, room_id: str, player_id: str, websocket: WebSocket
@@ -40,10 +43,12 @@ class ConnectionManager:
         logger.info("connected: room=%s player=%s", room_id, player_id)
 
     def disconnect(self, room_id: str, player_id: str) -> None:
+        self._cancel_freeze_timeout(room_id, player_id)
         room = self.rooms.get(room_id)
         if room:
             room.players.pop(player_id, None)
             if not room.players:
+                self._cancel_room_freeze_timeouts(room_id)
                 del self.rooms[room_id]
                 session_manager.remove(room_id)
         logger.info("disconnected: room=%s player=%s", room_id, player_id)
@@ -100,6 +105,7 @@ class ConnectionManager:
                     "z": player.position.z,
                 },
             })
+            self._schedule_freeze_timeout(room_id, player_id)
             logger.info(
                 "FREEZE: room=%s player=%s word=%s",
                 room_id, player_id, result.matched_word,
@@ -107,6 +113,8 @@ class ConnectionManager:
 
             # 팀 전멸 체크
             if session.state.all_non_seeker_frozen_or_eliminated():
+                session.state.phase = GamePhase.RESULT
+                self._cancel_room_freeze_timeouts(room_id)
                 await self.broadcast(room_id, {
                     "type": "game_over",
                     "reason": "all_frozen",
@@ -147,6 +155,7 @@ class ConnectionManager:
             target = session.state.get_player(target_id) if target_id else None
             if target and target.is_frozen:
                 target.unfreeze()
+                self._cancel_freeze_timeout(room_id, target_id)
                 await self.broadcast(room_id, {
                     "type": "rescued",
                     "rescuer_id": actor.player_id,
@@ -173,6 +182,99 @@ class ConnectionManager:
                     "z": player.position.z,
                 },
             })
+            self._schedule_freeze_timeout(room_id, player_id)
+
+    def _schedule_freeze_timeout(self, room_id: str, player_id: str) -> None:
+        """현재 빙결 세대에 대응하는 제한시간 task를 하나만 유지한다."""
+        session = session_manager.get_or_create(room_id)
+        player = session.state.get_player(player_id)
+        if not player or not player.is_frozen or player.frozen_at is None:
+            return
+
+        self._cancel_freeze_timeout(room_id, player_id)
+        frozen_at = player.frozen_at
+        task = asyncio.create_task(
+            self._eliminate_after_freeze_timeout(room_id, player_id, frozen_at)
+        )
+        key = (room_id, player_id)
+        self._freeze_tasks[key] = task
+        task.add_done_callback(
+            lambda completed, task_key=key: self._forget_freeze_task(
+                task_key, completed
+            )
+        )
+
+    async def _eliminate_after_freeze_timeout(
+        self, room_id: str, player_id: str, frozen_at: float
+    ) -> None:
+        session = session_manager.sessions.get(room_id)
+        if not session:
+            return
+
+        remaining = max(
+            0.0,
+            session.state.freeze_timeout_sec - (time.time() - frozen_at),
+        )
+        await asyncio.sleep(remaining)
+
+        # 구조 후 재빙결되었거나 방이 종료된 오래된 task는 상태를 바꾸지 않는다.
+        session = session_manager.sessions.get(room_id)
+        if not session:
+            return
+        player = session.state.get_player(player_id)
+        if (
+            not player
+            or not player.is_frozen
+            or player.frozen_at != frozen_at
+        ):
+            return
+
+        player.eliminate()
+        await self.broadcast(room_id, {
+            "type": "eliminated",
+            "player_id": player_id,
+            "reason": "freeze_timeout",
+        })
+        logger.info(
+            "ELIMINATED: room=%s player=%s reason=freeze_timeout",
+            room_id, player_id,
+        )
+
+        # 현재 사전과제는 인간 1명 플레이이므로 조작 주체가 탈락하면 판을 종료한다.
+        # AI 동료가 살아 있다는 이유로 입력할 인간이 없는 세션을 방치하지 않는다.
+        if player.role == PlayerRole.HUMAN:
+            session.state.phase = GamePhase.RESULT
+            self._cancel_room_freeze_timeouts(room_id)
+            await self.broadcast(room_id, {
+                "type": "game_over",
+                "reason": "human_eliminated",
+            })
+            return
+
+        if session.state.all_non_seeker_frozen_or_eliminated():
+            session.state.phase = GamePhase.RESULT
+            await self.broadcast(room_id, {
+                "type": "game_over",
+                "reason": "all_frozen_or_eliminated",
+            })
+
+    def _cancel_freeze_timeout(self, room_id: str, player_id: str) -> None:
+        task = self._freeze_tasks.pop((room_id, player_id), None)
+        if task and not task.done():
+            task.cancel()
+
+    def _cancel_room_freeze_timeouts(self, room_id: str) -> None:
+        keys = [key for key in self._freeze_tasks if key[0] == room_id]
+        for _, player_id in keys:
+            self._cancel_freeze_timeout(room_id, player_id)
+
+    def _forget_freeze_task(
+        self,
+        key: tuple[str, str],
+        completed: asyncio.Task[None],
+    ) -> None:
+        if self._freeze_tasks.get(key) is completed:
+            self._freeze_tasks.pop(key, None)
 
     async def _handle_onboarding(
         self, room_id: str, player_id: str, payload: dict
