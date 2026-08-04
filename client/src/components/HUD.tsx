@@ -18,7 +18,7 @@ function FrozenCountdown() {
   const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
   const freezeEvent = useGameStore((s) => s.lastFreezeEvent)
   const [now, setNow] = useState(Date.now())
-  const visible = phase === 'playing'
+  const visible = (phase === 'playing' || phase === 'final_spell' || phase === 'escape')
     && playerStatus === 'frozen'
     && freezeEvent?.playerId === playerId
 
