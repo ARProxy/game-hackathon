@@ -10,6 +10,7 @@ import Seeker from './game/Seeker'
 import Props from './game/Props'
 import Partner from './game/Partner'
 import ThirdPersonCamera from './game/ThirdPersonCamera'
+import Fog from './game/Fog'
 import HUD from './components/HUD'
 import Onboarding from './components/Onboarding'
 import ForbiddenReveal from './components/ForbiddenReveal'
@@ -70,8 +71,9 @@ function Scene({
   return (
     <>
       {/* ── 조명 ── */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[10, 30, 10]} intensity={0.8} />
+      <ambientLight intensity={cameraMode === 'cctv' ? 0.6 : 0.08} />
+      <directionalLight position={[10, 30, 10]} intensity={cameraMode === 'cctv' ? 0.8 : 0.16} />
+      {cameraMode === '3d' && <Fog />}
 
       {/* ── 물리 월드 ── */}
       <Physics gravity={[0, -9.81, 0]}>
