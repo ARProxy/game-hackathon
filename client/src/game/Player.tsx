@@ -1,6 +1,6 @@
 /**
- * 플레이어 캐릭터 — Rapier dynamic body
- * - RigidBody(dynamic) + CapsuleCollider
+ * 플레이어 캐릭터 — Rapier dynamic body + Characters.tsx 비주얼
+ * - RigidBody(dynamic) + CapsuleCollider (Characters.tsx 규격)
  * - velocity로 이동 → rapier가 충돌 처리
  * - 회전 잠금, 중력 적용
  */
@@ -12,16 +12,15 @@ import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import useKeyboard from '../hooks/useKeyboard'
 import { useGameStore } from '../stores/gameStore'
+import { CharacterModel, COLLIDER } from './Characters'
 
 const MOVE_SPEED = 5
 const JUMP_FORCE = 5
-const GROUND_THRESHOLD = 0.1 // 바닥 판정 y 속도 임계값
-
-const COLOR_NORMAL = '#52E5FF'
-const COLOR_FROZEN = '#8090a0'
+const GROUND_THRESHOLD = 0.1
 
 interface PlayerProps {
   position?: [number, number, number]
+  characterId?: string
 }
 
 export interface PlayerHandle {
@@ -30,16 +29,14 @@ export interface PlayerHandle {
 
 const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   position = [0, 0, 0],
+  characterId = 'R01',
 }: PlayerProps, ref) {
   const visualRef = useRef<THREE.Group>(null)
   const rigidBodyRef = useRef<RapierRigidBody>(null)
-  const bodyMeshRef = useRef<THREE.Mesh>(null)
-  const headMeshRef = useRef<THREE.Mesh>(null)
   const keys = useKeyboard()
   const isMoving = useRef(false)
   const { camera } = useThree()
 
-  // 외부에서 visual group 위치를 참조 (카메라 추종 등)
   useImperativeHandle(ref, () => ({
     getGroup: () => visualRef.current,
   }))
@@ -51,23 +48,11 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     const playerState = useGameStore.getState().players[playerId]
     const isFrozen = playerState?.status === 'frozen'
 
-    // 빙결 시 색 변경
-    const targetColor = isFrozen ? COLOR_FROZEN : COLOR_NORMAL
-    if (bodyMeshRef.current) {
-      const mat = bodyMeshRef.current.material as THREE.MeshStandardMaterial
-      mat.color.lerp(new THREE.Color(targetColor), 0.1)
-    }
-    if (headMeshRef.current) {
-      const mat = headMeshRef.current.material as THREE.MeshStandardMaterial
-      mat.color.lerp(new THREE.Color(targetColor), 0.1)
-    }
-
     // 빙결 시 정지
     if (isFrozen) {
       rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true)
-      // visual 동기화
       const pos = rigidBodyRef.current.translation()
-      visualRef.current.position.set(pos.x, 0, pos.z)
+      visualRef.current.position.set(pos.x, pos.y - COLLIDER.offsetY, pos.z)
       return
     }
 
@@ -94,7 +79,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     const moveX = move.x
     const moveZ = move.z
 
-    // 점프 — Space키, 바닥에 있을 때만
+    // 점프
     const currentVel = rigidBodyRef.current.linvel()
     let velY = currentVel.y
     const isGrounded = Math.abs(velY) < GROUND_THRESHOLD
@@ -102,15 +87,14 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       velY = JUMP_FORCE
     }
 
-    // velocity 설정
     rigidBodyRef.current.setLinvel(
       { x: moveX * MOVE_SPEED, y: velY, z: moveZ * MOVE_SPEED },
       true,
     )
 
-    // visual을 rigid body 위치에 동기화 (y도 포함 — 점프/낙하)
+    // visual을 rigid body 위치에 동기화
     const pos = rigidBodyRef.current.translation()
-    visualRef.current.position.set(pos.x, pos.y - 0.6, pos.z)
+    visualRef.current.position.set(pos.x, pos.y - COLLIDER.offsetY, pos.z)
 
     // 이동 방향으로 회전
     if (isMoving.current) {
@@ -122,7 +106,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       )
     }
 
-    // 바운스 — 바닥에 있을 때만 (점프/낙하 중에는 꺼짐)
+    // 바운스
     if (isGrounded) {
       const t = clock.getElapsedTime()
       const bounceAmount = isMoving.current ? 0.08 : 0.03
@@ -131,9 +115,12 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     }
   })
 
+  const playerId = useGameStore((s) => s.playerId)
+  const isFrozen = useGameStore((s) => s.players[playerId]?.status === 'frozen')
+
   return (
     <>
-      {/* 물리 바디 — 충돌 담당 */}
+      {/* 물리 바디 */}
       <RigidBody
         ref={rigidBodyRef}
         type="dynamic"
@@ -143,27 +130,12 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
         mass={1}
         linearDamping={5}
       >
-        <CapsuleCollider args={[0.4, 0.3]} />
+        <CapsuleCollider args={[COLLIDER.halfHeight, COLLIDER.radius]} position={[0, COLLIDER.offsetY, 0]} />
       </RigidBody>
 
-      {/* 비주얼 — rigid body 위치를 따라감 */}
+      {/* 비주얼 — CharacterModel */}
       <group ref={visualRef} position={position}>
-        <mesh ref={bodyMeshRef} position={[0, 0.6, 0]}>
-          <capsuleGeometry args={[0.3, 0.6, 8, 16]} />
-          <meshStandardMaterial color={COLOR_NORMAL} />
-        </mesh>
-        <mesh ref={headMeshRef} position={[0, 1.3, 0]}>
-          <sphereGeometry args={[0.25, 16, 16]} />
-          <meshStandardMaterial color={COLOR_NORMAL} />
-        </mesh>
-        <mesh position={[-0.1, 1.35, 0.22]}>
-          <sphereGeometry args={[0.05, 8, 8]} />
-          <meshBasicMaterial color="#07090D" />
-        </mesh>
-        <mesh position={[0.1, 1.35, 0.22]}>
-          <sphereGeometry args={[0.05, 8, 8]} />
-          <meshBasicMaterial color="#07090D" />
-        </mesh>
+        <CharacterModel id={characterId} frozen={isFrozen} />
       </group>
     </>
   )

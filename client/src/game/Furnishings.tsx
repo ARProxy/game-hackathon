@@ -22,10 +22,11 @@
  * 층 높이: F1=0, F2=3.6, F3=7.2
  */
 
+import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import type { FloorKey } from './SchoolCampus'
 
-/* ── GLB 래퍼 ── */
+/* ── GLB 래퍼 — useMemo로 clone 캐시 ── */
 function M({ url, position, scale = 1, rotation = [0, 0, 0] as [number, number, number] }: {
   url: string
   position: [number, number, number]
@@ -33,26 +34,22 @@ function M({ url, position, scale = 1, rotation = [0, 0, 0] as [number, number, 
   rotation?: [number, number, number]
 }) {
   const { scene } = useGLTF(url)
-  return <primitive object={scene.clone()} position={position} scale={scale} rotation={rotation} />
+  const cloned = useMemo(() => scene.clone(), [scene])
+  return <primitive object={cloned} position={position} scale={scale} rotation={rotation} />
 }
 
-/* ── 천장 조명 — 방 내부 + 창문 밖으로 빛 새어나옴 ── */
-function RoomLight({ cx, y, cz = -32.3, intensity = 4, color = '#ffe8c0' }: {
+/* ── 천장 조명 — PointLight 제거, ambient로 대체 ── */
+function RoomLight({ cx, y, cz = -32.3 }: {
   cx: number
   y: number
   cz?: number
   intensity?: number
   color?: string
 }) {
-  const ceilingY = y + 3 // 천장 높이
+  const ceilingY = y + 3
   return (
     <group>
-      {/* 천장등 모델 */}
       <M url="/models/lampSquareCeiling.glb" position={[cx, ceilingY, cz]} />
-      {/* 실내 조명 — 따뜻한 빛 */}
-      <pointLight position={[cx, ceilingY - 0.3, cz]} intensity={intensity} distance={10} color={color} decay={2} />
-      {/* 창문 밖으로 새어나오는 빛 — 북벽(z=-35.7) 바깥으로 약하게 */}
-      <pointLight position={[cx, y + 1.5, -36.5]} intensity={intensity * 0.3} distance={5} color={color} decay={2} />
     </group>
   )
 }

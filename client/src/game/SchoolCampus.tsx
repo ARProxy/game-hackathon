@@ -67,7 +67,7 @@
  *   조명 톤 14 (warm 운동장·놀이터 / amber 골목·정문 / cool 건물)
  *   pickRound(seed) 하나로 트랩·게이트·열쇠가 결정적으로 정해진다
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
@@ -2433,16 +2433,134 @@ export function Lamp({ position, h, color }: { position: V2; h: number; color: s
   )
 }
 
+/* ── InstancedMesh 배칭 ── */
+function BoxInstances({ boxes }: { boxes: typeof BOXES }) {
+  const groups = useMemo(() => {
+    const m = new Map<string, typeof BOXES>()
+    for (const b of boxes) {
+      if (b.hide) continue
+      const arr = m.get(b.c)
+      if (arr) arr.push(b)
+      else m.set(b.c, [b])
+    }
+    return m
+  }, [boxes])
+
+  return (
+    <>
+      {Array.from(groups.entries()).map(([color, items]) => (
+        <BoxColorBatch key={color} items={items} color={color} />
+      ))}
+    </>
+  )
+}
+
+function BoxColorBatch({ items, color }: { items: typeof BOXES; color: string }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  useEffect(() => {
+    if (!ref.current) return
+    const mat = new THREE.Matrix4()
+    const pos = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
+    const scl = new THREE.Vector3()
+    const euler = new THREE.Euler()
+    for (let i = 0; i < items.length; i++) {
+      const b = items[i]
+      pos.set(b.p[0], b.p[1], b.p[2])
+      scl.set(b.s[0], b.s[1], b.s[2])
+      if (b.rot) { euler.set(b.rot[0], b.rot[1], b.rot[2]); quat.setFromEuler(euler) }
+      else quat.identity()
+      mat.compose(pos, quat, scl)
+      ref.current.setMatrixAt(i, mat)
+    }
+    ref.current.instanceMatrix.needsUpdate = true
+  }, [items])
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, items.length]} frustumCulled={false}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color={color} />
+    </instancedMesh>
+  )
+}
+
+function VisualBoxInstances({ items }: { items: typeof VISUALS }) {
+  const groups = useMemo(() => {
+    const m = new Map<string, typeof VISUALS>()
+    for (const v of items) {
+      if (v.t !== 'box') continue
+      const arr = m.get(v.c)
+      if (arr) arr.push(v)
+      else m.set(v.c, [v])
+    }
+    return m
+  }, [items])
+
+  return (
+    <>
+      {Array.from(groups.entries()).map(([color, group]) => (
+        <VisualBoxColorBatch key={color} items={group} color={color} />
+      ))}
+    </>
+  )
+}
+
+function VisualBoxColorBatch({ items, color }: { items: typeof VISUALS; color: string }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  useEffect(() => {
+    if (!ref.current) return
+    const mat = new THREE.Matrix4()
+    const pos = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
+    const scl = new THREE.Vector3()
+    const euler = new THREE.Euler()
+    for (let i = 0; i < items.length; i++) {
+      const v = items[i]
+      pos.set(v.p[0], v.p[1], v.p[2])
+      const s = v.s as V3 | undefined
+      scl.set(s ? s[0] : 1, s ? s[1] : 1, s ? s[2] : 1)
+      if (v.rot) { euler.set(v.rot[0], v.rot[1], v.rot[2]); quat.setFromEuler(euler) }
+      else quat.identity()
+      mat.compose(pos, quat, scl)
+      ref.current.setMatrixAt(i, mat)
+    }
+    ref.current.instanceMatrix.needsUpdate = true
+  }, [items])
+
+  return (
+    <instancedMesh ref={ref} args={[undefined, undefined, items.length]} frustumCulled={false}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color={color} />
+    </instancedMesh>
+  )
+}
+
 export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTrapEnter, elevatorY = 0 }: {
-  /** 렌더할 층. 생략 시 전부 (컷어웨이: 플레이어가 선 층 + 'OUT'만 넘기면 위층이 사라진다) */
   visibleFloors?: FloorKey[]
   activeTraps?: string[]
   gateId?: string
   onTrapEnter?: (id: string) => void
-  /** 엘리베이터 카 바닥 높이 (기본 1층) */
   elevatorY?: number
 }) {
   const show = (f: FloorKey) => !visibleFloors || visibleFloors.includes(f)
+
+  const filteredBoxes = useMemo(
+    () => BOXES.filter((b) => show(b.f)),
+    [visibleFloors],
+  )
+  const filteredCyls = useMemo(
+    () => CYLS.filter((c) => show(c.f)),
+    [visibleFloors],
+  )
+  const filteredVisuals = useMemo(
+    () => VISUALS.filter((v) => show(v.f)),
+    [visibleFloors],
+  )
+  const nonBoxVisuals = useMemo(
+    () => filteredVisuals.filter((v) => v.t !== 'box'),
+    [filteredVisuals],
+  )
+
   return (
     <group>
       {/* 지면 */}
@@ -2453,29 +2571,41 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTra
         </mesh>
       </RigidBody>
 
-      {BOXES.filter((b) => show(b.f)).map((b, i) => (
-        <RigidBody key={`b${i}`} type="fixed" position={b.p} rotation={b.rot} colliders="cuboid">
-          {/* hide: 계단 경사 콜라이더 — 위에 실제 계단 단이 시각화된다 */}
-          <mesh visible={!b.hide}>
-            <boxGeometry args={b.s} />
-            <meshStandardMaterial color={b.c} />
-          </mesh>
-        </RigidBody>
+      {/* ── BOXES: compound collider 1개 + InstancedMesh per color ── */}
+      <RigidBody type="fixed" colliders={false}>
+        {filteredBoxes.map((b, i) => (
+          <CuboidCollider key={i}
+            args={[b.s[0] / 2, b.s[1] / 2, b.s[2] / 2]}
+            position={b.p} rotation={b.rot}
+          />
+        ))}
+      </RigidBody>
+      <BoxInstances boxes={filteredBoxes} />
+
+      {/* ── CYLS: compound collider 1개 + 개별 mesh (114개라 배칭 불필요) ── */}
+      <RigidBody type="fixed" colliders={false}>
+        {filteredCyls.map((cy, i) => (
+          <CuboidCollider key={i}
+            args={[cy.r, cy.h / 2, cy.r]}
+            position={cy.p} rotation={cy.rot}
+          />
+        ))}
+      </RigidBody>
+      {filteredCyls.map((cy, i) => (
+        <mesh key={`c${i}`} position={cy.p} rotation={cy.rot}>
+          <cylinderGeometry args={[cy.r, cy.r, cy.h, 8]} />
+          <meshStandardMaterial color={cy.c} />
+        </mesh>
       ))}
 
-      {CYLS.filter((c) => show(c.f)).map((cy, i) => (
-        <RigidBody key={`c${i}`} type="fixed" position={cy.p} rotation={cy.rot} colliders="cuboid">
-          <mesh>
-            <cylinderGeometry args={[cy.r, cy.r, cy.h, 12]} />
-            <meshStandardMaterial color={cy.c} />
-          </mesh>
-        </RigidBody>
-      ))}
+      {/* ── VISUALS box: InstancedMesh per color ── */}
+      <VisualBoxInstances items={filteredVisuals} />
 
-      {VISUALS.filter((v) => show(v.f)).map((v, i) =>
+      {/* ── VISUALS 비-box: 개별 mesh (168개 — 배칭 대비 공수 과다) ── */}
+      {nonBoxVisuals.map((v, i) =>
         v.t === 'sph' ? (
           <mesh key={`v${i}`} position={v.p}>
-            <sphereGeometry args={[v.r!, 10, 8]} />
+            <sphereGeometry args={[v.r!, 8, 6]} />
             <meshStandardMaterial color={v.c} />
           </mesh>
         ) : v.t === 'plate' ? (
@@ -2485,17 +2615,12 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTra
           </mesh>
         ) : v.t === 'ring' ? (
           <mesh key={`v${i}`} position={v.p} rotation={[-Math.PI / 2, 0, 0]} scale={[v.sx!, v.sz!, 1]}>
-            <ringGeometry args={[v.ri!, v.ro!, 64]} />
+            <ringGeometry args={[v.ri!, v.ro!, 32]} />
             <meshBasicMaterial color={v.c} side={2} />
-          </mesh>
-        ) : v.t === 'cyl' ? (
-          <mesh key={`v${i}`} position={v.p} rotation={v.rot}>
-            <cylinderGeometry args={[v.r!, v.r!, (v as { h: number }).h, 12]} />
-            <meshStandardMaterial color={v.c} />
           </mesh>
         ) : (
           <mesh key={`v${i}`} position={v.p} rotation={v.rot}>
-            <boxGeometry args={v.s as V3} />
+            <cylinderGeometry args={[v.r!, v.r!, (v as { h: number }).h, 8]} />
             <meshStandardMaterial color={v.c} />
           </mesh>
         )

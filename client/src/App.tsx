@@ -7,6 +7,7 @@ import SchoolCampus, { pickRound, SPAWNS, type FloorKey } from './game/SchoolCam
 import Furnishings from './game/Furnishings'
 import WallOverlay from './game/WallOverlay'
 import Player, { type PlayerHandle } from './game/Player'
+import { assignCharacters } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
 import Seeker from './game/Seeker'
 import Props from './game/Props'
@@ -41,6 +42,9 @@ const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
   'Digit4': ['OUT', 'F1', 'F2', 'F3', 'ROOF'], // 전체 (옥상 포함)
 }
 
+/* 캐릭터 배정 — 시드 고정으로 매번 같은 배정 */
+const cast = assignCharacters(42, 3) // seeker + runner 2명
+
 function Scene({
   cameraMode,
   visibleFloors,
@@ -60,13 +64,11 @@ function Scene({
   return (
     <>
       {/* ── 조명 ── */}
-      {/* 개발 중: 밝게. 완성 후 Fog+PlayerLight로 전환 */}
       <ambientLight intensity={0.6} />
       <directionalLight position={[10, 30, 10]} intensity={0.8} />
 
       {/* ── 물리 월드 ── */}
       <Physics gravity={[0, -9.81, 0]}>
-        {/* 맵 본체 — 층 필터링 지원 */}
         <SchoolCampus
           visibleFloors={visibleFloors}
           onTrapEnter={(id) => {
@@ -84,14 +86,15 @@ function Scene({
           }}
         />
         <Props playerRef={playerGroupRef} />
-        <Player ref={playerRef} position={[SPAWNS.player[0], 1, SPAWNS.player[1]]} />
-        <Partner playerRef={playerGroupRef} />
+        <Player ref={playerRef} position={[SPAWNS.player[0], 1, SPAWNS.player[1]]} characterId={cast.runners[0]} />
+        <Partner playerRef={playerGroupRef} characterId={cast.runners[1] ?? 'R05'} />
         <Seeker />
       </Physics>
 
-      {/* ── 비주얼 오버레이 — Physics 밖 (충돌 불필요) ── */}
-      <WallOverlay visibleFloors={visibleFloors} />
-      <Furnishings visibleFloors={visibleFloors} />
+      {/* ── 비주얼 오버레이 — 성능 최적화 전까지 비활성화 ── */}
+      {/* TODO: GLB InstancedMesh로 교체 후 재활성화 */}
+      {/* <WallOverlay visibleFloors={visibleFloors} /> */}
+      {/* <Furnishings visibleFloors={visibleFloors} /> */}
 
       {/* ── 플레이어 시야 조명 ── */}
       <PlayerLight targetRef={playerGroupRef} />
