@@ -191,11 +191,7 @@ def round_to_dict(rd: RoundData) -> dict:
                 "mesh": p.mesh,
                 "scale": p.scale,
                 "position": p.position,
-                "is_real": p.is_real,
                 "zone": p.zone,
-                "forbidden_word": p.forbidden_word,
-                "tags": p.tags,
-                "descriptions": p.descriptions,
             }
             for p in rd.all_props
         ],

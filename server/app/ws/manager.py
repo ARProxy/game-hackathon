@@ -10,9 +10,10 @@ from fastapi import WebSocket
 
 from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
+from app.ai.partner import match_partner_command
 from app.ai.spell import check_spell
 from app.game.session import session_manager
-from app.game.state import GamePhase, PlayerRole, PlayerStatus
+from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,16 @@ class ConnectionManager:
                 "transcript": transcript,
                 "is_final": is_final,
             })
+            mission = session.current_mission()
+            if mission and is_final and transcript.strip():
+                command = match_partner_command(transcript, mission.real_prop)
+                if command.matched:
+                    await self.broadcast(room_id, {
+                        "type": "partner_command",
+                        "target_prop_id": mission.real_prop.prop_id,
+                        "position": mission.real_prop.position,
+                        "utterance": transcript,
+                    })
 
     async def _handle_action(
         self, room_id: str, player_id: str, payload: dict
@@ -196,6 +207,11 @@ class ConnectionManager:
             })
             self._schedule_freeze_timeout(room_id, player_id)
 
+        elif action_type == "inspect_prop":
+            await self._handle_inspect_prop(
+                room_id, player_id, actor, payload
+            )
+
         elif (
             action_type == "seeker_catch"
             and player
@@ -233,6 +249,82 @@ class ConnectionManager:
                 "reason": "escaped",
                 "gate_id": payload.get("gate_id"),
             })
+
+    async def _handle_inspect_prop(
+        self,
+        room_id: str,
+        player_id: str,
+        actor: Player | None,
+        payload: dict,
+    ) -> None:
+        session = session_manager.get_or_create(room_id)
+        prop_id = payload.get("prop_id")
+
+        if not actor or actor.role != PlayerRole.AI_PARTNER:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "inspect_prop",
+                "reason": "ai_partner_only",
+            })
+            return
+        if not isinstance(prop_id, str) or not prop_id:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "inspect_prop",
+                "reason": "invalid_prop",
+            })
+            return
+        if prop_id in session.inspected_prop_ids:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "inspect_prop",
+                "reason": "already_inspected",
+                "prop_id": prop_id,
+            })
+            return
+
+        mission = session.current_mission()
+        if not mission:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "inspect_prop",
+                "reason": "no_active_mission",
+            })
+            return
+
+        mission_props = [mission.real_prop, *mission.decoy_props]
+        prop = next((item for item in mission_props if item.prop_id == prop_id), None)
+        if prop is None:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "inspect_prop",
+                "reason": "prop_not_in_current_mission",
+                "prop_id": prop_id,
+            })
+            return
+
+        session.inspected_prop_ids.add(prop_id)
+        completed_index = session.current_mission_index
+        is_correct = prop.prop_id == mission.real_prop.prop_id
+        clue = None
+        if is_correct:
+            clue = mission.clue_word
+            session.current_mission_index += 1
+        all_complete = bool(
+            session.round_data
+            and session.current_mission_index >= len(session.round_data.missions)
+        )
+        if all_complete:
+            session.state.phase = GamePhase.FINAL_SPELL
+        await self.broadcast(room_id, {
+            "type": "prop_inspected",
+            "prop_id": prop_id,
+            "is_correct": is_correct,
+            "clue": clue,
+            "mission_index": completed_index,
+            "next_mission_index": session.current_mission_index,
+            "all_complete": all_complete,
+        })
 
     def _schedule_freeze_timeout(self, room_id: str, player_id: str) -> None:
         """현재 빙결 세대에 대응하는 제한시간 task를 하나만 유지한다."""
@@ -345,7 +437,7 @@ class ConnectionManager:
         # 게임 시작
         session = session_manager.get_or_create(room_id)
         session.setup_game(forbidden_words)
-        session.spell_words = round_data.spell_words
+        session.setup_round(round_data)
         await self.broadcast(room_id, {
             "type": "game_started",
             "state": session.state.to_dict(),
