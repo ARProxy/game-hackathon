@@ -16,6 +16,8 @@ from collections import Counter
 
 from kiwipiepy import Kiwi
 
+from app.ai.mission import load_prop_dict
+
 logger = logging.getLogger(__name__)
 
 _kiwi = Kiwi()
@@ -56,6 +58,16 @@ EXCLUDED = {
 FALLBACK_POOL = ["열쇠", "시계", "빨간", "커피", "우산"]
 
 
+def supported_prop_words() -> set[str]:
+    """T1에서 우회 표현 두 개 이상으로 식별 가능한 단어를 반환한다."""
+    prop_dict = load_prop_dict()
+    return {
+        word
+        for word, prop in prop_dict.items()
+        if len({description.strip() for description in prop.get("descriptions", []) if description.strip()}) >= 2
+    }
+
+
 def extract_forbidden_words(
     answers: list[str],
     count: int = 3,
@@ -70,15 +82,17 @@ def extract_forbidden_words(
     nouns = [
         token.form
         for token in tokens
-        if token.tag in ("NNG", "NNP") and len(token.form) >= 2
+        if token.tag in ("NNG", "NNP")
     ]
 
-    # 제외어 필터
-    nouns = [n for n in nouns if n not in EXCLUDED]
+    # 제외어와 T1 미지원 단어를 제거한다. 사전 밖 단어를
+    # generic prop으로 만들면 식별 단서가 하나뿐이어서 동료 명령이 영원히 성립하지 않는다.
+    supported = supported_prop_words()
+    nouns = [n for n in nouns if n not in EXCLUDED and n in supported]
 
     if not nouns:
         logger.warning("no nouns extracted, using fallback pool")
-        return FALLBACK_POOL[:count]
+        return [word for word in FALLBACK_POOL if word in supported][:count]
 
     # 빈도 계산
     freq = Counter(nouns)
@@ -93,12 +107,14 @@ def extract_forbidden_words(
     # 점수 내림차순 정렬
     scored.sort(key=lambda x: x[1], reverse=True)
 
-    # 상위 count개 선택
+    # 답변에 실제로 등장한 지원 단어를 먼저 유지한다.
     result = [word for word, _ in scored[:count]]
 
     # 부족하면 폴백에서 보충
     if len(result) < count:
         for fallback in FALLBACK_POOL:
+            if fallback not in supported:
+                continue
             if fallback not in result:
                 result.append(fallback)
             if len(result) >= count:
