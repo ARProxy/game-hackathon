@@ -5,13 +5,15 @@
  * - 탈출 페이즈가 시작되면 활성 게이트를 선점해 경비
  */
 
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
 import { useGameStore } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import useSound from '../hooks/useSound'
 import { CharacterModel } from './Characters'
+import { planAvoidedStep } from './aiNavigation'
 
 type SeekerState = 'patrol' | 'alert' | 'chase' | 'rush' | 'guard'
 
@@ -40,6 +42,8 @@ interface SeekerProps {
 
 export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
+  const { world, rapier } = useRapier()
+  const navigationShape = useMemo(() => new rapier.Ball(0.36), [rapier])
   const { playSeekerProximity } = useSound()
 
   const state = useRef<SeekerState>('patrol')
@@ -54,6 +58,37 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const lastPos = useRef(new THREE.Vector3(18, 0, -18))
   const lastPositionSync = useRef(0)
   const lastProximitySound = useRef(-Infinity)
+  const avoidanceSide = useRef(-1)
+
+  const fixedSolidFilters = rapier.QueryFilterFlags.EXCLUDE_SENSORS
+    | rapier.QueryFilterFlags.ONLY_FIXED
+  const moveToward = (pos: THREE.Vector3, dx: number, dz: number, maxStep: number) => {
+    const step = planAvoidedStep(dx, dz, maxStep, (direction, distance) => Boolean(world.castShape(
+      { x: pos.x, y: 0.78, z: pos.z },
+      { x: 0, y: 0, z: 0, w: 1 },
+      { x: direction.x, y: 0, z: direction.z },
+      navigationShape,
+      0.02,
+      distance + 0.08,
+      false,
+      fixedSolidFilters,
+    )), avoidanceSide.current)
+    if (step.x === 0 && step.z === 0) avoidanceSide.current *= -1
+    pos.x += step.x
+    pos.z += step.z
+  }
+
+  const hasClearCatchLine = (from: THREE.Vector3, to: THREE.Vector3) => {
+    const dx = to.x - from.x
+    const dz = to.z - from.z
+    const distance = Math.hypot(dx, dz)
+    if (distance <= 0) return true
+    const ray = new rapier.Ray(
+      { x: from.x, y: 0.85, z: from.z },
+      { x: dx / distance, y: 0, z: dz / distance },
+    )
+    return world.castRay(ray, distance, true, fixedSolidFilters) === null
+  }
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current) return
@@ -152,6 +187,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
       playerPos &&
       (store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape') &&
       Math.hypot(playerPos.x - pos.x, playerPos.z - pos.z) <= CATCH_DISTANCE &&
+      hasClearCatchLine(pos, playerPos) &&
       clock.elapsedTime - lastCatchAttempt.current >= CATCH_RETRY_SECONDS
     ) {
       const sent = sendGameMessage({
@@ -190,9 +226,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
       return
     }
 
-    const speed = PATROL_SPEED * delta
-    pos.x += (dx / dist) * speed
-    pos.z += (dz / dist) * speed
+    moveToward(pos, dx, dz, PATROL_SPEED * delta)
 
     const angle = Math.atan2(dx, dz)
     if (groupRef.current) {
@@ -235,9 +269,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
       return
     }
 
-    const speed = CHASE_SPEED * delta
-    pos.x += (dx / dist) * speed
-    pos.z += (dz / dist) * speed
+    moveToward(pos, dx, dz, CHASE_SPEED * delta)
 
     if (groupRef.current) {
       const angle = Math.atan2(dx, dz)
@@ -263,8 +295,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
     }
 
     const step = Math.min(RUSH_SPEED * delta, dist - RUSH_ARRIVE_DIST)
-    pos.x += (dx / dist) * step
-    pos.z += (dz / dist) * step
+    moveToward(pos, dx, dz, step)
 
     if (groupRef.current) {
       const angle = Math.atan2(dx, dz)
