@@ -120,6 +120,23 @@ export default function HUD() {
             </div>
           </div>
         )}
+
+        {phase === 'escape' && (
+          <div style={{
+            background: 'rgba(82, 229, 255, 0.18)',
+            border: '1px solid rgba(82, 229, 255, 0.65)',
+            borderRadius: 8,
+            padding: '10px 14px',
+            boxShadow: '0 0 24px rgba(82, 229, 255, 0.2)',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#52E5FF' }}>
+              탈출구가 열렸습니다
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4, opacity: 0.75 }}>
+              빛기둥으로 달리세요. 술래도 그곳으로 향합니다!
+            </div>
+          </div>
+        )}
       </div>
 
       {/* E키 조사 힌트 — 프롭 근처일 때 */}
@@ -170,13 +187,13 @@ export default function HUD() {
         gap: 8,
       }}>
         {/* 자막 */}
-        {subtitles.slice(-2).map((sub, i) => (
+        {subtitles.slice(-2).map((sub, i, visibleSubtitles) => (
           <div key={sub.timestamp} style={{
             background: 'rgba(0, 0, 0, 0.6)',
             padding: '4px 12px',
             borderRadius: 6,
             fontSize: 14,
-            opacity: i === subtitles.length - 1 ? 1 : 0.5,
+            opacity: i === visibleSubtitles.length - 1 ? 1 : 0.5,
           }}>
             {sub.text}
           </div>

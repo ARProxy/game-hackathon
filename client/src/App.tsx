@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
-import SchoolCampus, { SPAWNS, type FloorKey } from './game/SchoolCampus'
+import SchoolCampus, { GATE_SLOTS, pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
 import { assignCharacters } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
@@ -28,6 +28,9 @@ import './App.css'
  * ───────────────────────────────────────────── */
 type CameraMode = 'cctv' | '3d'
 
+/** CCTV와 층 필터는 개발 서버에서만 사용할 수 있다. */
+const DEV_TOOLS_ENABLED = import.meta.env.DEV
+
 /* ─────────────────────────────────────────────
  * 층 필터 (CCTV 모드에서 숫자키로 전환)
  * 1: 외부+1층  2: 2층  3: 3층  4: 옥상  0: 전체
@@ -46,11 +49,15 @@ const cast = assignCharacters(42, 3) // seeker + runner 2명
 function Scene({
   cameraMode,
   visibleFloors,
+  roundPlan,
 }: {
   cameraMode: CameraMode
   visibleFloors: FloorKey[] | undefined
+  roundPlan: RoundPlan
 }) {
   const playerRef = useRef<PlayerHandle>(null)
+  const phase = useGameStore((state) => state.phase)
+  const gateTarget = GATE_SLOTS.find((gate) => gate.id === roundPlan.gate)?.p
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
   const playerGroupRef = {
@@ -69,6 +76,14 @@ function Scene({
       <Physics gravity={[0, -9.81, 0]}>
         <SchoolCampus
           visibleFloors={visibleFloors}
+          activeTraps={roundPlan.traps}
+          gateId={phase === 'escape' ? roundPlan.gate : undefined}
+          onGateEnter={(id) => {
+            if (phase === 'escape' && id === roundPlan.gate) {
+              useGameStore.getState().setPhase('result')
+              useGameStore.getState().addSubtitle('system', '탈출 성공!')
+            }
+          }}
           onTrapEnter={(id) => {
             const store = useGameStore.getState()
             if (store.phase === 'playing') {
@@ -88,7 +103,7 @@ function Scene({
         <Props playerRef={playerGroupRef} />
         <Player ref={playerRef} position={[SPAWNS.player[0], 1, SPAWNS.player[1]]} characterId={cast.runners[0]} />
         <Partner playerRef={playerGroupRef} characterId={cast.runners[1] ?? 'R05'} />
-        <Seeker />
+        <Seeker rushTarget={gateTarget} />
       </Physics>
 
       {/* ── 비주얼 오버레이 — 성능 최적화 전까지 비활성화 ── */}
@@ -220,11 +235,14 @@ function GameController() {
  * 숫자키 1~4, 0: 층별 필터 (CCTV 모드에서만)
  * ───────────────────────────────────────────── */
 function App() {
-  const [cameraMode, setCameraMode] = useState<CameraMode>('cctv') // 개발 중 기본 CCTV
+  const [cameraMode, setCameraMode] = useState<CameraMode>('3d')
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
+  const [roundPlan] = useState(() => pickRound())
 
   useEffect(() => {
+    if (!DEV_TOOLS_ENABLED) return
+
     const onKeyDown = (e: KeyboardEvent) => {
       /* Tab: 카메라 모드 전환 */
       if (e.code === 'Tab') {
@@ -263,14 +281,14 @@ function App() {
           far: 1000,
         }}
       >
-        <Scene cameraMode={cameraMode} visibleFloors={visibleFloors} />
+        <Scene cameraMode={cameraMode} visibleFloors={visibleFloors} roundPlan={roundPlan} />
       </Canvas>
 
       <HUD />
       <ResultScreen />
 
-      {/* ── 개발용 컨트롤 패널 (완성 후 제거) ── */}
-      <div style={{
+      {/* ── 개발 서버 전용 CCTV/층 필터 패널 ── */}
+      {DEV_TOOLS_ENABLED && <div style={{
         position: 'fixed',
         top: 16,
         right: 16,
@@ -303,7 +321,7 @@ function App() {
             클릭: 마우스 잠금 | WASD: 이동 | Space: 점프 | Q: PTT
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

@@ -7,7 +7,7 @@
 
 import { create } from 'zustand'
 
-export type GamePhase = 'lobby' | 'onboarding' | 'reveal' | 'playing' | 'final_spell' | 'result'
+export type GamePhase = 'lobby' | 'onboarding' | 'reveal' | 'playing' | 'final_spell' | 'escape' | 'result'
 export type PlayerStatus = 'alive' | 'frozen' | 'eliminated'
 
 export interface PlayerState {
@@ -91,6 +91,7 @@ interface GameStore {
   updatePlayer: (playerId: string, update: Partial<PlayerState>) => void
   freezePlayer: (event: FreezeEvent) => void
   unfreezePlayer: (playerId: string) => void
+  eliminatePlayer: (playerId: string) => void
   setSpeaking: (isSpeaking: boolean) => void
   setLastTranscript: (transcript: string) => void
   addSubtitle: (playerId: string, text: string) => void
@@ -182,6 +183,17 @@ export const useGameStore = create<GameStore>((set) => ({
         [playerId]: {
           ...state.players[playerId],
           status: 'alive',
+        },
+      },
+    })),
+
+  eliminatePlayer: (playerId) =>
+    set((state) => ({
+      players: {
+        ...state.players,
+        [playerId]: {
+          ...state.players[playerId],
+          status: 'eliminated',
         },
       },
     })),

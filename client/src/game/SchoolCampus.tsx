@@ -2369,12 +2369,14 @@ export function TrapPlate({ id, position, floor, active = true, onTriggered }: {
   )
 }
 
-export function GateFrame({ position, rotationY, active = false, onActivated }: {
+export function GateFrame({ position, rotationY, active = false, onActivated, onReached }: {
   position: V2; rotationY: number
   /** 이번 판의 탈출 게이트인가 (열쇠 확보 후 true로 올리면 발광·사운드가 트리거된다) */
   active?: boolean
   /** active가 false→true로 바뀌는 순간 1회 호출 — 사운드/카메라 연출 훅 */
   onActivated?: () => void
+  /** 활성화된 게이트 안으로 플레이어가 들어왔을 때 호출 */
+  onReached?: () => void
 }) {
   const beamRef = useRef<THREE.Mesh>(null)
   const prev = useRef(active)
@@ -2393,6 +2395,11 @@ export function GateFrame({ position, rotationY, active = false, onActivated }: 
   const glow = active ? 1.3 : 0.12
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotationY, 0]}>
+      {active && (
+        <RigidBody type="fixed" colliders={false}>
+          <CuboidCollider args={[1.15, 1.5, 0.65]} position={[0, 1.5, 0]} sensor onIntersectionEnter={onReached} />
+        </RigidBody>
+      )}
       {/* 탈출 지점 표식 — 멀리서도 보이는 빛기둥 (활성 시에만) */}
       <mesh ref={beamRef} position={[0, 6, 0]}>
         <cylinderGeometry args={[1.5, 1.5, 12, 12, 1, true]} />
@@ -2535,11 +2542,12 @@ function VisualBoxColorBatch({ items, color }: { items: typeof VISUALS; color: s
   )
 }
 
-export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTrapEnter, elevatorY = 0 }: {
+export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTrapEnter, onGateEnter, elevatorY = 0 }: {
   visibleFloors?: FloorKey[]
   activeTraps?: string[]
   gateId?: string
   onTrapEnter?: (id: string) => void
+  onGateEnter?: (id: string) => void
   elevatorY?: number
 }) {
   const show = (f: FloorKey) => !visibleFloors || visibleFloors.includes(f)
@@ -2632,7 +2640,8 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTra
       ))}
 
       {GATE_SLOTS.map((g) => (
-        <GateFrame key={g.id} position={g.p} rotationY={g.ry} active={g.id === gateId} />
+        <GateFrame key={g.id} position={g.p} rotationY={g.ry} active={g.id === gateId}
+          onReached={() => onGateEnter?.(g.id)} />
       ))}
 
       {LAMPS.map((l, i) => (

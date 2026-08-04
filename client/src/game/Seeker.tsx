@@ -1,7 +1,8 @@
 /**
  * 술래 캐릭터 — Characters.tsx 비주얼
- * - FSM: PATROL → ALERT → CHASE
+ * - FSM: PATROL → ALERT → CHASE / RUSH → GUARD
  * - 빙결 핑 감지 시 해당 위치로 추격
+ * - 탈출 페이즈가 시작되면 활성 게이트를 선점해 경비
  */
 
 import { useRef } from 'react'
@@ -10,12 +11,14 @@ import * as THREE from 'three'
 import { useGameStore } from '../stores/gameStore'
 import { CharacterModel } from './Characters'
 
-type SeekerState = 'patrol' | 'alert' | 'chase'
+type SeekerState = 'patrol' | 'alert' | 'chase' | 'rush' | 'guard'
 
 const PATROL_SPEED = 1.8
 const CHASE_SPEED = 3.2
+const RUSH_SPEED = 5.2
 const ALERT_DURATION = 1.5
 const CHASE_ARRIVE_DIST = 1.5
+const RUSH_ARRIVE_DIST = 1.4
 
 // 순찰 웨이포인트
 const WAYPOINTS: [number, number][] = [
@@ -23,7 +26,7 @@ const WAYPOINTS: [number, number][] = [
   [0, 0], [-15, 10], [-8, 18], [0, 12], [15, 15], [18, 8], [5, 0],
 ]
 
-export default function Seeker() {
+export default function Seeker({ rushTarget }: { rushTarget?: [number, number] }) {
   const groupRef = useRef<THREE.Group>(null)
 
   const state = useRef<SeekerState>('patrol')
@@ -42,6 +45,15 @@ export default function Seeker() {
     const store = useGameStore.getState()
     const freezeEvent = store.lastFreezeEvent
 
+    // 주문 성공 시 기존 행동을 중단하고 선택된 탈출구부터 선점한다.
+    if (store.phase === 'escape' && rushTarget && state.current !== 'rush' && state.current !== 'guard') {
+      state.current = 'rush'
+      chaseTarget.current = null
+    } else if (store.phase === 'playing' && state.current === 'guard') {
+      // 새 라운드가 같은 씬에서 시작되더라도 경비 상태가 남지 않게 한다.
+      state.current = 'patrol'
+    }
+
     // 빙결 이벤트 감지 → ALERT 전환
     if (
       freezeEvent &&
@@ -59,6 +71,8 @@ export default function Seeker() {
       case 'patrol': patrol(pos, delta); break
       case 'alert': alert(pos, delta); break
       case 'chase': chase(pos, delta); break
+      case 'rush': rush(pos, delta); break
+      case 'guard': break
     }
 
     // 위장 판정 — 정지 3초 후 발동, 이동 시 해제
@@ -73,8 +87,9 @@ export default function Seeker() {
     }
 
     // 바운스
-    const bounceSpeed = state.current === 'chase' ? 6 : 3
-    const bounceAmount = state.current === 'chase' ? 0.08 : 0.04
+    const isRunning = state.current === 'chase' || state.current === 'rush'
+    const bounceSpeed = isRunning ? 6 : 3
+    const bounceAmount = isRunning ? 0.08 : 0.04
     pos.y = Math.abs(Math.sin(clock.getElapsedTime() * bounceSpeed)) * bounceAmount
   })
 
@@ -142,6 +157,33 @@ export default function Seeker() {
       const angle = Math.atan2(dx, dz)
       groupRef.current.rotation.y = THREE.MathUtils.lerp(
         groupRef.current.rotation.y, angle, 0.12
+      )
+    }
+  }
+
+  function rush(pos: THREE.Vector3, delta: number) {
+    if (!rushTarget) {
+      state.current = 'patrol'
+      return
+    }
+
+    const dx = rushTarget[0] - pos.x
+    const dz = rushTarget[1] - pos.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+
+    if (dist <= RUSH_ARRIVE_DIST) {
+      state.current = 'guard'
+      return
+    }
+
+    const step = Math.min(RUSH_SPEED * delta, dist - RUSH_ARRIVE_DIST)
+    pos.x += (dx / dist) * step
+    pos.z += (dz / dist) * step
+
+    if (groupRef.current) {
+      const angle = Math.atan2(dx, dz)
+      groupRef.current.rotation.y = THREE.MathUtils.lerp(
+        groupRef.current.rotation.y, angle, 0.18
       )
     }
   }
