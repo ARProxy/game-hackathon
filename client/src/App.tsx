@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
-import SchoolCampus, { pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
+import SchoolCampus, { PATROL, pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
 import { assignCharacters } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
@@ -47,6 +47,9 @@ const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
 
 /* 캐릭터 배정 — 시드 고정으로 매번 같은 배정 */
 const cast = assignCharacters(42, 3) // seeker + runner 2명
+const SEEKER_PATROL = PATROL
+  .filter(({ floor }) => floor === 'OUT' || floor === 'F1')
+  .map(({ p }) => p)
 
 function Scene({
   cameraMode,
@@ -113,8 +116,17 @@ function Scene({
         />
         <Props />
         <Player ref={playerRef} position={[SPAWNS.player[0], 1, SPAWNS.player[1]]} characterId={cast.runners[0]} />
-        <Partner playerRef={playerGroupRef} characterId={cast.runners[1] ?? 'R05'} />
-        <Seeker playerRef={playerGroupRef} rushTarget={gateTarget} />
+        <Partner
+          playerRef={playerGroupRef}
+          characterId={cast.runners[1] ?? 'R05'}
+          spawn={SPAWNS.ai}
+        />
+        <Seeker
+          playerRef={playerGroupRef}
+          rushTarget={gateTarget}
+          spawn={SPAWNS.seeker}
+          waypoints={SEEKER_PATROL}
+        />
       </Physics>
 
       {/* ── 비주얼 오버레이 — 성능 최적화 전까지 비활성화 ── */}

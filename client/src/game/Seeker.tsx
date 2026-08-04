@@ -29,18 +29,14 @@ const PROXIMITY_SOUND_RANGE = 18
 const PROXIMITY_SOUND_MIN_INTERVAL = 0.38
 const PROXIMITY_SOUND_MAX_INTERVAL = 1.55
 
-// 순찰 웨이포인트
-const WAYPOINTS: [number, number][] = [
-  [-18, -18], [-8, -15], [0, -10], [15, -18], [18, -8],
-  [0, 0], [-15, 10], [-8, 18], [0, 12], [15, 15], [18, 8], [5, 0],
-]
-
 interface SeekerProps {
   playerRef: React.RefObject<THREE.Group | null>
   rushTarget?: [number, number]
+  spawn: readonly [number, number]
+  waypoints: readonly (readonly [number, number])[]
 }
 
-export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
+export default function Seeker({ playerRef, rushTarget, spawn, waypoints }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const { world, rapier } = useRapier()
   const navigationShape = useMemo(() => new rapier.Ball(0.36), [rapier])
@@ -55,7 +51,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const lastCatchAttempt = useRef(-Infinity)
   const camoActive = useRef(false)
   const stillTimer = useRef(0)
-  const lastPos = useRef(new THREE.Vector3(18, 0, -18))
+  const lastPos = useRef(new THREE.Vector3(spawn[0], 0, spawn[1]))
   const lastPositionSync = useRef(0)
   const lastProximitySound = useRef(-Infinity)
   const avoidanceSide = useRef(-1)
@@ -216,13 +212,13 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   })
 
   function patrol(pos: THREE.Vector3, delta: number) {
-    const target = WAYPOINTS[waypointIndex.current]
+    const target = waypoints[waypointIndex.current]
     const dx = target[0] - pos.x
     const dz = target[1] - pos.z
     const dist = Math.sqrt(dx * dx + dz * dz)
 
     if (dist < 0.5) {
-      waypointIndex.current = (waypointIndex.current + 1) % WAYPOINTS.length
+      waypointIndex.current = (waypointIndex.current + 1) % waypoints.length
       return
     }
 
@@ -306,7 +302,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   }
 
   return (
-    <group ref={groupRef} position={[26, 0, -27]}>
+    <group ref={groupRef} position={[spawn[0], 0, spawn[1]]}>
       <CharacterModel id="R00" camo={camoActive.current} />
     </group>
   )

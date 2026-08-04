@@ -25,9 +25,10 @@ const RESCUE_RETRY_SECONDS = 0.5
 interface PartnerProps {
   playerRef: React.RefObject<THREE.Group | null>
   characterId?: string
+  spawn: readonly [number, number]
 }
 
-export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps) {
+export default function Partner({ playerRef, characterId = 'R05', spawn }: PartnerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const { world, rapier } = useRapier()
   const navigationShape = useMemo(() => new rapier.Ball(0.34), [rapier])
@@ -176,7 +177,7 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
   })
 
   return (
-    <group ref={groupRef} position={[-16, 0, -2]}>
+    <group ref={groupRef} position={[spawn[0], 0, spawn[1]]}>
       <CharacterModel id={characterId} />
     </group>
   )
