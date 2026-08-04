@@ -39,8 +39,19 @@ export default function useSpeech({
     recognition.lang = lang
     recognition.interimResults = true
     recognition.continuous = true
+    let finished = false
+
+    const finish = () => {
+      if (finished) return
+      finished = true
+      if (recognitionRef.current === recognition) recognitionRef.current = null
+      const wasListening = isListening.current
+      isListening.current = false
+      if (wasListening) onEnd?.()
+    }
 
     recognition.onstart = () => {
+      if (finished) return
       isListening.current = true
       onStart?.()
     }
@@ -64,24 +75,35 @@ export default function useSpeech({
 
     recognition.onerror = (event) => {
       console.error('[Speech] error:', event.error)
-      isListening.current = false
+      finish()
     }
 
-    recognition.onend = () => {
-      isListening.current = false
-      onEnd?.()
-    }
+    recognition.onend = finish
 
-    recognition.start()
     recognitionRef.current = recognition
+    try {
+      recognition.start()
+    } catch (error) {
+      console.error('[Speech] failed to start:', error)
+      finish()
+    }
   }, [lang, onInterim, onFinal, onStart, onEnd])
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current && isListening.current) {
-      recognitionRef.current.stop()
-      recognitionRef.current = null
+    const recognition = recognitionRef.current
+    if (recognition) {
+      try {
+        recognition.stop()
+      } catch (error) {
+        console.error('[Speech] failed to stop:', error)
+        recognitionRef.current = null
+        if (isListening.current) {
+          isListening.current = false
+          onEnd?.()
+        }
+      }
     }
-  }, [])
+  }, [onEnd])
 
   // Q키 Push-to-Talk
   useEffect(() => {

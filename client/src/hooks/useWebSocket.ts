@@ -67,7 +67,10 @@ export default function useWebSocket() {
   } = useGameStore()
 
   const connect = useCallback((roomId: string, playerId: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
+    if (
+      wsRef.current?.readyState === WebSocket.OPEN
+      || wsRef.current?.readyState === WebSocket.CONNECTING
+    ) return
 
     useGameStore.getState().setConnectionError(null)
     const ws = new WebSocket(
@@ -75,6 +78,7 @@ export default function useWebSocket() {
     )
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) return
       activeSocket = ws
       console.log('[WS] connected')
       useGameStore.getState().setConnected(true)
@@ -82,6 +86,8 @@ export default function useWebSocket() {
     }
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return
+      wsRef.current = null
       if (activeSocket === ws) activeSocket = null
       console.log('[WS] disconnected')
       useGameStore.getState().setConnected(false)
@@ -89,11 +95,17 @@ export default function useWebSocket() {
     }
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      handleMessageRef.current(data)
+      if (wsRef.current !== ws) return
+      try {
+        const data = JSON.parse(event.data)
+        if (data && typeof data === 'object') handleMessageRef.current(data)
+      } catch (error) {
+        console.error('[WS] invalid message', error)
+      }
     }
 
     ws.onerror = (err) => {
+      if (wsRef.current !== ws) return
       console.error('[WS] error', err)
       useGameStore.getState().setConnectionError('게임 서버에 연결할 수 없습니다. 네트워크와 서버 주소를 확인해 주세요.')
     }
@@ -242,7 +254,10 @@ export default function useWebSocket() {
   // 컴포넌트 언마운트 시 정리
   useEffect(() => {
     return () => {
-      wsRef.current?.close()
+      const ws = wsRef.current
+      wsRef.current = null
+      if (activeSocket === ws) activeSocket = null
+      ws?.close()
     }
   }, [])
 

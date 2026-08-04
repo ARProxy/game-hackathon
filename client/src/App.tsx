@@ -256,6 +256,18 @@ function App() {
 
       <Canvas
         dpr={[1, 1.5]}
+        fallback={(
+          <div role="alert" style={{
+            display: 'grid',
+            height: '100%',
+            placeItems: 'center',
+            padding: 24,
+            color: '#FF8BAD',
+            textAlign: 'center',
+          }}>
+            3D 그래픽을 시작할 수 없습니다. WebGL을 지원하는 브라우저에서 다시 실행해 주세요.
+          </div>
+        )}
         camera={{
           position: [60, 40, 60],
           fov: 60,

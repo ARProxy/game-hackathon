@@ -9,14 +9,23 @@ export default function useSound() {
   const ensureContext = useCallback(() => {
     let context = contextRef.current
     if (!context) {
-      context = new AudioContext()
+      try {
+        context = new AudioContext()
+      } catch (error) {
+        console.warn('[Audio] unavailable:', error)
+        return null
+      }
       const master = context.createGain()
       master.gain.value = 0.32
       master.connect(context.destination)
       contextRef.current = context
       masterRef.current = master
     }
-    if (context.state === 'suspended') void context.resume()
+    if (context.state === 'suspended') {
+      void context.resume().catch((error) => {
+        console.warn('[Audio] resume blocked:', error)
+      })
+    }
     return context
   }, [])
 
@@ -27,7 +36,9 @@ export default function useSound() {
     return () => {
       window.removeEventListener('pointerdown', unlock)
       window.removeEventListener('keydown', unlock)
-      void contextRef.current?.close()
+      void contextRef.current?.close().catch((error) => {
+        console.warn('[Audio] close failed:', error)
+      })
       contextRef.current = null
       masterRef.current = null
     }

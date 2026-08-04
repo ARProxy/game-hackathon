@@ -24,11 +24,15 @@ export default function ForbiddenReveal({ words, onComplete }: ForbiddenRevealPr
       return () => clearTimeout(timer)
     } else {
       // 모두 공개 후 2초 대기 → 페이드아웃 → 게임 시작
+      let completionTimer: ReturnType<typeof setTimeout> | undefined
       const timer = setTimeout(() => {
         setFadeOut(true)
-        setTimeout(onComplete, 500)
+        completionTimer = setTimeout(onComplete, 500)
       }, 2000)
-      return () => clearTimeout(timer)
+      return () => {
+        clearTimeout(timer)
+        if (completionTimer) clearTimeout(completionTimer)
+      }
     }
   }, [revealedCount, words.length, onComplete])
 
