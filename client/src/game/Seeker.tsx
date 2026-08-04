@@ -104,7 +104,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
     if (
       !catchSent.current &&
       playerPos &&
-      (store.phase === 'playing' || store.phase === 'escape') &&
+      (store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape') &&
       Math.hypot(playerPos.x - pos.x, playerPos.z - pos.z) <= CATCH_DISTANCE
     ) {
       catchSent.current = sendGameMessage({
