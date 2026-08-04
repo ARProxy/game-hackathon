@@ -12,7 +12,7 @@ from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
 from app.ai.spell import check_spell
 from app.game.session import session_manager
-from app.game.state import GamePhase, PlayerRole
+from app.game.state import GamePhase, PlayerRole, PlayerStatus
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,20 @@ class ConnectionManager:
         player = session.state.get_player(player_id)
 
         # 빙결된 플레이어의 발화는 무시
-        if player and player.is_frozen:
+        if player and player.status != PlayerStatus.ALIVE:
             return
+
+        # 확정된 정상 발화는 내용 판정에 앞서 위치 기반 청각 핑을 만든다.
+        # 술래는 안전 발화와 금기어 발화를 동일한 순서로 감지할 수 있다.
+        if player and is_final and transcript.strip():
+            await self.broadcast(room_id, {
+                "type": "sound_ping",
+                "player_id": player_id,
+                "position": {
+                    "x": player.position.x,
+                    "z": player.position.z,
+                },
+            })
 
         # 금기어 판정
         result = session.engine.check(transcript)
@@ -183,6 +195,29 @@ class ConnectionManager:
                 },
             })
             self._schedule_freeze_timeout(room_id, player_id)
+
+        elif (
+            action_type == "seeker_catch"
+            and player
+            and player.role == PlayerRole.HUMAN
+            and player.status != PlayerStatus.ELIMINATED
+        ):
+            player.eliminate()
+            session.state.phase = GamePhase.RESULT
+            self._cancel_room_freeze_timeouts(room_id)
+            await self.broadcast(room_id, {
+                "type": "eliminated",
+                "player_id": player_id,
+                "reason": "caught_by_seeker",
+            })
+            await self.broadcast(room_id, {
+                "type": "game_over",
+                "reason": "caught_by_seeker",
+            })
+            logger.info(
+                "ELIMINATED: room=%s player=%s reason=caught_by_seeker",
+                room_id, player_id,
+            )
 
     def _schedule_freeze_timeout(self, room_id: str, player_id: str) -> None:
         """현재 빙결 세대에 대응하는 제한시간 task를 하나만 유지한다."""

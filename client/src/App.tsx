@@ -103,7 +103,7 @@ function Scene({
         <Props playerRef={playerGroupRef} />
         <Player ref={playerRef} position={[SPAWNS.player[0], 1, SPAWNS.player[1]]} characterId={cast.runners[0]} />
         <Partner playerRef={playerGroupRef} characterId={cast.runners[1] ?? 'R05'} />
-        <Seeker rushTarget={gateTarget} />
+        <Seeker playerRef={playerGroupRef} rushTarget={gateTarget} />
       </Physics>
 
       {/* ── 비주얼 오버레이 — 성능 최적화 전까지 비활성화 ── */}

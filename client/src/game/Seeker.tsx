@@ -9,6 +9,7 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGameStore } from '../stores/gameStore'
+import { sendGameMessage } from '../hooks/useWebSocket'
 import { CharacterModel } from './Characters'
 
 type SeekerState = 'patrol' | 'alert' | 'chase' | 'rush' | 'guard'
@@ -19,6 +20,7 @@ const RUSH_SPEED = 5.2
 const ALERT_DURATION = 1.5
 const CHASE_ARRIVE_DIST = 1.5
 const RUSH_ARRIVE_DIST = 1.4
+const CATCH_DISTANCE = 1.1
 
 // 순찰 웨이포인트
 const WAYPOINTS: [number, number][] = [
@@ -26,7 +28,12 @@ const WAYPOINTS: [number, number][] = [
   [0, 0], [-15, 10], [-8, 18], [0, 12], [15, 15], [18, 8], [5, 0],
 ]
 
-export default function Seeker({ rushTarget }: { rushTarget?: [number, number] }) {
+interface SeekerProps {
+  playerRef: React.RefObject<THREE.Group | null>
+  rushTarget?: [number, number]
+}
+
+export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
 
   const state = useRef<SeekerState>('patrol')
@@ -34,6 +41,8 @@ export default function Seeker({ rushTarget }: { rushTarget?: [number, number] }
   const alertTimer = useRef(0)
   const chaseTarget = useRef<{ x: number; z: number } | null>(null)
   const lastFreezeTimestamp = useRef(0)
+  const lastSoundTimestamp = useRef(0)
+  const catchSent = useRef(false)
   const camoActive = useRef(false)
   const stillTimer = useRef(0)
   const lastPos = useRef(new THREE.Vector3(18, 0, -18))
@@ -44,6 +53,7 @@ export default function Seeker({ rushTarget }: { rushTarget?: [number, number] }
     const pos = groupRef.current.position
     const store = useGameStore.getState()
     const freezeEvent = store.lastFreezeEvent
+    const soundEvent = store.lastSoundEvent
 
     // 주문 성공 시 기존 행동을 중단하고 선택된 탈출구부터 선점한다.
     if (store.phase === 'escape' && rushTarget && state.current !== 'rush' && state.current !== 'guard') {
@@ -54,11 +64,25 @@ export default function Seeker({ rushTarget }: { rushTarget?: [number, number] }
       state.current = 'patrol'
     }
 
-    // 빙결 이벤트 감지 → ALERT 전환
+    // 일반 발화도 위치 노출로 취급한다. RUSH/GUARD 중에는 탈출구 선점이 우선이다.
+    if (
+      soundEvent &&
+      soundEvent.timestamp > lastSoundTimestamp.current &&
+      state.current !== 'rush' &&
+      state.current !== 'guard'
+    ) {
+      lastSoundTimestamp.current = soundEvent.timestamp
+      chaseTarget.current = { ...soundEvent.position }
+      state.current = 'alert'
+      alertTimer.current = ALERT_DURATION
+    }
+
+    // 빙결 핑은 일반 발화보다 강한 단서이므로 진행 중 추격도 덮어쓴다.
     if (
       freezeEvent &&
       freezeEvent.timestamp > lastFreezeTimestamp.current &&
-      state.current === 'patrol'
+      state.current !== 'rush' &&
+      state.current !== 'guard'
     ) {
       lastFreezeTimestamp.current = freezeEvent.timestamp
       chaseTarget.current = { ...freezeEvent.position }
@@ -73,6 +97,20 @@ export default function Seeker({ rushTarget }: { rushTarget?: [number, number] }
       case 'chase': chase(pos, delta); break
       case 'rush': rush(pos, delta); break
       case 'guard': break
+    }
+
+    // 접촉 판정은 서버에 한 번만 신고하고 결과 판정은 game_over 응답에 맡긴다.
+    const playerPos = playerRef.current?.position
+    if (
+      !catchSent.current &&
+      playerPos &&
+      (store.phase === 'playing' || store.phase === 'escape') &&
+      Math.hypot(playerPos.x - pos.x, playerPos.z - pos.z) <= CATCH_DISTANCE
+    ) {
+      catchSent.current = sendGameMessage({
+        type: 'action',
+        payload: { action_type: 'seeker_catch' },
+      })
     }
 
     // 위장 판정 — 정지 3초 후 발동, 이동 시 해제

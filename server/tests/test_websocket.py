@@ -42,9 +42,33 @@ class TestSpeechJudgment:
                 "type": "speech",
                 "payload": {"transcript": "반짝이는 물건 확인해줘", "is_final": True},
             })
+            ping = ws.receive_json()
             data = ws.receive_json()
+            assert ping["type"] == "sound_ping"
+            assert ping["position"] == {"x": 0.0, "z": 0.0}
             assert data["type"] == "speech_safe"
             assert data["transcript"] == "반짝이는 물건 확인해줘"
+
+    def test_sound_ping_precedes_judgment_at_latest_position(self, client):
+        with client.websocket_connect("/ws/room11/player1") as ws:
+            self._start_game(ws)
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "move", "x": 8.5, "z": -4.25},
+            })
+            ws.send_json({
+                "type": "speech",
+                "payload": {"transcript": "여기 확인해줘", "is_final": True},
+            })
+
+            ping = ws.receive_json()
+            judgment = ws.receive_json()
+            assert ping == {
+                "type": "sound_ping",
+                "player_id": "player1",
+                "position": {"x": 8.5, "z": -4.25},
+            }
+            assert judgment["type"] == "speech_safe"
 
     def test_forbidden_word_freeze(self, client):
         with client.websocket_connect("/ws/room3/player1") as ws:
@@ -53,7 +77,9 @@ class TestSpeechJudgment:
                 "type": "speech",
                 "payload": {"transcript": "열쇠를 가져와", "is_final": True},
             })
+            ping = ws.receive_json()
             data = ws.receive_json()
+            assert ping["type"] == "sound_ping"
             assert data["type"] == "freeze"
             assert data["matched_word"] == "열쇠"
             assert data["player_id"] == "player1"
@@ -65,6 +91,7 @@ class TestSpeechJudgment:
                 "type": "speech",
                 "payload": {"transcript": "커피가 마시고 싶어", "is_final": True},
             })
+            assert ws.receive_json()["type"] == "sound_ping"
             data = ws.receive_json()
             assert data["type"] == "freeze"
             assert data["matched_word"] == "커피"
@@ -78,6 +105,7 @@ class TestSpeechJudgment:
                 "type": "speech",
                 "payload": {"transcript": "열쇠", "is_final": True},
             })
+            assert ws.receive_json()["type"] == "sound_ping"
             ws.receive_json()  # freeze
 
             # 빙결 상태에서 추가 발화 → 응답 없어야 함
@@ -116,6 +144,7 @@ class TestActions:
                 "type": "speech",
                 "payload": {"transcript": "열쇠", "is_final": True},
             })
+            assert ws.receive_json()["type"] == "sound_ping"
             assert ws.receive_json()["type"] == "freeze"
 
             ws.send_json({
@@ -149,6 +178,32 @@ class TestActions:
             assert frozen["trap_id"] == "trap_field_diag"
             assert frozen["position"] == {"x": 7.5, "z": -2.25}
 
+    def test_seeker_catch_eliminates_human_and_ends_game(self, client):
+        with client.websocket_connect("/ws/room10/player1") as ws:
+            self._start_game(ws)
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "seeker_catch"},
+            })
+
+            eliminated = ws.receive_json()
+            game_over = ws.receive_json()
+            assert eliminated == {
+                "type": "eliminated",
+                "player_id": "player1",
+                "reason": "caught_by_seeker",
+            }
+            assert game_over == {
+                "type": "game_over",
+                "reason": "caught_by_seeker",
+            }
+
+            from app.game.session import session_manager
+
+            state = session_manager.get_or_create("room10").state
+            assert state.get_player("player1").status.value == "eliminated"
+            assert state.phase.value == "result"
+
 
 class TestGameOver:
     def test_human_freeze_does_not_end_solo_team(self, client):
@@ -164,6 +219,7 @@ class TestGameOver:
                 "type": "speech",
                 "payload": {"transcript": "열쇠", "is_final": True},
             })
+            assert ws.receive_json()["type"] == "sound_ping"
             freeze_msg = ws.receive_json()
             assert freeze_msg["type"] == "freeze"
             assert freeze_msg["player_id"] == "player1"

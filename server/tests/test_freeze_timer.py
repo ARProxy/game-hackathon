@@ -113,3 +113,27 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(task.cancelled())
         self.assertNotIn(key, self.manager._freeze_tasks)
         self.assertNotIn(self.room_id, session_manager.sessions)
+
+    async def test_seeker_catch_cancels_pending_freeze_timeout(self) -> None:
+        await self._freeze()
+        key = (self.room_id, self.player_id)
+        task = self.manager._freeze_tasks[key]
+
+        await self.manager.handle_message(self.room_id, self.player_id, {
+            "type": "action",
+            "payload": {"action_type": "seeker_catch"},
+        })
+        await asyncio.sleep(0)
+
+        player = self.session.state.get_player(self.player_id)
+        self.assertEqual(player.status.value, "eliminated")  # type: ignore[union-attr]
+        self.assertTrue(task.cancelled())
+        self.assertNotIn(key, self.manager._freeze_tasks)
+        self.assertEqual(self.websocket.messages[-2:], [
+            {
+                "type": "eliminated",
+                "player_id": self.player_id,
+                "reason": "caught_by_seeker",
+            },
+            {"type": "game_over", "reason": "caught_by_seeker"},
+        ])

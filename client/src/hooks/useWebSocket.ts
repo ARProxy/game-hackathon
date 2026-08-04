@@ -25,6 +25,7 @@ export default function useWebSocket() {
     setForbiddenWords,
     setRoundData,
     freezePlayer,
+    setLastSoundEvent,
     unfreezePlayer,
     eliminatePlayer,
     addSubtitle,
@@ -96,6 +97,14 @@ export default function useWebSocket() {
         addSubtitle(data.player_id, data.transcript)
         break
 
+      case 'sound_ping':
+        setLastSoundEvent({
+          playerId: data.player_id,
+          position: data.position,
+          timestamp: Date.now(),
+        })
+        break
+
       case 'spell_success':
         setPhase('escape')
         addSubtitle('system', '주문 성공! 탈출구가 열립니다!')
@@ -112,7 +121,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, setForbiddenWords, setRoundData, freezePlayer, unfreezePlayer, eliminatePlayer, addSubtitle])
+  }, [setPhase, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle])
 
   const send = useCallback((message: object) => {
     sendGameMessage(message)

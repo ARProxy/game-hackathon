@@ -46,6 +46,12 @@ export interface FreezeEvent {
   timestamp: number
 }
 
+export interface SoundEvent {
+  playerId: string
+  position: { x: number; z: number }
+  timestamp: number
+}
+
 interface GameStore {
   // 연결 상태
   connected: boolean
@@ -71,6 +77,7 @@ interface GameStore {
 
   // 빙결 이벤트 (연출용)
   lastFreezeEvent: FreezeEvent | null
+  lastSoundEvent: SoundEvent | null
 
   // 음성 관련
   isSpeaking: boolean
@@ -90,6 +97,7 @@ interface GameStore {
   removeProp: (propId: string) => void
   updatePlayer: (playerId: string, update: Partial<PlayerState>) => void
   freezePlayer: (event: FreezeEvent) => void
+  setLastSoundEvent: (event: SoundEvent) => void
   unfreezePlayer: (playerId: string) => void
   eliminatePlayer: (playerId: string) => void
   setSpeaking: (isSpeaking: boolean) => void
@@ -114,6 +122,7 @@ const initialState = {
   removedPropIds: [] as string[],
   players: {},
   lastFreezeEvent: null,
+  lastSoundEvent: null,
   isSpeaking: false,
   lastTranscript: '',
   subtitles: [],
@@ -175,6 +184,8 @@ export const useGameStore = create<GameStore>((set) => ({
         },
       },
     })),
+
+  setLastSoundEvent: (event) => set({ lastSoundEvent: event }),
 
   unfreezePlayer: (playerId) =>
     set((state) => ({
