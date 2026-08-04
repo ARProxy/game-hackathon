@@ -47,6 +47,7 @@ export default function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const {
     setPhase,
+    startRound,
     finishGame,
     setForbiddenWords,
     setRoundData,
@@ -107,6 +108,7 @@ export default function useWebSocket() {
         break
 
       case 'game_started':
+        startRound()
         setForbiddenWords(data.state.forbidden_words)
         if (data.round) {
           setRoundData(data.round.props, data.round.missions, data.round.spell_words)
@@ -222,7 +224,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
+  }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
 
   const send = useCallback((message: object) => {
     sendGameMessage(message)

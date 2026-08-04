@@ -12,6 +12,36 @@ import { sendGameMessage } from '../hooks/useWebSocket'
 
 const FREEZE_TIMEOUT_MS = 30_000
 
+function formatElapsed(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+function RoundElapsedTime() {
+  const phase = useGameStore((s) => s.phase)
+  const startedAt = useGameStore((s) => s.roundStartedAt)
+  const [now, setNow] = useState(Date.now())
+  const visible = startedAt !== null
+    && (phase === 'playing' || phase === 'final_spell' || phase === 'escape')
+
+  useEffect(() => {
+    if (!visible) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [visible, startedAt])
+
+  if (!visible || startedAt === null) return null
+  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000))
+
+  return (
+    <span style={{ marginLeft: 10, opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>
+      · 경과 {formatElapsed(elapsed)}
+    </span>
+  )
+}
+
 function FrozenCountdown() {
   const phase = useGameStore((s) => s.phase)
   const playerId = useGameStore((s) => s.playerId)
@@ -253,6 +283,7 @@ export default function HUD() {
         {/* 연결 상태 */}
         <div style={{ fontSize: 12, opacity: 0.5 }}>
           {connected ? '● 서버 연결됨' : '○ 연결 중...'}
+          <RoundElapsedTime />
         </div>
         {connectionError && (
           <div role="alert" style={{

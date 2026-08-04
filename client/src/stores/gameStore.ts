@@ -74,6 +74,8 @@ interface GameStore {
   forbiddenWords: string[]
   sourceAnswers: string[]
   freezeCount: number
+  roundStartedAt: number | null
+  elapsedSeconds: number | null
   players: Record<string, PlayerState>
 
   // 라운드 데이터 (미션, 프롭)
@@ -104,6 +106,7 @@ interface GameStore {
   setConnectionError: (message: string | null) => void
   setRoom: (roomId: string, playerId: string) => void
   setPhase: (phase: GamePhase) => void
+  startRound: () => void
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
   setSourceAnswers: (answers: string[]) => void
@@ -138,6 +141,8 @@ const initialState = {
   forbiddenWords: [],
   sourceAnswers: [] as string[],
   freezeCount: 0,
+  roundStartedAt: null as number | null,
+  elapsedSeconds: null as number | null,
   props: [] as PropData[],
   missions: [] as MissionData[],
   spellWords: [] as string[],
@@ -167,8 +172,17 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setPhase: (phase) => set({ phase }),
 
+  startRound: () => set({ roundStartedAt: Date.now(), elapsedSeconds: null }),
+
   finishGame: (outcome, resultReason) =>
-    set({ phase: 'result', outcome, resultReason }),
+    set((state) => ({
+      phase: 'result',
+      outcome,
+      resultReason,
+      elapsedSeconds: state.roundStartedAt === null
+        ? 0
+        : Math.max(0, Math.floor((Date.now() - state.roundStartedAt) / 1000)),
+    })),
 
   setForbiddenWords: (words) => set({ forbiddenWords: words }),
 

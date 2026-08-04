@@ -8,6 +8,12 @@
 
 import { useGameStore } from '../stores/gameStore'
 
+function formatElapsed(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
 export default function ResultScreen() {
   const phase = useGameStore((s) => s.phase)
   const forbiddenWords = useGameStore((s) => s.forbiddenWords)
@@ -17,6 +23,7 @@ export default function ResultScreen() {
   const spellWords = useGameStore((s) => s.spellWords)
   const outcome = useGameStore((s) => s.outcome)
   const resultReason = useGameStore((s) => s.resultReason)
+  const elapsedSeconds = useGameStore((s) => s.elapsedSeconds)
 
   if (phase !== 'result') return null
 
@@ -74,6 +81,7 @@ export default function ResultScreen() {
       }}>
         <StatBox label="획득 단서" value={`${acquiredClues.length} / ${spellWords.length}`} color="#52E5FF" />
         <StatBox label="금기어 위반" value={`${freezeCount}회`} color="#FF2F6E" />
+        <StatBox label="플레이 시간" value={formatElapsed(elapsedSeconds ?? 0)} color="#B6FF3D" />
       </div>
 
       {/* 금기어 출처 공개 */}
