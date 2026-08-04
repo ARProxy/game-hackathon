@@ -10,6 +10,81 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useGameStore, type GamePhase } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 
+const FREEZE_TIMEOUT_MS = 30_000
+
+function FrozenCountdown() {
+  const phase = useGameStore((s) => s.phase)
+  const playerId = useGameStore((s) => s.playerId)
+  const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
+  const freezeEvent = useGameStore((s) => s.lastFreezeEvent)
+  const [now, setNow] = useState(Date.now())
+  const visible = phase === 'playing'
+    && playerStatus === 'frozen'
+    && freezeEvent?.playerId === playerId
+
+  useEffect(() => {
+    if (!visible) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [visible, freezeEvent?.timestamp])
+
+  if (!visible || !freezeEvent) return null
+
+  const remainingMs = Math.max(0, FREEZE_TIMEOUT_MS - (now - freezeEvent.timestamp))
+  const remainingSeconds = Math.ceil(remainingMs / 1000)
+  const urgency = remainingSeconds <= 10
+
+  return (
+    <div role="status" aria-live="polite" style={{
+      position: 'absolute',
+      top: '38%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: 'min(420px, calc(100vw - 40px))',
+      textAlign: 'center',
+      background: 'rgba(7, 16, 25, 0.9)',
+      border: `1px solid ${urgency ? '#FF2F6E' : '#52E5FF'}`,
+      borderRadius: 18,
+      padding: '22px 26px',
+      boxShadow: `0 0 40px ${urgency ? 'rgba(255,47,110,0.35)' : 'rgba(82,229,255,0.25)'}`,
+    }}>
+      <div style={{
+        fontSize: 42,
+        fontWeight: 900,
+        color: urgency ? '#FF2F6E' : '#BDEFFF',
+        textShadow: `0 0 20px ${urgency ? 'rgba(255,47,110,0.5)' : 'rgba(82,229,255,0.45)'}`,
+      }}>
+        얼음! {remainingSeconds}
+      </div>
+      <div style={{ fontSize: 14, color: '#FF8BAD', marginTop: 6 }}>
+        “{freezeEvent.matchedWord}” 발화 · 0초가 되면 탈락합니다
+      </div>
+      <div style={{
+        height: 5,
+        margin: '16px 0 12px',
+        borderRadius: 999,
+        overflow: 'hidden',
+        background: 'rgba(255,255,255,0.12)',
+      }}>
+        <div style={{
+          width: `${(remainingMs / FREEZE_TIMEOUT_MS) * 100}%`,
+          height: '100%',
+          borderRadius: 999,
+          background: urgency ? '#FF2F6E' : '#52E5FF',
+          transition: 'width 0.25s linear, background 0.2s',
+        }} />
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#B6FF3D' }}>
+        AI 동료가 구조하러 오는 중
+      </div>
+      <div style={{ fontSize: 12, opacity: 0.68, marginTop: 4 }}>
+        동료가 가까워져 “땡!” 할 때까지 기다리세요
+      </div>
+    </div>
+  )
+}
+
 function TextSpeechFallback({ phase, connected, gateArrived }: {
   phase: GamePhase
   connected: boolean
@@ -141,7 +216,6 @@ export default function HUD() {
   const forbiddenWords = useGameStore((s) => s.forbiddenWords)
   const isSpeaking = useGameStore((s) => s.isSpeaking)
   const lastTranscript = useGameStore((s) => s.lastTranscript)
-  const lastFreezeEvent = useGameStore((s) => s.lastFreezeEvent)
   const connected = useGameStore((s) => s.connected)
   const subtitles = useGameStore((s) => s.subtitles)
   const inspectingPropId = useGameStore((s) => s.inspectingPropId)
@@ -361,33 +435,7 @@ export default function HUD() {
         <TextSpeechFallback phase={phase} connected={connected} gateArrived={gateArrived} />
       </div>
 
-      {/* 빙결 알림 — 화면 중앙 */}
-      {lastFreezeEvent && Date.now() - lastFreezeEvent.timestamp < 2000 && (
-        <div style={{
-          position: 'absolute',
-          top: '40%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          textAlign: 'center',
-        }}>
-          <div style={{
-            fontSize: 48,
-            fontWeight: 800,
-            color: '#FF2F6E',
-            textShadow: '0 0 20px rgba(255, 47, 110, 0.5)',
-          }}>
-            얼음!
-          </div>
-          <div style={{
-            fontSize: 18,
-            color: '#FF2F6E',
-            opacity: 0.8,
-            marginTop: 8,
-          }}>
-            "{lastFreezeEvent.matchedWord}" 발화
-          </div>
-        </div>
-      )}
+      <FrozenCountdown />
     </div>
   )
 }
