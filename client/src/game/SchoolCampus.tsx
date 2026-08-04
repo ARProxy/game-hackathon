@@ -71,6 +71,13 @@ import { useCallback, useEffect, useRef, useMemo } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
+import {
+  GATE_LOCKED_BLOCKER_HALF_SIZE,
+  GATE_SENSOR_LOCAL_Z,
+  GATE_SLOTS,
+} from './gateContract'
+
+export { GATE_SLOTS } from './gateContract'
 
 export type FloorKey = 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF'
 type V3 = [number, number, number]
@@ -2174,13 +2181,6 @@ export const TRAP_SLOTS: { id: string; p: V2; floor: FloorKey; kind: TrapKind; r
 
 ]
 
-/** 탈출 게이트 후보 — 판마다 1곳 */
-export const GATE_SLOTS: { id: string; p: V2; ry: number }[] = [
-  { id: 'gate_back', p: [-7, 38], ry: 0 }, // 후문 (골목 북단)
-  { id: 'gate_main', p: [38.5, 27.5], ry: 1.571 }, // 정문
-  { id: 'gate_gym', p: [38, -22.5], ry: 1.571 }, // 체육관 뒤 비상구
-]
-
 /** T1 미션용 프롭 슬롯 — surfaceY는 프롭이 놓일 표면 높이(책상/무대/조회대 위) */
 export const PROP_SLOTS: { id: string; p: V2; floor: FloorKey; surfaceY: number }[] = [
   { id: 'prop_sci_01', p: [-8.1, -33.6], floor: 'F2', surfaceY: 4.45 },
@@ -2406,7 +2406,7 @@ export function GateFrame({ position, rotationY, selected = false, open = false,
     <group position={[position[0], 0, position[1]]} rotation={[0, rotationY, 0]}>
       {!open && (
         <RigidBody type="fixed" colliders={false}>
-          <CuboidCollider args={[1.3, 1.5, 0.16]} position={[0, 1.5, 0]} />
+          <CuboidCollider args={GATE_LOCKED_BLOCKER_HALF_SIZE} position={[0, 1.5, 0]} />
           <mesh position={[0, 1.5, 0]}>
             <boxGeometry args={[2.6, 3, 0.24]} />
             <meshStandardMaterial color="#171f27" emissive={gateColor}
@@ -2416,12 +2416,14 @@ export function GateFrame({ position, rotationY, selected = false, open = false,
       )}
       {selected && !open && (
         <RigidBody type="fixed" colliders={false}>
-          <CuboidCollider args={[1.4, 1.5, 1.0]} position={[0, 1.5, -1.1]} sensor onIntersectionEnter={onArrived} />
+          <CuboidCollider args={[1.4, 1.5, 1.0]} position={[0, 1.5, GATE_SENSOR_LOCAL_Z.arrival]}
+            sensor onIntersectionEnter={onArrived} />
         </RigidBody>
       )}
       {selected && open && (
         <RigidBody type="fixed" colliders={false}>
-          <CuboidCollider args={[1.15, 1.5, 0.7]} position={[0, 1.5, 1.1]} sensor onIntersectionEnter={onEscaped} />
+          <CuboidCollider args={[1.15, 1.5, 0.7]} position={[0, 1.5, GATE_SENSOR_LOCAL_Z.escape]}
+            sensor onIntersectionEnter={onEscaped} />
         </RigidBody>
       )}
       {/* 탈출 지점 표식 — 멀리서도 보이는 빛기둥 (활성 시에만) */}
