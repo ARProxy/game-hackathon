@@ -13,6 +13,7 @@ import { CharacterModel } from './Characters'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import { planAvoidedStep } from './aiNavigation'
 import rescueContract from './rescueContract.json'
+import missionPacing from './missionPacingContract.json'
 
 const RESCUE_SPEED = 5.0
 const MISSION_SPEED = 4.2
@@ -35,6 +36,8 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
   const rescuing = useRef(false)
   const lastRescueRequestAt = useRef(-Infinity)
   const inspectRequestedFor = useRef<string | null>(null)
+  const inspectionStartedFor = useRef<string | null>(null)
+  const inspectionStartedAt = useRef(0)
   const lastPositionSync = useRef(0)
   const avoidanceSide = useRef(1)
 
@@ -90,17 +93,23 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
       const dz = target.position.z - pos.z
       const dist = Math.sqrt(dx * dx + dz * dz)
       if (dist <= INSPECT_DISTANCE) {
+        if (store.inspectingPropId !== target.propId) store.setInspectingProp(target.propId)
+        if (inspectionStartedFor.current !== target.propId) {
+          inspectionStartedFor.current = target.propId
+          inspectionStartedAt.current = Date.now()
+        }
         if (inspectRequestedFor.current !== target.propId) {
+          if (Date.now() - inspectionStartedAt.current < missionPacing.inspectionDurationMs) return true
           const sent = sendGameMessage({
             type: 'action',
             payload: { action_type: 'inspect_prop', actor_id: 'partner', prop_id: target.propId },
           })
           if (sent) {
             inspectRequestedFor.current = target.propId
-            store.setInspectingProp(target.propId)
           }
         }
       } else {
+        inspectionStartedFor.current = null
         const step = Math.min(MISSION_SPEED * delta, dist - INSPECT_DISTANCE)
         moveToward(pos, dx, dz, step)
       }
@@ -145,6 +154,7 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
       rescuing.current = false
       lastRescueRequestAt.current = -Infinity
       inspectRequestedFor.current = null
+      inspectionStartedFor.current = null
       const t = clock.getElapsedTime() * ORBIT_SPEED
       const targetX = playerPos.x + Math.cos(t) * FOLLOW_DISTANCE
       const targetZ = playerPos.z + Math.sin(t) * FOLLOW_DISTANCE
