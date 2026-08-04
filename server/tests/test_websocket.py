@@ -188,27 +188,6 @@ class TestActions:
             }
             assert player.is_frozen
 
-            # 다음 위치 동기화 뒤 같은 구조 요청을 재시도하면 정상 복구된다.
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "actor_move",
-                    "actor_id": "partner",
-                    "x": player.position.x,
-                    "z": player.position.z,
-                },
-            })
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "rescue",
-                    "actor_id": "partner",
-                    "target_id": "player1",
-                },
-            })
-            assert ws.receive_json()["type"] == "rescued"
-            assert player.status.value == "alive"
-
             # 실제 AI 동료라도 서버 위치가 멀면 구조할 수 없다.
             ws.send_json({
                 "type": "action",
@@ -233,6 +212,27 @@ class TestActions:
                 "reason": "invalid_rescue",
             }
             assert player.is_frozen
+
+            # 다음 위치 동기화 뒤 같은 구조 요청을 재시도하면 정상 복구된다.
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "actor_move",
+                    "actor_id": "partner",
+                    "x": player.position.x,
+                    "z": player.position.z,
+                },
+            })
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "rescue",
+                    "actor_id": "partner",
+                    "target_id": "player1",
+                },
+            })
+            assert ws.receive_json()["type"] == "rescued"
+            assert player.status.value == "alive"
 
     def test_trap_freezes_at_reported_position(self, client):
         with client.websocket_connect("/ws/room9/player1") as ws:
