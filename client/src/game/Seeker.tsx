@@ -19,17 +19,20 @@ const CHASE_SPEED = 3.2
 const ALERT_DURATION = 1.5 // 감지 후 대기 시간 (초)
 const CHASE_ARRIVE_DIST = 1.5 // 목표 도달 판정 거리
 
-// 순찰 웨이포인트 — 맵 사방을 돌아다님
+// 순찰 웨이포인트 — 50x50 맵
 const WAYPOINTS: [number, number][] = [
-  [-8, -8],   // A구역
-  [8, -8],    // B구역
-  [8, 8],     // D구역
-  [-8, 8],    // C구역
-  [0, 0],     // 중앙
-  [-5, 5],
-  [5, -5],
-  [0, -8],
-  [0, 8],
+  [-18, -18],  // A구역 깊숙이
+  [-8, -15],   // A구역 가장자리
+  [0, -10],    // A-B 경계
+  [15, -18],   // B구역 깊숙이
+  [18, -8],    // B구역 가장자리
+  [0, 0],      // 맵 중앙
+  [-15, 10],   // C구역
+  [-8, 18],    // C구역 가장자리
+  [0, 12],     // C-D 경계
+  [15, 15],    // D구역
+  [18, 8],     // D구역 가장자리
+  [5, 0],      // 중앙 부근
 ]
 
 export default function Seeker() {
@@ -171,7 +174,7 @@ export default function Seeker() {
   }
 
   return (
-    <group ref={groupRef} position={[8, 0, -8]}>
+    <group ref={groupRef} position={[18, 0, -18]}>
       {/* 몸통 — 큰 박스 (각진 형태) */}
       <mesh position={[0, 0.8, 0]}>
         <boxGeometry args={[0.9, 1.4, 0.7]} />

@@ -1,18 +1,20 @@
 /**
- * 플레이어 캐릭터
- * - 캡슐(몸통) + 구(머리) 조합
- * - WASD/방향키로 이동
- * - 빙결 시: 이동 불가, 색 변화, 바운스 정지
+ * 플레이어 캐릭터 — Rapier dynamic body
+ * - RigidBody(dynamic) + CapsuleCollider
+ * - velocity로 이동 → rapier가 충돌 처리
+ * - 회전 잠금, 중력 적용
  */
 
 import { useRef, forwardRef, useImperativeHandle } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { RigidBody, CapsuleCollider } from '@react-three/rapier'
+import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import useKeyboard from '../hooks/useKeyboard'
 import { useGameStore } from '../stores/gameStore'
+import { useCameraStore } from '../stores/cameraStore'
 
 const MOVE_SPEED = 5
-const MAP_EXTENT = 12.5
 
 const COLOR_NORMAL = '#52E5FF'
 const COLOR_FROZEN = '#8090a0'
@@ -28,18 +30,20 @@ export interface PlayerHandle {
 const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   position = [0, 0, 0],
 }: PlayerProps, ref) {
-  const groupRef = useRef<THREE.Group>(null)
-  const bodyRef = useRef<THREE.Mesh>(null)
-  const headRef = useRef<THREE.Mesh>(null)
+  const visualRef = useRef<THREE.Group>(null)
+  const rigidBodyRef = useRef<RapierRigidBody>(null)
+  const bodyMeshRef = useRef<THREE.Mesh>(null)
+  const headMeshRef = useRef<THREE.Mesh>(null)
   const keys = useKeyboard()
   const isMoving = useRef(false)
 
+  // 외부에서 visual group 위치를 참조 (카메라 추종 등)
   useImperativeHandle(ref, () => ({
-    getGroup: () => groupRef.current,
+    getGroup: () => visualRef.current,
   }))
 
-  useFrame(({ clock }, delta) => {
-    if (!groupRef.current) return
+  useFrame(({ clock }) => {
+    if (!rigidBodyRef.current || !visualRef.current) return
 
     const playerId = useGameStore.getState().playerId
     const playerState = useGameStore.getState().players[playerId]
@@ -47,89 +51,110 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
 
     // 빙결 시 색 변경
     const targetColor = isFrozen ? COLOR_FROZEN : COLOR_NORMAL
-    if (bodyRef.current) {
-      const mat = bodyRef.current.material as THREE.MeshStandardMaterial
+    if (bodyMeshRef.current) {
+      const mat = bodyMeshRef.current.material as THREE.MeshStandardMaterial
       mat.color.lerp(new THREE.Color(targetColor), 0.1)
     }
-    if (headRef.current) {
-      const mat = headRef.current.material as THREE.MeshStandardMaterial
+    if (headMeshRef.current) {
+      const mat = headMeshRef.current.material as THREE.MeshStandardMaterial
       mat.color.lerp(new THREE.Color(targetColor), 0.1)
     }
 
-    // 빙결 시 이동 불가
+    // 빙결 시 정지
     if (isFrozen) {
-      // 바운스 정지 — 현재 y 위치를 0으로 수렴
-      const pos = groupRef.current.position
-      pos.y = THREE.MathUtils.lerp(pos.y, 0, 0.15)
+      rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true)
+      // visual 동기화
+      const pos = rigidBodyRef.current.translation()
+      visualRef.current.position.set(pos.x, 0, pos.z)
       return
     }
 
-    // 이동 입력 수집
-    let moveX = 0
-    let moveZ = 0
-
+    // 이동 입력 (로컬 좌표)
+    let inputX = 0
+    let inputZ = 0
     const pressed = keys.current
-    if (pressed.has('KeyW') || pressed.has('ArrowUp')) moveZ -= 1
-    if (pressed.has('KeyS') || pressed.has('ArrowDown')) moveZ += 1
-    if (pressed.has('KeyA') || pressed.has('ArrowLeft')) moveX -= 1
-    if (pressed.has('KeyD') || pressed.has('ArrowRight')) moveX += 1
+    if (pressed.has('KeyW') || pressed.has('ArrowUp')) inputZ -= 1
+    if (pressed.has('KeyS') || pressed.has('ArrowDown')) inputZ += 1
+    if (pressed.has('KeyA') || pressed.has('ArrowLeft')) inputX -= 1
+    if (pressed.has('KeyD') || pressed.has('ArrowRight')) inputX += 1
 
-    const length = Math.sqrt(moveX * moveX + moveZ * moveZ)
+    const length = Math.sqrt(inputX * inputX + inputZ * inputZ)
     if (length > 0) {
-      moveX /= length
-      moveZ /= length
+      inputX /= length
+      inputZ /= length
     }
-
     isMoving.current = length > 0
 
-    const pos = groupRef.current.position
-    pos.x += moveX * MOVE_SPEED * delta
-    pos.z += moveZ * MOVE_SPEED * delta
+    // 카메라 yaw 기준으로 이동 방향 회전
+    const cameraYaw = useCameraStore.getState().yaw
+    const sin = Math.sin(cameraYaw)
+    const cos = Math.cos(cameraYaw)
+    const moveX = inputX * cos - inputZ * sin
+    const moveZ = inputX * sin + inputZ * cos
 
-    pos.x = THREE.MathUtils.clamp(pos.x, -MAP_EXTENT, MAP_EXTENT)
-    pos.z = THREE.MathUtils.clamp(pos.z, -MAP_EXTENT, MAP_EXTENT)
+    // velocity 설정 — y는 중력 유지
+    const currentVelY = rigidBodyRef.current.linvel().y
+    rigidBodyRef.current.setLinvel(
+      { x: moveX * MOVE_SPEED, y: currentVelY, z: moveZ * MOVE_SPEED },
+      true,
+    )
+
+    // visual을 rigid body 위치에 동기화
+    const pos = rigidBodyRef.current.translation()
+    visualRef.current.position.set(pos.x, 0, pos.z)
 
     // 이동 방향으로 회전
     if (length > 0) {
       const targetAngle = Math.atan2(moveX, moveZ)
-      groupRef.current.rotation.y = THREE.MathUtils.lerp(
-        groupRef.current.rotation.y,
+      visualRef.current.rotation.y = THREE.MathUtils.lerp(
+        visualRef.current.rotation.y,
         targetAngle,
         0.15,
       )
     }
 
-    // 바운스
+    // 바운스 (visual만)
     const t = clock.getElapsedTime()
     const bounceAmount = isMoving.current ? 0.12 : 0.04
     const bounceSpeed = isMoving.current ? 8 : 2
-    pos.y = Math.abs(Math.sin(t * bounceSpeed)) * bounceAmount
+    visualRef.current.position.y = Math.abs(Math.sin(t * bounceSpeed)) * bounceAmount
   })
 
   return (
-    <group ref={groupRef} position={position}>
-      {/* 몸통 */}
-      <mesh ref={bodyRef} position={[0, 0.6, 0]}>
-        <capsuleGeometry args={[0.3, 0.6, 8, 16]} />
-        <meshStandardMaterial color={COLOR_NORMAL} />
-      </mesh>
+    <>
+      {/* 물리 바디 — 충돌 담당 */}
+      <RigidBody
+        ref={rigidBodyRef}
+        type="dynamic"
+        position={[position[0], 1, position[2]]}
+        lockRotations
+        colliders={false}
+        mass={1}
+        linearDamping={5}
+      >
+        <CapsuleCollider args={[0.4, 0.3]} />
+      </RigidBody>
 
-      {/* 머리 */}
-      <mesh ref={headRef} position={[0, 1.3, 0]}>
-        <sphereGeometry args={[0.25, 16, 16]} />
-        <meshStandardMaterial color={COLOR_NORMAL} />
-      </mesh>
-
-      {/* 눈 */}
-      <mesh position={[-0.1, 1.35, 0.22]}>
-        <sphereGeometry args={[0.05, 8, 8]} />
-        <meshBasicMaterial color="#07090D" />
-      </mesh>
-      <mesh position={[0.1, 1.35, 0.22]}>
-        <sphereGeometry args={[0.05, 8, 8]} />
-        <meshBasicMaterial color="#07090D" />
-      </mesh>
-    </group>
+      {/* 비주얼 — rigid body 위치를 따라감 */}
+      <group ref={visualRef} position={position}>
+        <mesh ref={bodyMeshRef} position={[0, 0.6, 0]}>
+          <capsuleGeometry args={[0.3, 0.6, 8, 16]} />
+          <meshStandardMaterial color={COLOR_NORMAL} />
+        </mesh>
+        <mesh ref={headMeshRef} position={[0, 1.3, 0]}>
+          <sphereGeometry args={[0.25, 16, 16]} />
+          <meshStandardMaterial color={COLOR_NORMAL} />
+        </mesh>
+        <mesh position={[-0.1, 1.35, 0.22]}>
+          <sphereGeometry args={[0.05, 8, 8]} />
+          <meshBasicMaterial color="#07090D" />
+        </mesh>
+        <mesh position={[0.1, 1.35, 0.22]}>
+          <sphereGeometry args={[0.05, 8, 8]} />
+          <meshBasicMaterial color="#07090D" />
+        </mesh>
+      </group>
+    </>
   )
 })
 

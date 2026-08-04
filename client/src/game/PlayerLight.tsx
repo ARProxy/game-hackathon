@@ -1,39 +1,35 @@
 /**
  * 플레이어 주변 시야 조명
  * - PointLight가 플레이어를 따라다님
- * - 전역 조명을 어둡게 하고 이 라이트만 밝게 → 시야 제한 효과
+ * - Fog와 함께 작동하여 시야 반경 5m만 밝게
+ * - 시야 밖은 Fog가 완전히 가림
  */
 
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { VISION_RADIUS } from './Fog'
 
 interface PlayerLightProps {
   targetRef: React.RefObject<THREE.Group | null>
-  radius?: number
-  intensity?: number
 }
 
-export default function PlayerLight({
-  targetRef,
-  radius = 12,
-  intensity = 5,
-}: PlayerLightProps) {
+export default function PlayerLight({ targetRef }: PlayerLightProps) {
   const lightRef = useRef<THREE.PointLight>(null)
 
   useFrame(() => {
     if (!targetRef.current || !lightRef.current) return
     const pos = targetRef.current.position
-    lightRef.current.position.set(pos.x, 6, pos.z)
+    lightRef.current.position.set(pos.x, 4, pos.z)
   })
 
   return (
     <pointLight
       ref={lightRef}
-      intensity={intensity}
-      distance={radius}
+      intensity={8}
+      distance={VISION_RADIUS * 1.5}
       color="#c0d8f0"
-      castShadow={false}
+      decay={2}
     />
   )
 }
