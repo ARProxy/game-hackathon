@@ -127,6 +127,8 @@ class ConnectionManager:
         player = session.state.get_player(player_id)
 
         action_type = payload.get("action_type")
+        actor_id = payload.get("actor_id")
+        actor = session.state.get_player(actor_id) if actor_id else player
 
         if action_type == "move" and player and not player.is_frozen:
             player.position.x = payload.get("x", player.position.x)
@@ -140,20 +142,37 @@ class ConnectionManager:
                 },
             }, exclude=player_id)
 
-        elif action_type == "rescue" and player and not player.is_frozen:
+        elif action_type == "rescue" and actor and not actor.is_frozen:
             target_id = payload.get("target_id")
             target = session.state.get_player(target_id) if target_id else None
             if target and target.is_frozen:
                 target.unfreeze()
                 await self.broadcast(room_id, {
                     "type": "rescued",
-                    "rescuer_id": player_id,
+                    "rescuer_id": actor.player_id,
                     "target_id": target_id,
                 })
                 logger.info(
                     "RESCUE: room=%s rescuer=%s target=%s",
-                    room_id, player_id, target_id,
+                    room_id, actor.player_id, target_id,
                 )
+
+        elif action_type == "trap" and player and not player.is_frozen:
+            player.position.x = payload.get("x", player.position.x)
+            player.position.z = payload.get("z", player.position.z)
+            player.freeze()
+            await self.broadcast(room_id, {
+                "type": "freeze",
+                "player_id": player_id,
+                "matched_word": "트랩",
+                "matched_stage": "trap",
+                "confidence": 1.0,
+                "trap_id": payload.get("trap_id"),
+                "position": {
+                    "x": player.position.x,
+                    "z": player.position.z,
+                },
+            })
 
     async def _handle_onboarding(
         self, room_id: str, player_id: str, payload: dict

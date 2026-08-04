@@ -2,10 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
-import * as THREE from 'three'
-import SchoolCampus, { pickRound, SPAWNS, type FloorKey } from './game/SchoolCampus'
-import Furnishings from './game/Furnishings'
-import WallOverlay from './game/WallOverlay'
+import SchoolCampus, { SPAWNS, type FloorKey } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
 import { assignCharacters } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
@@ -20,6 +17,7 @@ import ResultScreen from './components/ResultScreen'
 import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
+import { sendGameMessage } from './hooks/useWebSocket'
 import './App.css'
 
 /* ─────────────────────────────────────────────
@@ -74,13 +72,15 @@ function Scene({
           onTrapEnter={(id) => {
             const store = useGameStore.getState()
             if (store.phase === 'playing') {
-              store.freezePlayer({
-                playerId: store.playerId,
-                matchedWord: '트랩',
-                matchedStage: 'trap',
-                confidence: 1,
-                position: { x: 0, z: 0 },
-                timestamp: Date.now(),
+              const pos = playerRef.current?.getGroup()?.position
+              sendGameMessage({
+                type: 'action',
+                payload: {
+                  action_type: 'trap',
+                  trap_id: id,
+                  x: pos?.x ?? 0,
+                  z: pos?.z ?? 0,
+                },
               })
             }
           }}

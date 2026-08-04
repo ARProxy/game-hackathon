@@ -110,3 +110,25 @@ class TestGameState:
     def test_initial_phase_is_lobby(self):
         s = GameState(room_id="new")
         assert s.phase == GamePhase.LOBBY
+
+
+class TestGameSessionTeamComposition:
+    def test_setup_game_adds_required_ai_roles(self):
+        from app.game.session import GameSession
+
+        session = GameSession("solo")
+        session.state.add_player("human1", PlayerRole.HUMAN)
+        session.setup_game(["열쇠"])
+
+        assert session.state.get_player("partner").role == PlayerRole.AI_PARTNER
+        assert session.state.get_player("seeker").role == PlayerRole.SEEKER
+        assert session.state.alive_non_seeker_count() == 2
+
+    def test_setup_game_is_idempotent_for_ai_roles(self):
+        from app.game.session import GameSession
+
+        session = GameSession("solo")
+        session.setup_game(["열쇠"])
+        session.setup_game(["커피"])
+
+        assert set(session.state.players) == {"partner", "seeker"}

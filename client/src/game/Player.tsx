@@ -13,6 +13,7 @@ import * as THREE from 'three'
 import useKeyboard from '../hooks/useKeyboard'
 import { useGameStore } from '../stores/gameStore'
 import { CharacterModel, COLLIDER } from './Characters'
+import { sendGameMessage } from '../hooks/useWebSocket'
 
 const MOVE_SPEED = 5
 const JUMP_FORCE = 5
@@ -35,6 +36,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   const rigidBodyRef = useRef<RapierRigidBody>(null)
   const keys = useKeyboard()
   const isMoving = useRef(false)
+  const lastPositionSync = useRef(0)
   const { camera } = useThree()
 
   useImperativeHandle(ref, () => ({
@@ -95,6 +97,16 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     // visual을 rigid body 위치에 동기화
     const pos = rigidBodyRef.current.translation()
     visualRef.current.position.set(pos.x, pos.y - COLLIDER.offsetY, pos.z)
+
+    // 서버가 빙결 핑과 청각 이벤트에 실제 좌표를 사용하도록 10Hz로 동기화한다.
+    const now = clock.elapsedTime
+    if (now - lastPositionSync.current >= 0.1) {
+      sendGameMessage({
+        type: 'action',
+        payload: { action_type: 'move', x: pos.x, z: pos.z },
+      })
+      lastPositionSync.current = now
+    }
 
     // 이동 방향으로 회전
     if (isMoving.current) {

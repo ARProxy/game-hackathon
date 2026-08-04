@@ -4,7 +4,6 @@
  * - 제거된 프롭은 렌더링에서 제외
  */
 
-import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGameStore, type PropData } from '../stores/gameStore'

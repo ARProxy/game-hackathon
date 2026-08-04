@@ -46,5 +46,8 @@ Desktop.ini
 # Claude
 .claude/
 
+# Local autonomous-agent reports (not shipped to GitHub)
+.agent-reports/
+
 # Asset archive (unused/original Kenney kits)
 _assets-archive/

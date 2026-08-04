@@ -79,7 +79,6 @@ class TestSpeechJudgment:
                 "payload": {"transcript": "열쇠", "is_final": True},
             })
             ws.receive_json()  # freeze
-            ws.receive_json()  # game_over (1인이라 전원 빙결)
 
             # 빙결 상태에서 추가 발화 → 응답 없어야 함
             ws.send_json({
@@ -110,10 +109,50 @@ class TestActions:
             # 위치가 서버에 반영됐는지는 다른 플레이어가 확인해야 함
             # 여기서는 에러 없이 처리되는지만 확인
 
+    def test_ai_partner_can_rescue_human(self, client):
+        with client.websocket_connect("/ws/room8/player1") as ws:
+            self._start_game(ws)
+            ws.send_json({
+                "type": "speech",
+                "payload": {"transcript": "열쇠", "is_final": True},
+            })
+            assert ws.receive_json()["type"] == "freeze"
+
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "rescue",
+                    "actor_id": "partner",
+                    "target_id": "player1",
+                },
+            })
+            rescued = ws.receive_json()
+            assert rescued["type"] == "rescued"
+            assert rescued["rescuer_id"] == "partner"
+            assert rescued["target_id"] == "player1"
+
+    def test_trap_freezes_at_reported_position(self, client):
+        with client.websocket_connect("/ws/room9/player1") as ws:
+            self._start_game(ws)
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "trap",
+                    "trap_id": "trap_field_diag",
+                    "x": 7.5,
+                    "z": -2.25,
+                },
+            })
+            frozen = ws.receive_json()
+            assert frozen["type"] == "freeze"
+            assert frozen["matched_stage"] == "trap"
+            assert frozen["trap_id"] == "trap_field_diag"
+            assert frozen["position"] == {"x": 7.5, "z": -2.25}
+
 
 class TestGameOver:
-    def test_all_frozen_game_over(self, client):
-        """플레이어가 1명일 때 빙결 → 즉시 game_over."""
+    def test_human_freeze_does_not_end_solo_team(self, client):
+        """싱글 플레이도 AI 동료가 살아 있으므로 즉시 전멸하지 않는다."""
         with client.websocket_connect("/ws/room7/player1") as ws:
             ws.send_json({
                 "type": "start_game",
@@ -127,7 +166,14 @@ class TestGameOver:
             })
             freeze_msg = ws.receive_json()
             assert freeze_msg["type"] == "freeze"
+            assert freeze_msg["player_id"] == "player1"
 
-            game_over_msg = ws.receive_json()
-            assert game_over_msg["type"] == "game_over"
-            assert game_over_msg["reason"] == "all_frozen"
+            # 서버 상태에 AI 동료와 술래가 등록됐는지 새 연결의 시작 응답으로 확인한다.
+            # 추가 game_over 메시지가 없어야 하므로 블로킹 receive 대신 세션 상태를 검사한다.
+            from app.game.session import session_manager
+
+            state = session_manager.get_or_create("room7").state
+            assert state.get_player("partner").role.value == "ai_partner"
+            assert state.get_player("partner").status.value == "alive"
+            assert state.get_player("seeker").role.value == "seeker"
+            assert not state.all_non_seeker_frozen_or_eliminated()

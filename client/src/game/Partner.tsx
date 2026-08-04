@@ -9,8 +9,8 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGameStore } from '../stores/gameStore'
 import { CharacterModel } from './Characters'
+import { sendGameMessage } from '../hooks/useWebSocket'
 
-const FOLLOW_SPEED = 3.5
 const RESCUE_SPEED = 5.0
 const FOLLOW_DISTANCE = 2.5
 const RESCUE_DISTANCE = 1.2
@@ -24,6 +24,7 @@ interface PartnerProps {
 export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const rescuing = useRef(false)
+  const rescueRequested = useRef(false)
 
   useFrame(({ clock }, delta) => {
     if (!groupRef.current || !playerRef.current) return
@@ -42,8 +43,12 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       const dist = Math.sqrt(dx * dx + dz * dz)
 
       if (dist < RESCUE_DISTANCE) {
-        store.unfreezePlayer(playerId)
-        rescuing.current = false
+        if (!rescueRequested.current) {
+          rescueRequested.current = sendGameMessage({
+            type: 'action',
+            payload: { action_type: 'rescue', actor_id: 'partner', target_id: playerId },
+          })
+        }
       } else {
         const speed = RESCUE_SPEED * delta
         pos.x += (dx / dist) * speed
@@ -60,6 +65,7 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 10)) * 0.15
     } else {
       rescuing.current = false
+      rescueRequested.current = false
       const t = clock.getElapsedTime() * ORBIT_SPEED
       const targetX = playerPos.x + Math.cos(t) * FOLLOW_DISTANCE
       const targetZ = playerPos.z + Math.sin(t) * FOLLOW_DISTANCE

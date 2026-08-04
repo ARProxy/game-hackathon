@@ -756,7 +756,7 @@ const CYLS: { f: FloorKey; p: V3; r: number; h: number; c: string; rot?: V3 }[] 
 ]
 
 /** 비주얼 전용 (충돌 없음) */
-const VISUALS: { f: FloorKey; t: string; p: V3; s?: number[]; r?: number; ri?: number; ro?: number; sx?: number; sz?: number; rot?: V3; c: string }[] = [
+const VISUALS: { f: FloorKey; t: string; p: V3; s?: number[]; r?: number; h?: number; ri?: number; ro?: number; sx?: number; sz?: number; rot?: V3; c: string }[] = [
   { f: 'F1', t: 'plate', p: [-13, 0.02, -30.55], s: [42, 10.3], c: '#141b24' },
   { f: 'F1', t: 'plate', p: [-28.5, 0.02, -16.7], s: [11, 17.4], c: '#141b24' },
   { f: 'F1', t: 'plate', p: [-21, 0.02, -23.8], s: [3, 2.8], c: '#12181f' },
@@ -2620,7 +2620,7 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTra
           </mesh>
         ) : (
           <mesh key={`v${i}`} position={v.p} rotation={v.rot}>
-            <cylinderGeometry args={[v.r!, v.r!, (v as { h: number }).h, 8]} />
+            <cylinderGeometry args={[v.r!, v.r!, v.h!, 8]} />
             <meshStandardMaterial color={v.c} />
           </mesh>
         )

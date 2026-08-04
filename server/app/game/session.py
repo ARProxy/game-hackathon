@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 # MVP 기본 금기어 (온보딩 미구현 시 폴백)
 DEFAULT_FORBIDDEN_WORDS = ["열쇠", "커피", "빨간"]
+DEFAULT_AI_PARTNER_ID = "partner"
+DEFAULT_SEEKER_ID = "seeker"
 
 
 class GameSession:
@@ -26,6 +28,13 @@ class GameSession:
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
         words = forbidden_words or DEFAULT_FORBIDDEN_WORDS
+        # 싱글 플레이도 기획서의 최소 팀 구성을 서버 상태에 명시한다.
+        # 화면에만 존재하는 동료를 서버가 모르면 인간 플레이어가 얼자마자
+        # all_frozen으로 판정되므로, AI 동료와 술래를 결정적인 ID로 등록한다.
+        if self.state.get_player(DEFAULT_AI_PARTNER_ID) is None:
+            self.state.add_player(DEFAULT_AI_PARTNER_ID, PlayerRole.AI_PARTNER)
+        if self.state.get_player(DEFAULT_SEEKER_ID) is None:
+            self.state.add_player(DEFAULT_SEEKER_ID, PlayerRole.SEEKER)
         self.state.forbidden_words = words
         self.engine.update_words(words)
         self.state.phase = GamePhase.PLAYING

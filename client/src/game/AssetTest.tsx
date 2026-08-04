@@ -4,9 +4,15 @@
  */
 
 import { useGLTF } from '@react-three/drei'
-import { RigidBody } from '@react-three/rapier'
 
-function Model({ url, position = [0, 0, 0] as [number, number, number], scale = 1, rotation = [0, 0, 0] as [number, number, number] }) {
+interface ModelProps {
+  url: string
+  position?: [number, number, number]
+  scale?: number
+  rotation?: [number, number, number]
+}
+
+function Model({ url, position = [0, 0, 0], scale = 1, rotation = [0, 0, 0] }: ModelProps) {
   const { scene } = useGLTF(url)
   return <primitive object={scene.clone()} position={position} scale={scale} rotation={rotation} />
 }

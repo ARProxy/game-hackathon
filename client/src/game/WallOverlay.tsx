@@ -16,11 +16,11 @@
  * SchoolCampus 벽: 3.2m → scaleY 1.07
  */
 
-import { useMemo, useEffect, useRef } from 'react'
+import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import type { FloorKey } from './SchoolCampus'
-import { LAMPS, LAMP_TONES } from './SchoolCampus'
+import { LAMPS } from './SchoolCampus'
 
 const SY = 1.07 // 높이 스케일 (3.2m / 3m)
 
@@ -346,7 +346,6 @@ function GymWalls() {
  * ═══════════════════════════════════════ */
 function WingWalls({ y }: { y: number }) {
   const EXT = COLORS.exteriorBrick
-  const INT = COLORS.interiorCorridor
   const PAR = COLORS.interiorPartition
 
   return (

@@ -9,13 +9,18 @@ import { useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/gameStore'
 
 const WS_URL = `ws://${window.location.hostname}:8000/ws`
+let activeSocket: WebSocket | null = null
+
+/** Three.js 프레임 루프에서도 동일한 게임 연결을 사용한다. */
+export function sendGameMessage(message: object): boolean {
+  if (activeSocket?.readyState !== WebSocket.OPEN) return false
+  activeSocket.send(JSON.stringify(message))
+  return true
+}
 
 export default function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const {
-    roomId,
-    playerId,
-    setConnected,
     setPhase,
     setForbiddenWords,
     setRoundData,
@@ -30,11 +35,13 @@ export default function useWebSocket() {
     const ws = new WebSocket(`${WS_URL}/${roomId}/${playerId}`)
 
     ws.onopen = () => {
+      activeSocket = ws
       console.log('[WS] connected')
       useGameStore.getState().setConnected(true)
     }
 
     ws.onclose = () => {
+      if (activeSocket === ws) activeSocket = null
       console.log('[WS] disconnected')
       useGameStore.getState().setConnected(false)
     }
@@ -103,13 +110,12 @@ export default function useWebSocket() {
   }, [setPhase, setForbiddenWords, setRoundData, freezePlayer, unfreezePlayer, addSubtitle])
 
   const send = useCallback((message: object) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message))
-    }
+    sendGameMessage(message)
   }, [])
 
   const disconnect = useCallback(() => {
     wsRef.current?.close()
+    if (activeSocket === wsRef.current) activeSocket = null
     wsRef.current = null
   }, [])
 
