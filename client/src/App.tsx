@@ -163,7 +163,7 @@ function GameController() {
     setRoom(roomId, playerId)
     connect(roomId, playerId)
     return () => disconnect()
-  }, [])
+  }, [connect, disconnect, setRoom])
 
   /* 연결 → 온보딩 */
   useEffect(() => {

@@ -45,6 +45,7 @@ export function sendGameMessage(message: object): boolean {
 
 export default function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
+  const handleMessageRef = useRef<(data: any) => void>(() => undefined)
   const {
     setPhase,
     startRound,
@@ -89,7 +90,7 @@ export default function useWebSocket() {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
-      handleMessage(data)
+      handleMessageRef.current(data)
     }
 
     ws.onerror = (err) => {
@@ -225,6 +226,8 @@ export default function useWebSocket() {
         console.log('[WS] unhandled:', data.type, data)
     }
   }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
+
+  handleMessageRef.current = handleMessage
 
   const send = useCallback((message: object) => {
     sendGameMessage(message)
