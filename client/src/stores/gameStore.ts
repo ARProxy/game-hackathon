@@ -66,6 +66,8 @@ interface GameStore {
   outcome: GameOutcome
   resultReason: string | null
   forbiddenWords: string[]
+  sourceAnswers: string[]
+  freezeCount: number
   players: Record<string, PlayerState>
 
   // 라운드 데이터 (미션, 프롭)
@@ -95,6 +97,7 @@ interface GameStore {
   setPhase: (phase: GamePhase) => void
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
+  setSourceAnswers: (answers: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], spellWords: string[]) => void
   acquireClue: (clueWord: string) => void
   setCurrentMissionIndex: (index: number) => void
@@ -121,6 +124,8 @@ const initialState = {
   outcome: null as GameOutcome,
   resultReason: null as string | null,
   forbiddenWords: [],
+  sourceAnswers: [] as string[],
+  freezeCount: 0,
   props: [] as PropData[],
   missions: [] as MissionData[],
   spellWords: [] as string[],
@@ -150,6 +155,8 @@ export const useGameStore = create<GameStore>((set) => ({
     set({ phase: 'result', outcome, resultReason }),
 
   setForbiddenWords: (words) => set({ forbiddenWords: words }),
+
+  setSourceAnswers: (sourceAnswers) => set({ sourceAnswers }),
 
   setRoundData: (props, missions, spellWords) =>
     set({
@@ -197,6 +204,9 @@ export const useGameStore = create<GameStore>((set) => ({
   freezePlayer: (event) =>
     set((state) => ({
       lastFreezeEvent: event,
+      freezeCount: state.freezeCount + (
+        event.playerId === state.playerId && event.matchedStage !== 'trap' ? 1 : 0
+      ),
       players: {
         ...state.players,
         [event.playerId]: {

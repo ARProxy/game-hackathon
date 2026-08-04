@@ -11,18 +11,14 @@ import { useGameStore } from '../stores/gameStore'
 export default function ResultScreen() {
   const phase = useGameStore((s) => s.phase)
   const forbiddenWords = useGameStore((s) => s.forbiddenWords)
+  const sourceAnswers = useGameStore((s) => s.sourceAnswers)
+  const freezeCount = useGameStore((s) => s.freezeCount)
   const acquiredClues = useGameStore((s) => s.acquiredClues)
   const spellWords = useGameStore((s) => s.spellWords)
-  const subtitles = useGameStore((s) => s.subtitles)
   const outcome = useGameStore((s) => s.outcome)
   const resultReason = useGameStore((s) => s.resultReason)
 
   if (phase !== 'result') return null
-
-  // 금기어 위반 횟수 (자막에서 "얼음" 관련 이벤트 카운트)
-  const freezeCount = subtitles.filter(
-    (s) => s.text.includes('얼음') || s.text.includes('FREEZE')
-  ).length
 
   const isWin = outcome === 'win'
   const failureMessage = resultReason === 'caught_by_seeker'
@@ -91,6 +87,22 @@ export default function ResultScreen() {
         <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 12 }}>
           당신의 금기어는 온보딩 대화에서 추출되었습니다
         </div>
+        {sourceAnswers.length > 0 && (
+          <div style={{
+            display: 'grid',
+            gap: 6,
+            marginBottom: 16,
+            maxWidth: 560,
+            textAlign: 'left',
+          }}>
+            {sourceAnswers.map((answer, index) => (
+              <div key={`${index}-${answer}`} style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)' }}>
+                <span style={{ color: '#52E5FF', marginRight: 8 }}>답변 {index + 1}</span>
+                {answer}
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
           {forbiddenWords.map((word) => (
             <span key={word} style={{

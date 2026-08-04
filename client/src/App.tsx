@@ -168,6 +168,7 @@ function GameController() {
 
   /* 온보딩 완료 → 서버에 답변 전송 */
   const handleOnboardingComplete = useCallback((answers: string[]) => {
+    useGameStore.getState().setSourceAnswers(answers)
     send({ type: 'onboarding_complete', payload: { answers } })
   }, [send])
 
