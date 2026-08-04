@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useGameStore, type GamePhase } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
+import rescueContract from '../game/rescueContract.json'
 
 const FREEZE_TIMEOUT_MS = 30_000
 
@@ -47,6 +48,7 @@ function FrozenCountdown() {
   const playerId = useGameStore((s) => s.playerId)
   const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
   const freezeEvent = useGameStore((s) => s.lastFreezeEvent)
+  const rescueRequested = useGameStore((s) => s.rescueRequested)
   const [now, setNow] = useState(Date.now())
   const visible = (phase === 'playing' || phase === 'final_spell' || phase === 'escape')
     && playerStatus === 'frozen'
@@ -59,11 +61,24 @@ function FrozenCountdown() {
     return () => window.clearInterval(timer)
   }, [visible, freezeEvent?.timestamp])
 
+  useEffect(() => {
+    if (!visible || rescueRequested) return
+    const request = (event: KeyboardEvent) => {
+      if (event.code !== rescueContract.requestCode || event.repeat) return
+      event.preventDefault()
+      useGameStore.getState().requestRescue()
+      useGameStore.getState().addSubtitle('partner', '알겠어! 하던 일을 멈추고 구조하러 갈게!')
+    }
+    window.addEventListener('keydown', request)
+    return () => window.removeEventListener('keydown', request)
+  }, [rescueRequested, visible])
+
   if (!visible || !freezeEvent) return null
 
   const remainingMs = Math.max(0, FREEZE_TIMEOUT_MS - (now - freezeEvent.timestamp))
   const remainingSeconds = Math.ceil(remainingMs / 1000)
   const urgency = remainingSeconds <= 10
+  const rescueActive = rescueRequested || now - freezeEvent.timestamp >= rescueContract.autoDelayMs
 
   return (
     <div role="status" aria-live="polite" style={{
@@ -108,10 +123,12 @@ function FrozenCountdown() {
         }} />
       </div>
       <div style={{ fontSize: 15, fontWeight: 700, color: '#B6FF3D' }}>
-        AI 동료가 구조하러 오는 중
+        {rescueActive ? 'AI 동료가 구조하러 오는 중' : '동료가 진행 중인 일을 정리하고 있습니다'}
       </div>
       <div style={{ fontSize: 12, opacity: 0.68, marginTop: 4 }}>
-        동료가 가까워져 “땡!” 할 때까지 기다리세요
+        {rescueActive
+          ? '구조 전환 완료 · 동료가 가까워져 “땡!” 할 때까지 기다리세요'
+          : `E를 눌러 즉시 구조 요청 · ${rescueContract.autoDelayMs / 1000}초 뒤에는 자동으로 구조합니다`}
       </div>
     </div>
   )

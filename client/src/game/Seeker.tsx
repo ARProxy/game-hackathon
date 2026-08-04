@@ -306,7 +306,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   }
 
   return (
-    <group ref={groupRef} position={[18, 0, -18]}>
+    <group ref={groupRef} position={[26, 0, -27]}>
       <CharacterModel id="R00" camo={camoActive.current} />
     </group>
   )

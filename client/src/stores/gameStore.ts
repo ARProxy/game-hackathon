@@ -95,6 +95,7 @@ interface GameStore {
   // 빙결 이벤트 (연출용)
   lastFreezeEvent: FreezeEvent | null
   lastSoundEvent: SoundEvent | null
+  rescueRequested: boolean
 
   // 음성 관련
   isSpeaking: boolean
@@ -121,6 +122,7 @@ interface GameStore {
   clearPartnerTarget: () => void
   updatePlayer: (playerId: string, update: Partial<PlayerState>) => void
   freezePlayer: (event: FreezeEvent) => void
+  requestRescue: () => void
   setLastSoundEvent: (event: SoundEvent) => void
   unfreezePlayer: (playerId: string) => void
   eliminatePlayer: (playerId: string) => void
@@ -156,6 +158,7 @@ const initialState = {
   players: {},
   lastFreezeEvent: null,
   lastSoundEvent: null,
+  rescueRequested: false,
   isSpeaking: false,
   lastTranscript: '',
   subtitles: [],
@@ -239,6 +242,7 @@ export const useGameStore = create<GameStore>((set) => ({
   freezePlayer: (event) =>
     set((state) => ({
       lastFreezeEvent: event,
+      rescueRequested: false,
       freezeCount: state.freezeCount + (
         event.playerId === state.playerId && event.matchedStage !== 'trap' ? 1 : 0
       ),
@@ -254,8 +258,11 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setLastSoundEvent: (event) => set({ lastSoundEvent: event }),
 
+  requestRescue: () => set({ rescueRequested: true }),
+
   unfreezePlayer: (playerId) =>
     set((state) => ({
+      rescueRequested: playerId === state.playerId ? false : state.rescueRequested,
       players: {
         ...state.players,
         [playerId]: {

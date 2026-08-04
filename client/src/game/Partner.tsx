@@ -12,6 +12,7 @@ import { useGameStore } from '../stores/gameStore'
 import { CharacterModel } from './Characters'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import { planAvoidedStep } from './aiNavigation'
+import rescueContract from './rescueContract.json'
 
 const RESCUE_SPEED = 5.0
 const MISSION_SPEED = 4.2
@@ -63,6 +64,12 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
     const playerState = store.players[playerId]
     const isFrozen = playerState?.status === 'frozen'
     const target = store.partnerTarget
+    const freezeElapsedMs = store.lastFreezeEvent?.playerId === playerId
+      ? Date.now() - store.lastFreezeEvent.timestamp
+      : 0
+    const shouldRescue = isFrozen && (
+      store.rescueRequested || freezeElapsedMs >= rescueContract.autoDelayMs
+    )
     const gameActive = store.phase === 'playing'
       || store.phase === 'final_spell'
       || store.phase === 'escape'
@@ -72,7 +79,37 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       return
     }
 
-    if (isFrozen) {
+    const advanceMission = () => {
+      if (!target) return false
+      rescuing.current = false
+      lastRescueRequestAt.current = -Infinity
+      if (inspectRequestedFor.current !== target.propId) inspectRequestedFor.current = null
+
+      const dx = target.position.x - pos.x
+      const dz = target.position.z - pos.z
+      const dist = Math.sqrt(dx * dx + dz * dz)
+      if (dist <= INSPECT_DISTANCE) {
+        if (inspectRequestedFor.current !== target.propId) {
+          const sent = sendGameMessage({
+            type: 'action',
+            payload: { action_type: 'inspect_prop', actor_id: 'partner', prop_id: target.propId },
+          })
+          if (sent) {
+            inspectRequestedFor.current = target.propId
+            store.setInspectingProp(target.propId)
+          }
+        }
+      } else {
+        const step = Math.min(MISSION_SPEED * delta, dist - INSPECT_DISTANCE)
+        moveToward(pos, dx, dz, step)
+      }
+      const angle = Math.atan2(dx, dz)
+      groupRef.current!.rotation.y = THREE.MathUtils.lerp(groupRef.current!.rotation.y, angle, 0.15)
+      pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 7)) * 0.09
+      return true
+    }
+
+    if (shouldRescue) {
       rescuing.current = true
       const dx = playerPos.x - pos.x
       const dz = playerPos.z - pos.z
@@ -98,40 +135,11 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
       }
 
       pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 10)) * 0.15
-    } else if (target) {
+    } else if (advanceMission()) {
+      // 구조를 즉시 요청하지 않으면 최대 5초 동안 진행 중인 조사를 마칠 수 있다.
+    } else if (isFrozen) {
       rescuing.current = false
-      lastRescueRequestAt.current = -Infinity
-      if (inspectRequestedFor.current !== target.propId) inspectRequestedFor.current = null
-
-      const dx = target.position.x - pos.x
-      const dz = target.position.z - pos.z
-      const dist = Math.sqrt(dx * dx + dz * dz)
-
-      if (dist <= INSPECT_DISTANCE) {
-        if (inspectRequestedFor.current !== target.propId) {
-          const sent = sendGameMessage({
-            type: 'action',
-            payload: {
-              action_type: 'inspect_prop',
-              actor_id: 'partner',
-              prop_id: target.propId,
-            },
-          })
-          if (sent) {
-            inspectRequestedFor.current = target.propId
-            store.setInspectingProp(target.propId)
-          }
-        }
-      } else {
-        const step = Math.min(MISSION_SPEED * delta, dist - INSPECT_DISTANCE)
-        moveToward(pos, dx, dz, step)
-      }
-
-      const angle = Math.atan2(dx, dz)
-      groupRef.current.rotation.y = THREE.MathUtils.lerp(
-        groupRef.current.rotation.y, angle, 0.15
-      )
-      pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 7)) * 0.09
+      pos.y = Math.abs(Math.sin(clock.getElapsedTime() * 4)) * 0.04
     } else {
       rescuing.current = false
       lastRescueRequestAt.current = -Infinity
@@ -168,7 +176,7 @@ export default function Partner({ playerRef, characterId = 'R05' }: PartnerProps
   })
 
   return (
-    <group ref={groupRef} position={[2, 0, 2]}>
+    <group ref={groupRef} position={[-16, 0, -2]}>
       <CharacterModel id={characterId} />
     </group>
   )
