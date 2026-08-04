@@ -256,22 +256,7 @@ class ConnectionManager:
                     "reason": "invalid_seeker_contact",
                 })
                 return
-            player.eliminate()
-            session.state.phase = GamePhase.RESULT
-            self._cancel_room_freeze_timeouts(room_id)
-            await self.broadcast(room_id, {
-                "type": "eliminated",
-                "player_id": player_id,
-                "reason": "caught_by_seeker",
-            })
-            await self.broadcast(room_id, {
-                "type": "game_over",
-                "reason": "caught_by_seeker",
-            })
-            logger.info(
-                "ELIMINATED: room=%s player=%s reason=caught_by_seeker",
-                room_id, player_id,
-            )
+            await self._finish_seeker_catch(room_id, player_id, player)
 
         elif action_type == "gate_escape":
             await self._handle_gate_escape(room_id, player_id, player, payload)
@@ -282,6 +267,27 @@ class ConnectionManager:
             (first.position.x - second.position.x) ** 2
             + (first.position.z - second.position.z) ** 2
         ) <= radius ** 2
+
+    async def _finish_seeker_catch(
+        self, room_id: str, player_id: str, player: Player
+    ) -> None:
+        session = session_manager.get_or_create(room_id)
+        player.eliminate()
+        session.state.phase = GamePhase.RESULT
+        self._cancel_room_freeze_timeouts(room_id)
+        await self.broadcast(room_id, {
+            "type": "eliminated",
+            "player_id": player_id,
+            "reason": "caught_by_seeker",
+        })
+        await self.broadcast(room_id, {
+            "type": "game_over",
+            "reason": "caught_by_seeker",
+        })
+        logger.info(
+            "ELIMINATED: room=%s player=%s reason=caught_by_seeker",
+            room_id, player_id,
+        )
 
     async def _handle_actor_move(
         self,
@@ -376,6 +382,16 @@ class ConnectionManager:
                 "action_type": "gate_escape",
                 "reason": reason,
             })
+            return
+
+        # 탈출 센서와 포획 신고가 같은 프레임에 겹치면 술래 접촉을 우선한다.
+        seeker = session.state.get_player("seeker")
+        if (
+            seeker
+            and seeker.status == PlayerStatus.ALIVE
+            and self._players_within(seeker, player, 1.5)
+        ):
+            await self._finish_seeker_catch(room_id, player_id, player)
             return
 
         session.state.phase = GamePhase.RESULT

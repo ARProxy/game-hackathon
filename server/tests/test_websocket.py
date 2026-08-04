@@ -408,6 +408,45 @@ class TestEscapeFlow:
             }
             assert session.state.phase.value == "result"
 
+    def test_seeker_contact_wins_gate_escape_race(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/escape-catch-priority/player1") as ws:
+            ws.send_json({
+                "type": "start_game",
+                "payload": {"forbidden_words": ["열쇠"]},
+            })
+            ws.receive_json()
+            session = session_manager.get_or_create("escape-catch-priority")
+            gate = session.active_gate_payload()
+            player = session.state.get_player("player1")
+            seeker = session.state.get_player("seeker")
+            assert player is not None and seeker is not None
+            player.position.x = gate["position"]["x"]
+            player.position.z = gate["position"]["z"]
+            seeker.position.x = player.position.x
+            seeker.position.z = player.position.z
+            session.state.phase = GamePhase.ESCAPE
+
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "gate_escape",
+                    "gate_id": gate["gate_id"],
+                },
+            })
+            assert ws.receive_json() == {
+                "type": "eliminated",
+                "player_id": "player1",
+                "reason": "caught_by_seeker",
+            }
+            assert ws.receive_json() == {
+                "type": "game_over",
+                "reason": "caught_by_seeker",
+            }
+            assert player.status.value == "eliminated"
+            assert session.state.phase.value == "result"
+
     def test_spell_is_rejected_until_authoritative_gate_arrival(self, client):
         from app.game.session import session_manager
 
