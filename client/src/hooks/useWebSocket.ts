@@ -8,7 +8,32 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/gameStore'
 
-const WS_URL = `ws://${window.location.hostname}:8000/ws`
+function resolveWebSocketBaseUrl(): string {
+  const configured = import.meta.env.VITE_WS_URL?.trim()
+  if (configured) {
+    try {
+      const url = new URL(configured, window.location.origin)
+      if (url.protocol === 'http:') url.protocol = 'ws:'
+      if (url.protocol === 'https:') url.protocol = 'wss:'
+      if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+        throw new Error(`Unsupported WebSocket protocol: ${url.protocol}`)
+      }
+      if (url.pathname === '/') url.pathname = '/ws'
+      return url.toString().replace(/\/$/, '')
+    } catch (error) {
+      console.error('[WS] invalid VITE_WS_URL, using safe default', error)
+    }
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const hostname = window.location.hostname.replace(/^\[|\]$/g, '')
+  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(hostname)
+  const localHostname = hostname.includes(':') ? `[${hostname}]` : hostname
+  const host = isLocal ? `${localHostname}:8000` : window.location.host
+  return `${protocol}//${host}/ws`
+}
+
+const WS_URL = resolveWebSocketBaseUrl()
 let activeSocket: WebSocket | null = null
 
 /** Three.js 프레임 루프에서도 동일한 게임 연결을 사용한다. */
@@ -42,18 +67,23 @@ export default function useWebSocket() {
   const connect = useCallback((roomId: string, playerId: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
 
-    const ws = new WebSocket(`${WS_URL}/${roomId}/${playerId}`)
+    useGameStore.getState().setConnectionError(null)
+    const ws = new WebSocket(
+      `${WS_URL}/${encodeURIComponent(roomId)}/${encodeURIComponent(playerId)}`,
+    )
 
     ws.onopen = () => {
       activeSocket = ws
       console.log('[WS] connected')
       useGameStore.getState().setConnected(true)
+      useGameStore.getState().setConnectionError(null)
     }
 
     ws.onclose = () => {
       if (activeSocket === ws) activeSocket = null
       console.log('[WS] disconnected')
       useGameStore.getState().setConnected(false)
+      useGameStore.getState().setConnectionError('서버 연결이 끊겼습니다. 페이지를 새로고침해 주세요.')
     }
 
     ws.onmessage = (event) => {
@@ -63,6 +93,7 @@ export default function useWebSocket() {
 
     ws.onerror = (err) => {
       console.error('[WS] error', err)
+      useGameStore.getState().setConnectionError('게임 서버에 연결할 수 없습니다. 네트워크와 서버 주소를 확인해 주세요.')
     }
 
     wsRef.current = ws
@@ -162,6 +193,8 @@ export default function useWebSocket() {
           addSubtitle('partner', '지금은 그 물건을 확인할 수 없어.')
         } else if (data.action_type === 'gate_arrived' || data.action_type === 'gate_escape') {
           addSubtitle('system', '선택된 탈출 게이트에 더 가까이 이동하세요.')
+        } else if (data.action_type === 'rescue') {
+          addSubtitle('partner', '조금만 기다려, 더 가까이 가서 다시 구조할게!')
         }
         break
 

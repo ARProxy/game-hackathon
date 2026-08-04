@@ -219,6 +219,7 @@ export default function HUD() {
   const isSpeaking = useGameStore((s) => s.isSpeaking)
   const lastTranscript = useGameStore((s) => s.lastTranscript)
   const connected = useGameStore((s) => s.connected)
+  const connectionError = useGameStore((s) => s.connectionError)
   const subtitles = useGameStore((s) => s.subtitles)
   const inspectingPropId = useGameStore((s) => s.inspectingPropId)
   const partnerTarget = useGameStore((s) => s.partnerTarget)
@@ -253,6 +254,20 @@ export default function HUD() {
         <div style={{ fontSize: 12, opacity: 0.5 }}>
           {connected ? '● 서버 연결됨' : '○ 연결 중...'}
         </div>
+        {connectionError && (
+          <div role="alert" style={{
+            maxWidth: 360,
+            padding: '8px 10px',
+            border: '1px solid rgba(255,47,110,0.55)',
+            borderRadius: 8,
+            background: 'rgba(50,5,20,0.88)',
+            color: '#FF8BAD',
+            fontSize: 12,
+            lineHeight: 1.45,
+          }}>
+            {connectionError}
+          </div>
+        )}
 
         {/* 금기어 표시 */}
         {phase === 'playing' && forbiddenWords.length > 0 && (

@@ -63,6 +63,7 @@ export interface SoundEvent {
 interface GameStore {
   // 연결 상태
   connected: boolean
+  connectionError: string | null
   roomId: string
   playerId: string
 
@@ -100,6 +101,7 @@ interface GameStore {
 
   // Actions
   setConnected: (connected: boolean) => void
+  setConnectionError: (message: string | null) => void
   setRoom: (roomId: string, playerId: string) => void
   setPhase: (phase: GamePhase) => void
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
@@ -127,6 +129,7 @@ interface GameStore {
 
 const initialState = {
   connected: false,
+  connectionError: null as string | null,
   roomId: '',
   playerId: '',
   phase: 'lobby' as GamePhase,
@@ -157,6 +160,8 @@ export const useGameStore = create<GameStore>((set) => ({
   ...initialState,
 
   setConnected: (connected) => set({ connected }),
+
+  setConnectionError: (connectionError) => set({ connectionError }),
 
   setRoom: (roomId, playerId) => set({ roomId, playerId }),
 
