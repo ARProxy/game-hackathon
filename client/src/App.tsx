@@ -186,6 +186,8 @@ function GameController() {
   /* E키 — 프롭 조사 */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.matches('input, textarea, [contenteditable="true"]')) return
       if (e.code !== 'KeyE') return
       const store = useGameStore.getState()
       if (store.phase !== 'playing' || !store.nearbyPropId || store.inspectingPropId) return
@@ -274,6 +276,7 @@ function App() {
       <GameController />
 
       <Canvas
+        dpr={[1, 1.5]}
         camera={{
           position: [60, 40, 60],
           fov: 60,

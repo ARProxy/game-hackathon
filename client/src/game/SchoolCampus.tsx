@@ -2422,7 +2422,12 @@ export function GateFrame({ position, rotationY, active = false, onActivated, on
   )
 }
 
-export function Lamp({ position, h, color }: { position: V2; h: number; color: string }) {
+export function Lamp({ position, h, color, dynamicLight = true }: {
+  position: V2
+  h: number
+  color: string
+  dynamicLight?: boolean
+}) {
   return (
     <group position={[position[0], 0, position[1]]}>
       <RigidBody type="fixed" position={[0, h / 2, 0]} colliders="cuboid">
@@ -2435,7 +2440,10 @@ export function Lamp({ position, h, color }: { position: V2; h: number; color: s
         <coneGeometry args={[0.34, 0.28, 8]} />
         <meshStandardMaterial color="#5a5a5a" emissive={color} emissiveIntensity={0.9} />
       </mesh>
-      <pointLight position={[0, h - 0.3, 0]} intensity={h > 5 ? 9 : 5} distance={h > 5 ? 20 : 13} decay={1.6} color={color} />
+      {dynamicLight && (
+        <pointLight position={[0, h - 0.3, 0]} intensity={h > 5 ? 9 : 5}
+          distance={h > 5 ? 20 : 13} decay={1.6} color={color} />
+      )}
     </group>
   )
 }
@@ -2645,7 +2653,8 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTra
       ))}
 
       {LAMPS.map((l, i) => (
-        <Lamp key={`l${i}`} position={l.p} h={l.h} color={l.c} />
+        <Lamp key={`l${i}`} position={l.p} h={l.h} color={l.c}
+          dynamicLight={i % 5 < 2} />
       ))}
 
       <ElevatorCar y={elevatorY} />
