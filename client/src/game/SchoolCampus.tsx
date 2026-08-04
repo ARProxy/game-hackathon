@@ -76,6 +76,7 @@ import {
   GATE_SENSOR_LOCAL_Z,
   GATE_SLOTS,
 } from './gateContract'
+import actorContract from './actorContract.json'
 
 export { GATE_SLOTS } from './gateContract'
 
@@ -2224,9 +2225,9 @@ export const LAMPS: { p: V2; h: number; c: string; tone: LampTone }[] = [
 
 /** 스폰 */
 export const SPAWNS = {
-  player: [-9.8, -22] as V2,   // 본관 현관 앞
-  ai: [-16, -2] as V2,           // 조회대 옆
-  seeker: [26, -27] as V2,   // 체육관
+  player: actorContract.spawns.human as V2,   // 본관 현관 앞
+  ai: actorContract.spawns.partner as V2,     // 조회대 옆
+  seeker: actorContract.spawns.seeker as V2,  // 체육관
 }
 
 /** 술래 순찰 웨이포인트 (루프) — floor로 캣워크 등 상층 노드 포함 */
