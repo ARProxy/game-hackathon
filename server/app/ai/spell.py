@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 from jamo import h2j, j2hcj
 from Levenshtein import ratio as levenshtein_ratio
@@ -36,7 +37,9 @@ def check_spell(
         else:
             missing.append(word)
 
-    required_count = max(1, int(len(spell_words) * required_ratio))
+    # 3개 단서의 60%는 1.8이므로 반드시 2개가 필요하다.
+    # int() 내림을 사용하면 단서 하나만으로 성공하는 치명적인 허점이 생긴다.
+    required_count = max(1, math.ceil(len(spell_words) * required_ratio))
     success = len(matched) >= required_count
 
     logger.info(
