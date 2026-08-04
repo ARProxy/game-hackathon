@@ -2404,6 +2404,16 @@ export function GateFrame({ position, rotationY, selected = false, open = false,
   const gateColor = open ? '#52E5FF' : selected ? '#FFD166' : '#52E5FF'
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotationY, 0]}>
+      {!open && (
+        <RigidBody type="fixed" colliders={false}>
+          <CuboidCollider args={[1.3, 1.5, 0.16]} position={[0, 1.5, 0]} />
+          <mesh position={[0, 1.5, 0]}>
+            <boxGeometry args={[2.6, 3, 0.24]} />
+            <meshStandardMaterial color="#171f27" emissive={gateColor}
+              emissiveIntensity={selected ? 0.28 : 0.04} transparent opacity={0.88} />
+          </mesh>
+        </RigidBody>
+      )}
       {selected && !open && (
         <RigidBody type="fixed" colliders={false}>
           <CuboidCollider args={[1.4, 1.5, 1.0]} position={[0, 1.5, -1.1]} sensor onIntersectionEnter={onArrived} />
