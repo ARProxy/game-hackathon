@@ -101,6 +101,7 @@ export default function useWebSocket() {
 
       case 'rescued':
         unfreezePlayer(data.target_id)
+        addSubtitle(data.rescuer_id ?? 'partner', '땡! 다시 움직여!')
         break
 
       case 'eliminated':
