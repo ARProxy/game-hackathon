@@ -22,6 +22,7 @@ const ALERT_DURATION = 1.5
 const CHASE_ARRIVE_DIST = 1.5
 const RUSH_ARRIVE_DIST = 1.4
 const CATCH_DISTANCE = 1.1
+const CATCH_RETRY_SECONDS = 0.35
 const PROXIMITY_SOUND_RANGE = 18
 const PROXIMITY_SOUND_MIN_INTERVAL = 0.38
 const PROXIMITY_SOUND_MAX_INTERVAL = 1.55
@@ -47,7 +48,7 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
   const chaseTarget = useRef<{ x: number; z: number } | null>(null)
   const lastFreezeTimestamp = useRef(0)
   const lastSoundTimestamp = useRef(0)
-  const catchSent = useRef(false)
+  const lastCatchAttempt = useRef(-Infinity)
   const camoActive = useRef(false)
   const stillTimer = useRef(0)
   const lastPos = useRef(new THREE.Vector3(18, 0, -18))
@@ -148,15 +149,16 @@ export default function Seeker({ playerRef, rushTarget }: SeekerProps) {
     }
 
     if (
-      !catchSent.current &&
       playerPos &&
       (store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape') &&
-      Math.hypot(playerPos.x - pos.x, playerPos.z - pos.z) <= CATCH_DISTANCE
+      Math.hypot(playerPos.x - pos.x, playerPos.z - pos.z) <= CATCH_DISTANCE &&
+      clock.elapsedTime - lastCatchAttempt.current >= CATCH_RETRY_SECONDS
     ) {
-      catchSent.current = sendGameMessage({
+      const sent = sendGameMessage({
         type: 'action',
         payload: { action_type: 'seeker_catch' },
       })
+      if (sent) lastCatchAttempt.current = clock.elapsedTime
     }
 
     // 위장 판정 — 정지 3초 후 발동, 이동 시 해제
