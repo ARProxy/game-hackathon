@@ -35,6 +35,8 @@ export default function useWebSocket() {
     removeProp,
     acquireClue,
     setCurrentMissionIndex,
+    setActiveGate,
+    setGateArrived,
   } = useGameStore()
 
   const connect = useCallback((roomId: string, playerId: string) => {
@@ -77,6 +79,12 @@ export default function useWebSocket() {
         setForbiddenWords(data.state.forbidden_words)
         if (data.round) {
           setRoundData(data.round.props, data.round.missions, data.round.spell_words)
+        }
+        if (data.active_gate) {
+          setActiveGate({
+            gateId: data.active_gate.gate_id,
+            position: data.active_gate.position,
+          })
         }
         break
 
@@ -131,15 +139,28 @@ export default function useWebSocket() {
           addSubtitle('partner', '이 물건은 아니야. 다른 특징으로 설명해줘.')
         }
         if (data.all_complete) {
+          if (data.active_gate) {
+            setActiveGate({
+              gateId: data.active_gate.gate_id,
+              position: data.active_gate.position,
+            })
+          }
           setPhase('final_spell')
-          addSubtitle('partner', '단서를 다 모았어! 주문을 외쳐!')
+          addSubtitle('partner', '단서를 다 모았어! 잠긴 탈출구 앞으로 가자!')
         }
+        break
+
+      case 'gate_arrived':
+        setGateArrived(true)
+        addSubtitle('system', '게이트 도착 확인. 이제 주문을 외치세요!')
         break
 
       case 'action_rejected':
         if (data.action_type === 'inspect_prop') {
           clearPartnerTarget()
           addSubtitle('partner', '지금은 그 물건을 확인할 수 없어.')
+        } else if (data.action_type === 'gate_arrived' || data.action_type === 'gate_escape') {
+          addSubtitle('system', '선택된 탈출 게이트에 더 가까이 이동하세요.')
         }
         break
 
@@ -150,6 +171,10 @@ export default function useWebSocket() {
 
       case 'spell_failed':
         addSubtitle('system', `주문이 달라요! 빠진 단서: ${data.missing.join(', ')}`)
+        break
+
+      case 'spell_rejected':
+        addSubtitle('system', '잠긴 탈출구 앞에 도착해야 주문을 외칠 수 있습니다.')
         break
 
       case 'game_over':
@@ -163,7 +188,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex])
+  }, [setPhase, finishGame, setForbiddenWords, setRoundData, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
 
   const send = useCallback((message: object) => {
     sendGameMessage(message)

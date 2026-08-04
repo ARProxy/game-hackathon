@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
-import SchoolCampus, { GATE_SLOTS, pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
+import SchoolCampus, { pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
 import { assignCharacters } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
@@ -59,7 +59,10 @@ function Scene({
 }) {
   const playerRef = useRef<PlayerHandle>(null)
   const phase = useGameStore((state) => state.phase)
-  const gateTarget = GATE_SLOTS.find((gate) => gate.id === roundPlan.gate)?.p
+  const activeGate = useGameStore((state) => state.activeGate)
+  const gateTarget: [number, number] | undefined = activeGate
+    ? [activeGate.position.x, activeGate.position.z]
+    : undefined
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
   const playerGroupRef = {
@@ -80,13 +83,16 @@ function Scene({
         <SchoolCampus
           visibleFloors={visibleFloors}
           activeTraps={roundPlan.traps}
-          gateId={phase === 'escape' ? roundPlan.gate : undefined}
-          onGateEnter={(id) => {
-            if (phase === 'escape' && id === roundPlan.gate) {
-              sendGameMessage({
-                type: 'action',
-                payload: { action_type: 'gate_escape', gate_id: id },
-              })
+          gateId={phase === 'final_spell' || phase === 'escape' ? activeGate?.gateId : undefined}
+          gateOpen={phase === 'escape'}
+          onGateArrive={(id) => {
+            if (phase === 'final_spell' && id === activeGate?.gateId) {
+              sendGameMessage({ type: 'action', payload: { action_type: 'gate_arrived', gate_id: id } })
+            }
+          }}
+          onGateEscape={(id) => {
+            if (phase === 'escape' && id === activeGate?.gateId) {
+              sendGameMessage({ type: 'action', payload: { action_type: 'gate_escape', gate_id: id } })
             }
           }}
           onTrapEnter={(id) => {
@@ -184,7 +190,11 @@ function GameController() {
         useGameStore.getState().addSubtitle(useGameStore.getState().playerId, transcript)
         send({ type: 'speech', payload: { transcript, is_final: true } })
       } else if (p === 'final_spell') {
-        send({ type: 'spell', payload: { spell_text: transcript } })
+        if (useGameStore.getState().gateArrived) {
+          send({ type: 'spell', payload: { spell_text: transcript } })
+        } else {
+          useGameStore.getState().addSubtitle('system', '먼저 잠긴 탈출구 앞으로 이동하세요.')
+        }
       }
     },
   })

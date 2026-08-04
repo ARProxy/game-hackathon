@@ -173,6 +173,7 @@ class TestPartnerMissionFlow(unittest.IsolatedAsyncioTestCase):
             "mission_index": 0,
             "next_mission_index": 1,
             "all_complete": True,
+            "active_gate": self.session.active_gate_payload(),
         }
         assert self.session.current_mission_index == 1
         assert self.session.inspected_prop_ids == {"key"}

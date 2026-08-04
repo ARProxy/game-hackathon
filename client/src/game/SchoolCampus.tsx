@@ -2369,35 +2369,42 @@ export function TrapPlate({ id, position, floor, active = true, onTriggered }: {
   )
 }
 
-export function GateFrame({ position, rotationY, active = false, onActivated, onReached }: {
+export function GateFrame({ position, rotationY, selected = false, open = false, onActivated, onArrived, onEscaped }: {
   position: V2; rotationY: number
-  /** 이번 판의 탈출 게이트인가 (열쇠 확보 후 true로 올리면 발광·사운드가 트리거된다) */
-  active?: boolean
-  /** active가 false→true로 바뀌는 순간 1회 호출 — 사운드/카메라 연출 훅 */
+  /** 서버가 선택한 이번 판의 게이트. final_spell부터 잠긴 상태로 노출한다. */
+  selected?: boolean
+  /** 주문 성공 뒤 실제로 열린 상태. */
+  open?: boolean
   onActivated?: () => void
-  /** 활성화된 게이트 안으로 플레이어가 들어왔을 때 호출 */
-  onReached?: () => void
+  onArrived?: () => void
+  onEscaped?: () => void
 }) {
   const beamRef = useRef<THREE.Mesh>(null)
-  const prev = useRef(active)
+  const prev = useRef(open)
   useEffect(() => {
-    if (active && !prev.current) onActivated?.()
-    prev.current = active
-  }, [active, onActivated])
+    if (open && !prev.current) onActivated?.()
+    prev.current = open
+  }, [open, onActivated])
   // 활성 시 기둥 발광 맥동 + 상승하는 빛기둥
   useFrame((st) => {
     if (!beamRef.current) return
     const t = st.clock.elapsedTime
     const m = beamRef.current.material as THREE.MeshBasicMaterial
-    m.opacity = active ? 0.16 + 0.1 * Math.sin(t * 2.2) : 0
-    beamRef.current.scale.y = active ? 1 + 0.04 * Math.sin(t * 1.6) : 0.001
+    m.opacity = open ? 0.16 + 0.1 * Math.sin(t * 2.2) : 0
+    beamRef.current.scale.y = open ? 1 + 0.04 * Math.sin(t * 1.6) : 0.001
   })
-  const glow = active ? 1.3 : 0.12
+  const glow = open ? 1.3 : selected ? 0.55 : 0.12
+  const gateColor = open ? '#52E5FF' : selected ? '#FFD166' : '#52E5FF'
   return (
     <group position={[position[0], 0, position[1]]} rotation={[0, rotationY, 0]}>
-      {active && (
+      {selected && !open && (
         <RigidBody type="fixed" colliders={false}>
-          <CuboidCollider args={[1.15, 1.5, 0.65]} position={[0, 1.5, 0]} sensor onIntersectionEnter={onReached} />
+          <CuboidCollider args={[1.4, 1.5, 1.0]} position={[0, 1.5, -1.1]} sensor onIntersectionEnter={onArrived} />
+        </RigidBody>
+      )}
+      {selected && open && (
+        <RigidBody type="fixed" colliders={false}>
+          <CuboidCollider args={[1.15, 1.5, 0.7]} position={[0, 1.5, 1.1]} sensor onIntersectionEnter={onEscaped} />
         </RigidBody>
       )}
       {/* 탈출 지점 표식 — 멀리서도 보이는 빛기둥 (활성 시에만) */}
@@ -2405,18 +2412,18 @@ export function GateFrame({ position, rotationY, active = false, onActivated, on
         <cylinderGeometry args={[1.5, 1.5, 12, 12, 1, true]} />
         <meshBasicMaterial color="#52E5FF" transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
-      {active && <pointLight position={[0, 2.6, 0]} intensity={14} distance={9} decay={1.5} color="#52E5FF" />}
+      {open && <pointLight position={[0, 2.6, 0]} intensity={14} distance={9} decay={1.5} color="#52E5FF" />}
       {([-1.5, 1.5] as const).map((x) => (
         <RigidBody key={x} type="fixed" position={[x, 1.7, 0]} colliders="cuboid">
           <mesh>
             <cylinderGeometry args={[0.18, 0.18, 3.4, 10]} />
-            <meshStandardMaterial color="#3a3a5a" emissive="#52E5FF" emissiveIntensity={glow} />
+            <meshStandardMaterial color="#3a3a5a" emissive={gateColor} emissiveIntensity={glow} />
           </mesh>
         </RigidBody>
       ))}
       <mesh position={[0, 3.3, 0]}>
         <boxGeometry args={[3.3, 0.34, 0.34]} />
-        <meshStandardMaterial color="#3a3a5a" emissive="#52E5FF" emissiveIntensity={glow} />
+        <meshStandardMaterial color="#3a3a5a" emissive={gateColor} emissiveIntensity={glow} />
       </mesh>
     </group>
   )
@@ -2550,12 +2557,14 @@ function VisualBoxColorBatch({ items, color }: { items: typeof VISUALS; color: s
   )
 }
 
-export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTrapEnter, onGateEnter, elevatorY = 0 }: {
+export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape, elevatorY = 0 }: {
   visibleFloors?: FloorKey[]
   activeTraps?: string[]
   gateId?: string
+  gateOpen?: boolean
   onTrapEnter?: (id: string) => void
-  onGateEnter?: (id: string) => void
+  onGateArrive?: (id: string) => void
+  onGateEscape?: (id: string) => void
   elevatorY?: number
 }) {
   const show = (f: FloorKey) => !visibleFloors || visibleFloors.includes(f)
@@ -2648,8 +2657,10 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, onTra
       ))}
 
       {GATE_SLOTS.map((g) => (
-        <GateFrame key={g.id} position={g.p} rotationY={g.ry} active={g.id === gateId}
-          onReached={() => onGateEnter?.(g.id)} />
+        <GateFrame key={g.id} position={g.p} rotationY={g.ry} selected={g.id === gateId}
+          open={g.id === gateId && gateOpen}
+          onArrived={() => onGateArrive?.(g.id)}
+          onEscaped={() => onGateEscape?.(g.id)} />
       ))}
 
       {LAMPS.map((l, i) => (

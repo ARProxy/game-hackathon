@@ -212,6 +212,9 @@ class ConnectionManager:
                 room_id, player_id, actor, payload
             )
 
+        elif action_type == "gate_arrived":
+            await self._handle_gate_arrived(room_id, player_id, player, payload)
+
         elif (
             action_type == "seeker_catch"
             and player
@@ -235,20 +238,76 @@ class ConnectionManager:
                 room_id, player_id,
             )
 
-        elif (
-            action_type == "gate_escape"
-            and player
-            and player.status == PlayerStatus.ALIVE
-            and session.state.phase == GamePhase.ESCAPE
-        ):
-            session.state.phase = GamePhase.RESULT
-            self._cancel_room_freeze_timeouts(room_id)
-            await self.broadcast(room_id, {
-                "type": "game_won",
-                "player_id": player_id,
-                "reason": "escaped",
-                "gate_id": payload.get("gate_id"),
+        elif action_type == "gate_escape":
+            await self._handle_gate_escape(room_id, player_id, player, payload)
+
+    async def _handle_gate_arrived(
+        self,
+        room_id: str,
+        player_id: str,
+        player: Player | None,
+        payload: dict,
+    ) -> None:
+        session = session_manager.get_or_create(room_id)
+        reason = None
+        if session.state.phase != GamePhase.FINAL_SPELL:
+            reason = "wrong_phase"
+        elif not player or player.status != PlayerStatus.ALIVE:
+            reason = "player_not_alive"
+        elif payload.get("gate_id") != session.active_gate_id:
+            reason = "wrong_gate"
+        elif not session.is_near_active_gate(player_id):
+            reason = "too_far"
+
+        if reason:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "gate_arrived",
+                "reason": reason,
             })
+            return
+
+        session.gate_arrived_player_ids.add(player_id)
+        await self.broadcast(room_id, {
+            "type": "gate_arrived",
+            "player_id": player_id,
+            "gate_id": session.active_gate_id,
+        })
+
+    async def _handle_gate_escape(
+        self,
+        room_id: str,
+        player_id: str,
+        player: Player | None,
+        payload: dict,
+    ) -> None:
+        session = session_manager.get_or_create(room_id)
+        reason = None
+        if session.state.phase != GamePhase.ESCAPE:
+            reason = "wrong_phase"
+        elif not player or player.status != PlayerStatus.ALIVE:
+            reason = "player_not_alive"
+        elif payload.get("gate_id") != session.active_gate_id:
+            reason = "wrong_gate"
+        elif not session.is_near_active_gate(player_id):
+            reason = "too_far"
+
+        if reason:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected",
+                "action_type": "gate_escape",
+                "reason": reason,
+            })
+            return
+
+        session.state.phase = GamePhase.RESULT
+        self._cancel_room_freeze_timeouts(room_id)
+        await self.broadcast(room_id, {
+            "type": "game_won",
+            "player_id": player_id,
+            "reason": "escaped",
+            "gate_id": session.active_gate_id,
+        })
 
     async def _handle_inspect_prop(
         self,
@@ -324,6 +383,7 @@ class ConnectionManager:
             "mission_index": completed_index,
             "next_mission_index": session.current_mission_index,
             "all_complete": all_complete,
+            "active_gate": session.active_gate_payload() if all_complete else None,
         })
 
     def _schedule_freeze_timeout(self, room_id: str, player_id: str) -> None:
@@ -442,6 +502,7 @@ class ConnectionManager:
             "type": "game_started",
             "state": session.state.to_dict(),
             "round": round_to_dict(round_data),
+            "active_gate": session.active_gate_payload(),
         })
 
     async def _handle_spell(
@@ -449,6 +510,20 @@ class ConnectionManager:
     ) -> None:
         spell_text = payload.get("spell_text", "")
         session = session_manager.get_or_create(room_id)
+        player = session.state.get_player(player_id)
+
+        if (
+            session.state.phase != GamePhase.FINAL_SPELL
+            or player_id not in session.gate_arrived_player_ids
+            or not player
+            or player.status != PlayerStatus.ALIVE
+            or not session.is_near_active_gate(player_id)
+        ):
+            await self.send_to(room_id, player_id, {
+                "type": "spell_rejected",
+                "reason": "gate_arrival_required",
+            })
+            return
 
         result = check_spell(spell_text, session.spell_words)
 
@@ -477,6 +552,7 @@ class ConnectionManager:
         await self.broadcast(room_id, {
             "type": "game_started",
             "state": session.state.to_dict(),
+            "active_gate": session.active_gate_payload(),
         })
 
     async def broadcast(

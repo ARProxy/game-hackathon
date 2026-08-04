@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.game.state import GamePhase
 
 
 @pytest.fixture
@@ -25,6 +26,7 @@ class TestWebSocketConnection:
             assert data["type"] == "game_started"
             assert data["state"]["phase"] == "playing"
             assert data["state"]["forbidden_words"] == ["열쇠", "커피", "빨간"]
+            assert data["active_gate"]["gate_id"] in {"gate_back", "gate_main", "gate_gym"}
 
 
 class TestSpeechJudgment:
@@ -236,7 +238,7 @@ class TestGameOver:
 
 
 class TestEscapeFlow:
-    def test_spell_then_gate_is_server_authoritative_win(self, client):
+    def test_gate_arrival_then_spell_then_escape_is_server_authoritative(self, client):
         from app.game.session import session_manager
 
         with client.websocket_connect("/ws/room10/player1") as ws:
@@ -247,6 +249,27 @@ class TestEscapeFlow:
             ws.receive_json()
             session = session_manager.get_or_create("room10")
             session.spell_words = ["파란", "하늘", "별"]
+            session.state.phase = GamePhase.FINAL_SPELL
+            gate = session.active_gate_payload()
+
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "move",
+                    "x": gate["position"]["x"],
+                    "z": gate["position"]["z"],
+                },
+            })
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "gate_arrived", "gate_id": gate["gate_id"]},
+            })
+            arrived = ws.receive_json()
+            assert arrived == {
+                "type": "gate_arrived",
+                "player_id": "player1",
+                "gate_id": gate["gate_id"],
+            }
 
             ws.send_json({
                 "type": "spell",
@@ -258,13 +281,91 @@ class TestEscapeFlow:
 
             ws.send_json({
                 "type": "action",
-                "payload": {"action_type": "gate_escape", "gate_id": "gate_main"},
+                "payload": {"action_type": "gate_escape", "gate_id": gate["gate_id"]},
             })
             won = ws.receive_json()
             assert won == {
                 "type": "game_won",
                 "player_id": "player1",
                 "reason": "escaped",
-                "gate_id": "gate_main",
+                "gate_id": gate["gate_id"],
             }
             assert session.state.phase.value == "result"
+
+    def test_spell_is_rejected_until_authoritative_gate_arrival(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/room12/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            ws.receive_json()
+            session = session_manager.get_or_create("room12")
+            session.spell_words = ["별"]
+            session.state.phase = GamePhase.FINAL_SPELL
+
+            ws.send_json({"type": "spell", "payload": {"spell_text": "별"}})
+            assert ws.receive_json() == {
+                "type": "spell_rejected",
+                "reason": "gate_arrival_required",
+            }
+            assert session.state.phase.value == "final_spell"
+
+    def test_gate_arrival_rejects_wrong_gate_and_distance(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/room13/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            started = ws.receive_json()
+            session = session_manager.get_or_create("room13")
+            session.state.phase = GamePhase.FINAL_SPELL
+            active_id = started["active_gate"]["gate_id"]
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "gate_arrived", "gate_id": "not_the_gate"},
+            })
+            assert ws.receive_json()["reason"] == "wrong_gate"
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "gate_arrived", "gate_id": active_id},
+            })
+            assert ws.receive_json()["reason"] == "too_far"
+
+    def test_spell_rechecks_alive_and_near_gate_after_arrival(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/room14/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            started = ws.receive_json()
+            session = session_manager.get_or_create("room14")
+            session.spell_words = ["별"]
+            session.state.phase = GamePhase.FINAL_SPELL
+            gate = started["active_gate"]
+
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "move",
+                    "x": gate["position"]["x"],
+                    "z": gate["position"]["z"],
+                },
+            })
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "gate_arrived", "gate_id": gate["gate_id"]},
+            })
+            assert ws.receive_json()["type"] == "gate_arrived"
+
+            player = session.state.get_player("player1")
+            assert player is not None
+            player.freeze()
+            ws.send_json({"type": "spell", "payload": {"spell_text": "별"}})
+            assert ws.receive_json()["type"] == "spell_rejected"
+            assert session.state.phase == GamePhase.FINAL_SPELL
+
+            player.unfreeze()
+            player.position.x = 0.0
+            player.position.z = 0.0
+            ws.send_json({"type": "spell", "payload": {"spell_text": "별"}})
+            assert ws.receive_json()["type"] == "spell_rejected"
+            assert session.state.phase == GamePhase.FINAL_SPELL

@@ -10,11 +10,15 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useGameStore, type GamePhase } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 
-function TextSpeechFallback({ phase, connected }: { phase: GamePhase; connected: boolean }) {
+function TextSpeechFallback({ phase, connected, gateArrived }: {
+  phase: GamePhase
+  connected: boolean
+  gateArrived: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const available = phase === 'playing' || phase === 'final_spell'
+  const available = phase === 'playing' || (phase === 'final_spell' && gateArrived)
 
   const close = () => {
     setOpen(false)
@@ -146,6 +150,7 @@ export default function HUD() {
   const currentMissionIndex = useGameStore((s) => s.currentMissionIndex)
   const acquiredClues = useGameStore((s) => s.acquiredClues)
   const spellWords = useGameStore((s) => s.spellWords)
+  const gateArrived = useGameStore((s) => s.gateArrived)
 
   return (
     <div style={{
@@ -258,7 +263,9 @@ export default function HUD() {
               "{spellWords.join(' ')}"
             </div>
             <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
-              Q를 누르고 주문을 외치세요!
+              {gateArrived
+                ? '도착 확인 완료 — Q를 누르고 주문을 외치세요!'
+                : '노란빛으로 표시된 잠긴 게이트 앞으로 이동하세요.'}
             </div>
           </div>
         )}
@@ -351,7 +358,7 @@ export default function HUD() {
           {isSpeaking ? '🎤 듣는 중...' : 'Q를 누르고 말하세요'}
         </div>
 
-        <TextSpeechFallback phase={phase} connected={connected} />
+        <TextSpeechFallback phase={phase} connected={connected} gateArrived={gateArrived} />
       </div>
 
       {/* 빙결 알림 — 화면 중앙 */}

@@ -34,6 +34,11 @@ export interface PartnerTarget {
   utterance: string
 }
 
+export interface ActiveGate {
+  gateId: string
+  position: { x: number; z: number }
+}
+
 export interface MissionData {
   mission_id: number
   forbidden_word: string
@@ -76,6 +81,8 @@ interface GameStore {
   spellWords: string[]
   currentMissionIndex: number
   acquiredClues: string[]
+  activeGate: ActiveGate | null
+  gateArrived: boolean
 
   // 프롭 상호작용
   inspectingPropId: string | null  // AI 동료가 조사 중인 프롭
@@ -99,6 +106,8 @@ interface GameStore {
   setForbiddenWords: (words: string[]) => void
   setSourceAnswers: (answers: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], spellWords: string[]) => void
+  setActiveGate: (gate: ActiveGate) => void
+  setGateArrived: (arrived: boolean) => void
   acquireClue: (clueWord: string) => void
   setCurrentMissionIndex: (index: number) => void
   setInspectingProp: (propId: string | null) => void
@@ -131,6 +140,8 @@ const initialState = {
   spellWords: [] as string[],
   currentMissionIndex: 0,
   acquiredClues: [] as string[],
+  activeGate: null as ActiveGate | null,
+  gateArrived: false,
   inspectingPropId: null as string | null,
   removedPropIds: [] as string[],
   partnerTarget: null as PartnerTarget | null,
@@ -168,7 +179,12 @@ export const useGameStore = create<GameStore>((set) => ({
       removedPropIds: [],
       partnerTarget: null,
       inspectingPropId: null,
+      gateArrived: false,
     }),
+
+  setActiveGate: (activeGate) => set({ activeGate, gateArrived: false }),
+
+  setGateArrived: (gateArrived) => set({ gateArrived }),
 
   acquireClue: (clueWord) =>
     set((state) => ({

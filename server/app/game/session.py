@@ -7,6 +7,7 @@ Room별로 GameState와 ForbiddenWordEngine을 관리한다.
 from __future__ import annotations
 
 import logging
+import random
 
 from app.ai.forbidden import ForbiddenWordEngine
 from app.ai.mission import Mission, RoundData
@@ -18,6 +19,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_FORBIDDEN_WORDS = ["열쇠", "커피", "빨간"]
 DEFAULT_AI_PARTNER_ID = "partner"
 DEFAULT_SEEKER_ID = "seeker"
+GATE_POSITIONS: dict[str, dict[str, float]] = {
+    "gate_back": {"x": -7.0, "z": 38.0},
+    "gate_main": {"x": 38.5, "z": 27.5},
+    "gate_gym": {"x": 38.0, "z": -22.5},
+}
 
 
 class GameSession:
@@ -28,6 +34,8 @@ class GameSession:
         self.round_data: RoundData | None = None
         self.current_mission_index = 0
         self.inspected_prop_ids: set[str] = set()
+        self.active_gate_id = ""
+        self.gate_arrived_player_ids: set[str] = set()
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
@@ -36,6 +44,8 @@ class GameSession:
         self.spell_words = []
         self.current_mission_index = 0
         self.inspected_prop_ids.clear()
+        self.active_gate_id = random.choice(tuple(GATE_POSITIONS))
+        self.gate_arrived_player_ids.clear()
         # 싱글 플레이도 기획서의 최소 팀 구성을 서버 상태에 명시한다.
         # 화면에만 존재하는 동료를 서버가 모르면 인간 플레이어가 얼자마자
         # all_frozen으로 판정되므로, AI 동료와 술래를 결정적인 ID로 등록한다.
@@ -64,6 +74,22 @@ class GameSession:
         ):
             return None
         return self.round_data.missions[self.current_mission_index]
+
+    def active_gate_payload(self) -> dict:
+        return {
+            "gate_id": self.active_gate_id,
+            "position": GATE_POSITIONS[self.active_gate_id],
+        }
+
+    def is_near_active_gate(self, player_id: str, radius: float = 2.75) -> bool:
+        player = self.state.get_player(player_id)
+        if not player or not self.active_gate_id:
+            return False
+        gate = GATE_POSITIONS[self.active_gate_id]
+        return (
+            (player.position.x - gate["x"]) ** 2
+            + (player.position.z - gate["z"]) ** 2
+        ) <= radius ** 2
 
 
 class SessionManager:
