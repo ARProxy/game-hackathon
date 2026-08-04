@@ -45,3 +45,6 @@ Desktop.ini
 
 # Claude
 .claude/
+
+# Asset archive (unused/original Kenney kits)
+_assets-archive/

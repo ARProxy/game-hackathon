@@ -116,7 +116,7 @@ export default function HUD() {
               "{spellWords.join(' ')}"
             </div>
             <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
-              Space를 누르고 주문을 외치세요!
+              Q를 누르고 주문을 외치세요!
             </div>
           </div>
         )}
@@ -207,7 +207,7 @@ export default function HUD() {
           fontSize: 12,
           transition: 'all 0.15s',
         }}>
-          {isSpeaking ? '🎤 듣는 중...' : 'Space를 누르고 말하세요'}
+          {isSpeaking ? '🎤 듣는 중...' : 'Q를 누르고 말하세요'}
         </div>
       </div>
 

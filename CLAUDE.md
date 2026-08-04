@@ -16,6 +16,10 @@
 - `docs/phase4-mission.md` — Phase 4 미션/온보딩
 - `docs/prototype-review.md` — 프로토타입 리뷰
 - `docs/gap-analysis.md` — 기획서 대비 미구현 항목 분석
+- `docs/3d-transition.md` — 2.5D → 3D 전환 기록
+- `docs/map-redesign.md` — 맵 & 시야 리디자인 계획
+- `docs/asset-pipeline.md` — 에셋 파이프라인 (Kenney 도입, 하이브리드 전략, 생각의 흐름)
+- `docs/dev-log-day1-2.md` — 개발 로그 Day 1~2 (의사결정 흐름, 트러블슈팅, 교훈)
 - `docs/progress.md` — 진행 상황
 - `/docs` 디렉토리 내 추가되는 모든 .md 파일도 참조 대상
 

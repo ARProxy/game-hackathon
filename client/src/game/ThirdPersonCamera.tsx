@@ -10,10 +10,10 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useCameraStore } from '../stores/cameraStore'
 
-const DISTANCE = 8       // 플레이어와의 거리
-const HEIGHT = 4          // 카메라 높이
+const DISTANCE = 4        // 플레이어와의 거리 (가깝게)
+const HEIGHT = 1.8        // 카메라 높이 (어깨 높이)
 const SENSITIVITY = 0.002 // 마우스 감도
-const LERP_SPEED = 0.1
+const LERP_SPEED = 0.12
 
 interface ThirdPersonCameraProps {
   targetRef: React.RefObject<THREE.Group | null>
@@ -23,7 +23,7 @@ interface ThirdPersonCameraProps {
 export default function ThirdPersonCamera({ targetRef, enabled }: ThirdPersonCameraProps) {
   const { camera, gl } = useThree()
   const yaw = useRef(0)    // 좌우 회전
-  const pitch = useRef(0.3) // 상하 회전 (약간 아래를 봄)
+  const pitch = useRef(0.15) // 상하 회전 (거의 수평)
   const isLocked = useRef(false)
 
   // 포인터 잠금 + 마우스 이동
@@ -45,8 +45,8 @@ export default function ThirdPersonCamera({ targetRef, enabled }: ThirdPersonCam
       yaw.current -= e.movementX * SENSITIVITY
       pitch.current = THREE.MathUtils.clamp(
         pitch.current - e.movementY * SENSITIVITY,
-        0.05,  // 거의 수평
-        1.2,   // 거의 위에서
+        -0.2,  // 약간 올려다보기 허용
+        0.6,   // 최대 각도 제한 (위층 관통 방지)
       )
     }
 

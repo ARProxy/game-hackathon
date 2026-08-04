@@ -6,15 +6,16 @@
  */
 
 import { useRef, forwardRef, useImperativeHandle } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
 import * as THREE from 'three'
 import useKeyboard from '../hooks/useKeyboard'
 import { useGameStore } from '../stores/gameStore'
-import { useCameraStore } from '../stores/cameraStore'
 
 const MOVE_SPEED = 5
+const JUMP_FORCE = 5
+const GROUND_THRESHOLD = 0.1 // 바닥 판정 y 속도 임계값
 
 const COLOR_NORMAL = '#52E5FF'
 const COLOR_FROZEN = '#8090a0'
@@ -36,6 +37,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   const headMeshRef = useRef<THREE.Mesh>(null)
   const keys = useKeyboard()
   const isMoving = useRef(false)
+  const { camera } = useThree()
 
   // 외부에서 visual group 위치를 참조 (카메라 추종 등)
   useImperativeHandle(ref, () => ({
@@ -69,42 +71,49 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       return
     }
 
-    // 이동 입력 (로컬 좌표)
-    let inputX = 0
-    let inputZ = 0
+    // 카메라 기준 forward/right 벡터 계산
+    const forward = new THREE.Vector3()
+    camera.getWorldDirection(forward)
+    forward.y = 0
+    forward.normalize()
+
+    const right = new THREE.Vector3()
+    right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize()
+
+    // WASD 입력
     const pressed = keys.current
-    if (pressed.has('KeyW') || pressed.has('ArrowUp')) inputZ -= 1
-    if (pressed.has('KeyS') || pressed.has('ArrowDown')) inputZ += 1
-    if (pressed.has('KeyA') || pressed.has('ArrowLeft')) inputX -= 1
-    if (pressed.has('KeyD') || pressed.has('ArrowRight')) inputX += 1
+    const move = new THREE.Vector3(0, 0, 0)
+    if (pressed.has('KeyW') || pressed.has('ArrowUp')) move.add(forward)
+    if (pressed.has('KeyS') || pressed.has('ArrowDown')) move.sub(forward)
+    if (pressed.has('KeyD') || pressed.has('ArrowRight')) move.add(right)
+    if (pressed.has('KeyA') || pressed.has('ArrowLeft')) move.sub(right)
 
-    const length = Math.sqrt(inputX * inputX + inputZ * inputZ)
-    if (length > 0) {
-      inputX /= length
-      inputZ /= length
+    if (move.lengthSq() > 0) move.normalize()
+    isMoving.current = move.lengthSq() > 0
+
+    const moveX = move.x
+    const moveZ = move.z
+
+    // 점프 — Space키, 바닥에 있을 때만
+    const currentVel = rigidBodyRef.current.linvel()
+    let velY = currentVel.y
+    const isGrounded = Math.abs(velY) < GROUND_THRESHOLD
+    if (pressed.has('Space') && isGrounded) {
+      velY = JUMP_FORCE
     }
-    isMoving.current = length > 0
 
-    // 카메라 yaw 기준으로 이동 방향 회전
-    const cameraYaw = useCameraStore.getState().yaw
-    const sin = Math.sin(cameraYaw)
-    const cos = Math.cos(cameraYaw)
-    const moveX = inputX * cos - inputZ * sin
-    const moveZ = inputX * sin + inputZ * cos
-
-    // velocity 설정 — y는 중력 유지
-    const currentVelY = rigidBodyRef.current.linvel().y
+    // velocity 설정
     rigidBodyRef.current.setLinvel(
-      { x: moveX * MOVE_SPEED, y: currentVelY, z: moveZ * MOVE_SPEED },
+      { x: moveX * MOVE_SPEED, y: velY, z: moveZ * MOVE_SPEED },
       true,
     )
 
-    // visual을 rigid body 위치에 동기화
+    // visual을 rigid body 위치에 동기화 (y도 포함 — 점프/낙하)
     const pos = rigidBodyRef.current.translation()
-    visualRef.current.position.set(pos.x, 0, pos.z)
+    visualRef.current.position.set(pos.x, pos.y - 0.6, pos.z)
 
     // 이동 방향으로 회전
-    if (length > 0) {
+    if (isMoving.current) {
       const targetAngle = Math.atan2(moveX, moveZ)
       visualRef.current.rotation.y = THREE.MathUtils.lerp(
         visualRef.current.rotation.y,
@@ -113,11 +122,13 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       )
     }
 
-    // 바운스 (visual만)
-    const t = clock.getElapsedTime()
-    const bounceAmount = isMoving.current ? 0.12 : 0.04
-    const bounceSpeed = isMoving.current ? 8 : 2
-    visualRef.current.position.y = Math.abs(Math.sin(t * bounceSpeed)) * bounceAmount
+    // 바운스 — 바닥에 있을 때만 (점프/낙하 중에는 꺼짐)
+    if (isGrounded) {
+      const t = clock.getElapsedTime()
+      const bounceAmount = isMoving.current ? 0.08 : 0.03
+      const bounceSpeed = isMoving.current ? 8 : 2
+      visualRef.current.position.y += Math.abs(Math.sin(t * bounceSpeed)) * bounceAmount
+    }
   })
 
   return (

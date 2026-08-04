@@ -83,18 +83,16 @@ export default function useSpeech({
     }
   }, [])
 
-  // 스페이스바 Push-to-Talk
+  // Q키 Push-to-Talk
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !e.repeat) {
-        e.preventDefault()
+      if (e.code === 'KeyQ' && !e.repeat) {
         startListening()
       }
     }
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault()
+      if (e.code === 'KeyQ') {
         stopListening()
       }
     }
