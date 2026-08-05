@@ -44,6 +44,11 @@ class GameSession:
         self.active_gate_id = ""
         self.gate_arrived_player_ids: set[str] = set()
         self.position_samples: dict[str, MovementSample] = {}
+        self.hunter_signal: dict | None = None
+        self.hunter_last_seen: dict | None = None
+        self.hunter_forward = {"x": 0.0, "z": 1.0}
+        self.hunter_last_tick = 0.0
+        self.hunter_last_intent: dict | None = None
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
@@ -54,6 +59,11 @@ class GameSession:
         self.inspected_prop_ids.clear()
         self.active_gate_id = random.choice(tuple(GATE_POSITIONS))
         self.gate_arrived_player_ids.clear()
+        self.hunter_signal = None
+        self.hunter_last_seen = None
+        self.hunter_forward = {"x": 0.0, "z": 1.0}
+        self.hunter_last_tick = time.monotonic()
+        self.hunter_last_intent = None
         # 싱글 플레이도 기획서의 최소 팀 구성을 서버 상태에 명시한다.
         # 화면에만 존재하는 동료를 서버가 모르면 인간 플레이어가 얼자마자
         # all_frozen으로 판정되므로, AI 동료와 술래를 결정적인 ID로 등록한다.

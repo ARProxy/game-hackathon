@@ -66,6 +66,7 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
     const store = useGameStore.getState()
     const playerId = store.playerId
     const playerState = store.players[playerId]
+    const partnerState = Object.values(store.players).find((player) => player.role === 'ai_partner')
     const isFrozen = playerState?.status === 'frozen'
     const target = store.partnerTarget
     const freezeElapsedMs = store.lastFreezeEvent?.playerId === playerId
@@ -77,6 +78,13 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
     const gameActive = store.phase === 'playing'
       || store.phase === 'final_spell'
       || store.phase === 'escape'
+
+    if (partnerState?.status === 'eliminated') {
+      groupRef.current.visible = false
+      pos.y = 0
+      return
+    }
+    groupRef.current.visible = true
 
     if (!gameActive) {
       pos.y = 0

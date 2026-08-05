@@ -55,6 +55,7 @@ export default function useWebSocket() {
     hydratePlayers,
     freezePlayer,
     setLastSoundEvent,
+    setHunterIntent,
     unfreezePlayer,
     eliminatePlayer,
     addSubtitle,
@@ -169,6 +170,16 @@ export default function useWebSocket() {
         })
         break
 
+      case 'seeker_intent':
+        setHunterIntent({
+          state: data.state,
+          targetId: data.target_id,
+          target: data.target,
+          seekerPosition: data.seeker_position,
+          reason: data.reason,
+        })
+        break
+
       case 'partner_command':
         setPartnerTarget({
           propId: data.target_prop_id,
@@ -258,7 +269,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, hydratePlayers, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, setPartnerDecision, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
+  }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, hydratePlayers, freezePlayer, setLastSoundEvent, setHunterIntent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, setPartnerDecision, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
 
   handleMessageRef.current = handleMessage
 

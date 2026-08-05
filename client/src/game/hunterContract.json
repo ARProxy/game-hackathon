@@ -1,0 +1,14 @@
+{
+  "visionDistance": 12,
+  "visionAngleDegrees": 100,
+  "proximityDetectionDistance": 8,
+  "hearingDistance": 18,
+  "memorySeconds": 4,
+  "thinkIntervalSeconds": 0.25,
+  "detectedHoldSeconds": 0.45,
+  "huntSpeed": 2.2,
+  "investigateSpeed": 2.8,
+  "chaseSpeed": 3.6,
+  "rushSpeed": 5.2,
+  "catchDistance": 1.1
+}

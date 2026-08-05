@@ -12,6 +12,7 @@ from fastapi import WebSocket
 from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
 from app.ai.partner import compare_partner_candidates
+from app.ai.hunter import CONTRACT as HUNTER_CONTRACT, advance_hunter, hunter_snapshot, record_hunter_signal
 from app.ai.spell import check_spell
 from app.game.authority import (
     ACTOR_MAX_SPEED,
@@ -36,6 +37,7 @@ class ConnectionManager:
     def __init__(self) -> None:
         self.rooms: dict[str, Room] = {}
         self._freeze_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
+        self._hunter_tasks: dict[str, asyncio.Task[None]] = {}
 
     async def connect(
         self, room_id: str, player_id: str, websocket: WebSocket
@@ -58,6 +60,9 @@ class ConnectionManager:
             room.players.pop(player_id, None)
             if not room.players:
                 self._cancel_room_freeze_timeouts(room_id)
+                hunter_task = self._hunter_tasks.pop(room_id, None)
+                if hunter_task:
+                    hunter_task.cancel()
                 del self.rooms[room_id]
                 session_manager.remove(room_id)
         logger.info("disconnected: room=%s player=%s", room_id, player_id)
@@ -100,13 +105,12 @@ class ConnectionManager:
         # 확정된 정상 발화는 내용 판정에 앞서 위치 기반 청각 핑을 만든다.
         # 술래는 안전 발화와 금기어 발화를 동일한 순서로 감지할 수 있다.
         if player and is_final and transcript.strip():
+            signal_position = {"x": player.position.x, "z": player.position.z}
+            record_hunter_signal(session, player_id, signal_position, "speech")
             await self.broadcast(room_id, {
                 "type": "sound_ping",
                 "player_id": player_id,
-                "position": {
-                    "x": player.position.x,
-                    "z": player.position.z,
-                },
+                "position": signal_position,
             })
 
         # 금기어 판정
@@ -114,6 +118,10 @@ class ConnectionManager:
 
         if result.is_forbidden and player:
             player.freeze()
+            record_hunter_signal(
+                session, player_id,
+                {"x": player.position.x, "z": player.position.z}, "freeze",
+            )
             await self.broadcast(room_id, {
                 "type": "freeze",
                 "player_id": player_id,
@@ -221,6 +229,15 @@ class ConnectionManager:
         elif action_type == "actor_move":
             await self._handle_actor_move(room_id, player_id, player, actor, payload)
 
+        elif action_type == "seeker_think":
+            if (
+                not player or player.role != PlayerRole.HUMAN
+                or session.state.phase not in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}
+            ):
+                return
+            intent = hunter_snapshot(session)
+            await self.send_to(room_id, player_id, {"type": "seeker_intent", **intent})
+
         elif action_type == "rescue":
             target_id = payload.get("target_id")
             target = session.state.get_player(target_id) if target_id else None
@@ -265,6 +282,10 @@ class ConnectionManager:
                 })
                 return
             player.freeze()
+            record_hunter_signal(
+                session, player_id,
+                {"x": player.position.x, "z": player.position.z}, "freeze",
+            )
             await self.broadcast(room_id, {
                 "type": "freeze",
                 "player_id": player_id,
@@ -289,20 +310,22 @@ class ConnectionManager:
 
         elif action_type == "seeker_catch":
             seeker = session.state.get_player("seeker")
+            target_id = payload.get("target_id", player_id)
+            target = session.state.get_player(target_id)
             valid_catch = (
                 session.state.phase in {
                     GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
                 }
-                and player
-                and player.role == PlayerRole.HUMAN
-                and player.status != PlayerStatus.ELIMINATED
+                and target
+                and target.role != PlayerRole.SEEKER
+                and target.status != PlayerStatus.ELIMINATED
                 and seeker
                 and seeker.role == PlayerRole.SEEKER
                 and seeker.status == PlayerStatus.ALIVE
-                and self._players_within(seeker, player, 1.5)
+                and self._players_within(seeker, target, 1.5)
                 and has_clear_catch_line(
                     (seeker.position.x, seeker.position.z),
-                    (player.position.x, player.position.z),
+                    (target.position.x, target.position.z),
                 )
             )
             if not valid_catch:
@@ -312,7 +335,7 @@ class ConnectionManager:
                     "reason": "invalid_seeker_contact",
                 })
                 return
-            await self._finish_seeker_catch(room_id, player_id, player)
+            await self._finish_seeker_catch(room_id, target_id, target)
 
         elif action_type == "gate_escape":
             await self._handle_gate_escape(room_id, player_id, player, payload)
@@ -361,17 +384,20 @@ class ConnectionManager:
     ) -> None:
         session = session_manager.get_or_create(room_id)
         player.eliminate()
-        session.state.phase = GamePhase.RESULT
-        self._cancel_room_freeze_timeouts(room_id)
+        team_defeated = player.role == PlayerRole.HUMAN or session.state.all_non_seeker_frozen_or_eliminated()
+        if team_defeated:
+            session.state.phase = GamePhase.RESULT
+            self._cancel_room_freeze_timeouts(room_id)
         await self.broadcast(room_id, {
             "type": "eliminated",
             "player_id": player_id,
             "reason": "caught_by_seeker",
         })
-        await self.broadcast(room_id, {
-            "type": "game_over",
-            "reason": "caught_by_seeker",
-        })
+        if team_defeated:
+            await self.broadcast(room_id, {
+                "type": "game_over",
+                "reason": "caught_by_seeker",
+            })
         logger.info(
             "ELIMINATED: room=%s player=%s reason=caught_by_seeker",
             room_id, player_id,
@@ -395,7 +421,7 @@ class ConnectionManager:
                 GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
             }
             and actor is not None
-            and actor.role in {PlayerRole.AI_PARTNER, PlayerRole.SEEKER}
+            and actor.role == PlayerRole.AI_PARTNER
         )
         if not valid or not self._accept_position_update(
             session, actor, x, z, ACTOR_MAX_SPEED
@@ -543,6 +569,10 @@ class ConnectionManager:
             return
 
         session.inspected_prop_ids.add(prop_id)
+        record_hunter_signal(
+            session, actor.player_id,
+            {"x": actor.position.x, "z": actor.position.z}, "ai_action",
+        )
         completed_index = session.current_mission_index
         is_correct = prop.prop_id == mission.real_prop.prop_id
         clue = None
@@ -682,6 +712,7 @@ class ConnectionManager:
         session = session_manager.get_or_create(room_id)
         session.setup_game(forbidden_words)
         session.setup_round(round_data)
+        self._ensure_hunter_task(room_id)
         await self.broadcast(room_id, {
             "type": "game_started",
             "state": session.state.to_dict(),
@@ -723,10 +754,12 @@ class ConnectionManager:
         else:
             # 틀린 주문도 큰 소리로 외친 행동이다. 무료 재시도가 되지 않도록
             # 술래와 팀에 현재 위치를 강한 청각 단서로 전달한다.
+            failed_position = {"x": player.position.x, "z": player.position.z}
+            record_hunter_signal(session, player_id, failed_position, "failed_spell")
             await self.broadcast(room_id, {
                 "type": "sound_ping",
                 "player_id": player_id,
-                "position": {"x": player.position.x, "z": player.position.z},
+                "position": failed_position,
                 "source": "failed_spell",
             })
             await self.send_to(room_id, player_id, {
@@ -747,11 +780,41 @@ class ConnectionManager:
         session = session_manager.get_or_create(room_id)
         forbidden_words = payload.get("forbidden_words")
         session.setup_game(forbidden_words)
+        self._ensure_hunter_task(room_id)
         await self.broadcast(room_id, {
             "type": "game_started",
             "state": session.state.to_dict(),
             "active_gate": session.active_gate_payload(),
         })
+
+    def _ensure_hunter_task(self, room_id: str) -> None:
+        existing = self._hunter_tasks.get(room_id)
+        if existing and not existing.done():
+            return
+        task = asyncio.create_task(self._run_hunter(room_id))
+        self._hunter_tasks[room_id] = task
+        task.add_done_callback(
+            lambda completed, target_room=room_id: self._forget_hunter_task(target_room, completed)
+        )
+
+    async def _run_hunter(self, room_id: str) -> None:
+        interval = float(HUNTER_CONTRACT["thinkIntervalSeconds"])
+        try:
+            while room_id in self.rooms:
+                session = session_manager.get_or_create(room_id)
+                if session.state.phase == GamePhase.RESULT:
+                    return
+                if session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
+                    advance_hunter(session)
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+
+    def _forget_hunter_task(self, room_id: str, completed: asyncio.Task[None]) -> None:
+        if self._hunter_tasks.get(room_id) is completed:
+            self._hunter_tasks.pop(room_id, None)
+        if not completed.cancelled() and completed.exception():
+            logger.error("hunter task failed: room=%s error=%s", room_id, completed.exception())
 
     async def broadcast(
         self, room_id: str, message: dict, exclude: str | None = None

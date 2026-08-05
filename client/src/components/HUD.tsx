@@ -281,6 +281,7 @@ export default function HUD() {
   const totalClues = useGameStore((s) => s.totalClues)
   const gateArrived = useGameStore((s) => s.gateArrived)
   const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
+  const hunterIntent = useGameStore((s) => s.hunterIntent)
 
   return (
     <div style={{
@@ -439,6 +440,19 @@ export default function HUD() {
       </div>
 
       {/* 조사 중 표시 */}
+      {hunterIntent && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
+        <div style={{
+          position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
+          padding: '7px 12px', borderRadius: 20,
+          border: `1px solid ${hunterIntent.state === 'CHASE' || hunterIntent.state === 'DETECTED' ? '#FF2F6E' : 'rgba(255,255,255,.25)'}`,
+          background: hunterIntent.state === 'CHASE' || hunterIntent.state === 'DETECTED' ? 'rgba(120,10,35,.78)' : 'rgba(7,9,13,.7)',
+          color: hunterIntent.state === 'CHASE' || hunterIntent.state === 'DETECTED' ? '#FF8BAD' : 'rgba(255,255,255,.7)',
+          fontSize: 11, fontWeight: 800, letterSpacing: '.08em',
+        }}>
+          술래 · {hunterIntent.state}
+        </div>
+      )}
+
       {phase === 'playing' && partnerDecision && (
         <div style={{
           position: 'absolute',

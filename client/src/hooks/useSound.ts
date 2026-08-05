@@ -134,6 +134,12 @@ export default function useSound() {
     }
   }, [tone])
 
+  const playSeekerDetected = useCallback(() => {
+    tone(720, 0, 0.22, 0.11, 540, 'sawtooth')
+    tone(520, 0.22, 0.22, 0.11, 760, 'sawtooth')
+    tone(760, 0.44, 0.28, 0.1, 500, 'square')
+  }, [tone])
+
   return {
     playFreeze,
     playRescue,
@@ -141,5 +147,6 @@ export default function useSound() {
     playVictory,
     playDefeat,
     playSeekerProximity,
+    playSeekerDetected,
   }
 }

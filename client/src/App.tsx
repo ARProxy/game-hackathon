@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
-import SchoolCampus, { PATROL, pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
+import SchoolCampus, { pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
 import { CHARACTERS } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
@@ -47,10 +47,6 @@ const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
 }
 
 const runnerIds = CHARACTERS.filter((character) => character.role === 'runner').map((character) => character.id)
-const SEEKER_PATROL = PATROL
-  .filter(({ floor }) => floor === 'OUT' || floor === 'F1')
-  .map(({ p }) => p)
-
 function Scene({
   cameraMode,
   visibleFloors,
@@ -65,9 +61,6 @@ function Scene({
   const playerRef = useRef<PlayerHandle>(null)
   const phase = useGameStore((state) => state.phase)
   const activeGate = useGameStore((state) => state.activeGate)
-  const gateTarget: [number, number] | undefined = activeGate
-    ? [activeGate.position.x, activeGate.position.z]
-    : undefined
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
   const playerGroupRef = {
@@ -125,9 +118,7 @@ function Scene({
         />
         <Seeker
           playerRef={playerGroupRef}
-          rushTarget={gateTarget}
           spawn={SPAWNS.seeker}
-          waypoints={SEEKER_PATROL}
         />
       </Physics>
 

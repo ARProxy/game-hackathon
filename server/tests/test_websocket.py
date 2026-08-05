@@ -4,6 +4,7 @@ FastAPI TestClient로 WebSocket 연결 → 메시지 → 응답을 검증한다.
 """
 
 import pytest
+import time
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -404,6 +405,72 @@ class TestGameOver:
             assert state.get_player("partner").status.value == "alive"
             assert state.get_player("seeker").role.value == "seeker"
             assert not state.all_non_seeker_frozen_or_eliminated()
+
+
+class TestActiveHunterFlow:
+    def test_human_client_requests_server_authoritative_intent(self, client):
+        with client.websocket_connect("/ws/hunter-intent/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            ws.receive_json()
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "seeker_think", "forward_x": -999.0, "forward_z": 999.0},
+            })
+            intent = ws.receive_json()
+            assert intent["type"] == "seeker_intent"
+            assert intent["state"] in {"HUNT", "INVESTIGATE", "DETECTED", "CHASE", "SEARCH", "RUSH_GATE"}
+            assert set(intent["target"]) == {"x", "z"}
+
+    def test_seeker_can_eliminate_ai_without_immediately_ending_human_run(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/hunter-ai-catch/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            ws.receive_json()
+            session = session_manager.get_or_create("hunter-ai-catch")
+            seeker = session.state.get_player("seeker")
+            partner = session.state.get_player("partner")
+            assert seeker and partner
+            seeker.position.x = partner.position.x
+            seeker.position.z = partner.position.z
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "seeker_catch", "target_id": "partner"},
+            })
+            eliminated = ws.receive_json()
+            assert eliminated == {
+                "type": "eliminated",
+                "player_id": "partner",
+                "reason": "caught_by_seeker",
+            }
+            assert partner.status.value == "eliminated"
+            assert session.state.phase.value == "playing"
+
+    def test_client_cannot_move_seeker_or_accelerate_server_tick(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/hunter-authority/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            ws.receive_json()
+            session = session_manager.get_or_create("hunter-authority")
+            seeker = session.state.get_player("seeker")
+            assert seeker
+            start = (seeker.position.x, seeker.position.z)
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "actor_move", "actor_id": "seeker", "x": -30, "z": 30},
+            })
+            assert ws.receive_json()["reason"] == "invalid_actor_position"
+            assert (seeker.position.x, seeker.position.z) == start
+
+            for _ in range(5):
+                ws.send_json({"type": "action", "payload": {"action_type": "seeker_think"}})
+                ws.receive_json()
+            assert ((seeker.position.x - start[0]) ** 2 + (seeker.position.z - start[1]) ** 2) ** 0.5 < 0.2
+            before_idle = (seeker.position.x, seeker.position.z)
+            time.sleep(0.35)
+            assert (seeker.position.x, seeker.position.z) != before_idle
 
 
 class TestEscapeFlow:

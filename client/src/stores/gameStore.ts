@@ -68,6 +68,15 @@ export interface SoundEvent {
   timestamp: number
 }
 
+export type HunterState = 'HUNT' | 'INVESTIGATE' | 'DETECTED' | 'CHASE' | 'SEARCH' | 'RUSH_GATE'
+export interface HunterIntent {
+  state: HunterState
+  targetId: string | null
+  target: { x: number; z: number }
+  seekerPosition: { x: number; z: number }
+  reason: string
+}
+
 interface GameStore {
   // 연결 상태
   connected: boolean
@@ -105,6 +114,7 @@ interface GameStore {
   // 빙결 이벤트 (연출용)
   lastFreezeEvent: FreezeEvent | null
   lastSoundEvent: SoundEvent | null
+  hunterIntent: HunterIntent | null
   rescueRequested: boolean
 
   // 음성 관련
@@ -137,6 +147,7 @@ interface GameStore {
   freezePlayer: (event: FreezeEvent) => void
   requestRescue: () => void
   setLastSoundEvent: (event: SoundEvent) => void
+  setHunterIntent: (intent: HunterIntent) => void
   unfreezePlayer: (playerId: string) => void
   eliminatePlayer: (playerId: string) => void
   setSpeaking: (isSpeaking: boolean) => void
@@ -173,6 +184,7 @@ const initialState = {
   players: {},
   lastFreezeEvent: null,
   lastSoundEvent: null,
+  hunterIntent: null as HunterIntent | null,
   rescueRequested: false,
   isSpeaking: false,
   lastTranscript: '',
@@ -283,6 +295,8 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
 
   setLastSoundEvent: (event) => set({ lastSoundEvent: event }),
+
+  setHunterIntent: (hunterIntent) => set({ hunterIntent }),
 
   requestRescue: () => set({ rescueRequested: true }),
 
