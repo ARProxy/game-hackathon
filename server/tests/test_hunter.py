@@ -2,7 +2,13 @@
 
 import time
 
-from app.ai.hunter import CONTRACT, _safe_hunter_step, decide_hunter_intent, record_hunter_signal
+from app.ai.hunter import (
+    CONTRACT,
+    _safe_hunter_step,
+    decide_hunter_intent,
+    director_snapshot,
+    record_hunter_signal,
+)
 from app.game.session import GameSession
 from app.game.state import PlayerRole
 
@@ -147,3 +153,27 @@ def test_recent_signal_and_visible_runner_can_be_scored_together() -> None:
     session.hunter_forward = {"x": 1.0, "z": 0.0}
     record_hunter_signal(session, "human", {"x": 17.0, "z": 0.0}, "speech")
     assert decide_hunter_intent(session)["target_id"] == "human"
+
+
+def test_director_pressure_rises_with_time_and_mission_progress() -> None:
+    session = make_session("hunter-director-progress")
+    started_at = session.state.started_at
+    early = director_snapshot(session, now=started_at)
+    session.current_mission_index = 2
+    late = director_snapshot(session, now=started_at + 180)
+
+    assert late["director_tension"] > early["director_tension"]
+    assert late["speed_multiplier"] > early["speed_multiplier"]
+    assert CONTRACT["director"]["minSpeedMultiplier"] <= early["speed_multiplier"]
+    assert late["speed_multiplier"] <= CONTRACT["director"]["maxSpeedMultiplier"]
+
+
+def test_director_reduces_pressure_while_teammate_is_frozen() -> None:
+    session = make_session("hunter-director-relief")
+    checked_at = session.state.started_at + 90
+    normal = director_snapshot(session, now=checked_at)
+    session.state.get_player("partner").freeze()
+    relief = director_snapshot(session, now=checked_at)
+
+    assert relief["director_tension"] < normal["director_tension"]
+    assert relief["speed_multiplier"] < normal["speed_multiplier"]

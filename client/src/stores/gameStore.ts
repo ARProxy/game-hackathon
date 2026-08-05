@@ -77,6 +77,8 @@ export interface HunterIntent {
   target: { x: number; z: number }
   seekerPosition: { x: number; z: number }
   reason: string
+  directorTension: number
+  speedMultiplier: number
 }
 
 export type CompanionState = 'EXPLORE_ZONE' | 'INSPECT_CANDIDATE' | 'REPORT_FINDING'
@@ -226,6 +228,8 @@ function sameHunterIntent(left: HunterIntent | null, right: HunterIntent): boole
     && left.state === right.state
     && left.targetId === right.targetId
     && left.reason === right.reason
+    && left.directorTension === right.directorTension
+    && left.speedMultiplier === right.speedMultiplier
     && samePosition(left.target, right.target)
     && samePosition(left.seekerPosition, right.seekerPosition))
 }

@@ -93,7 +93,10 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
         group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, Math.atan2(dx, dz), 0.16)
         const stopDistance = intent.state === 'RUSH_GATE' ? 1.4 : 0.5
         if (intent.state !== 'DETECTED' && distance > stopDistance) {
-          moveToward(pos, dx, dz, Math.min(SPEEDS[intent.state] * delta, distance - stopDistance))
+          moveToward(pos, dx, dz, Math.min(
+            SPEEDS[intent.state] * intent.speedMultiplier * delta,
+            distance - stopDistance,
+          ))
         }
       }
 

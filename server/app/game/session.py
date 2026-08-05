@@ -125,6 +125,7 @@ class GameSession:
         self.state.forbidden_words = words
         self.engine.update_words(words)
         self.state.phase = GamePhase.PLAYING
+        self.state.started_at = time.time()
         logger.info(
             "game setup: room=%s words=%s", self.state.room_id, words
         )

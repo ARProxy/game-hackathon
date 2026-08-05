@@ -186,6 +186,8 @@ export default function useWebSocket() {
           target: data.target,
           seekerPosition: data.seeker_position,
           reason: data.reason,
+          directorTension: data.director_tension ?? 0,
+          speedMultiplier: data.speed_multiplier ?? 1,
         })
         break
 

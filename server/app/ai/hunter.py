@@ -16,6 +16,36 @@ with CONTRACT_PATH.open(encoding="utf-8") as contract_file:
     CONTRACT = json.load(contract_file)
 
 
+def director_snapshot(session: Any, now: float | None = None) -> dict[str, float]:
+    """진행도와 위기 상태로 공정한 범위 안의 술래 압박을 계산한다."""
+    director = CONTRACT["director"]
+    checked_at = time.time() if now is None else now
+    started_at = session.state.started_at or checked_at
+    elapsed_factor = min(1.0, max(0.0, checked_at - started_at) / director["targetRoundSeconds"])
+    mission_total = len(session.round_data.missions) if session.round_data else 3
+    progress_factor = min(1.0, session.current_mission_index / max(1, mission_total))
+    phase_pressure = 0.3 if session.state.phase == GamePhase.ESCAPE else (
+        0.12 if session.state.phase == GamePhase.FINAL_SPELL else 0.0
+    )
+    frozen_count = sum(
+        player.status == PlayerStatus.FROZEN
+        for player in session.state.players.values()
+        if player.role != PlayerRole.SEEKER
+    )
+    tension = min(1.0, max(
+        0.05,
+        0.12 + elapsed_factor * 0.28 + progress_factor * 0.32
+        + phase_pressure - frozen_count * director["frozenRelief"],
+    ))
+    multiplier = director["minSpeedMultiplier"] + (
+        director["maxSpeedMultiplier"] - director["minSpeedMultiplier"]
+    ) * tension
+    return {
+        "director_tension": round(tension, 4),
+        "speed_multiplier": round(multiplier, 4),
+    }
+
+
 def record_hunter_signal(session: Any, player_id: str, position: dict, strength: str) -> bool:
     seeker = next(
         (player for player in session.state.players.values() if player.role == PlayerRole.SEEKER),
@@ -154,7 +184,7 @@ def advance_hunter(session: Any) -> dict:
     if elapsed < minimum_interval and session.hunter_last_intent:
         return {**session.hunter_last_intent, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
 
-    intent = decide_hunter_intent(session)
+    intent = {**decide_hunter_intent(session), **director_snapshot(session)}
     dx = intent["target"]["x"] - seeker.position.x
     dz = intent["target"]["z"] - seeker.position.z
     distance = math.hypot(dx, dz)
@@ -166,7 +196,10 @@ def advance_hunter(session: Any) -> dict:
     if distance > 0.01:
         session.hunter_forward = {"x": dx / distance, "z": dz / distance}
         if speed_key:
-            step = min(float(CONTRACT[speed_key]) * min(elapsed, 0.5), max(0.0, distance - 0.5))
+            step = min(
+                float(CONTRACT[speed_key]) * intent["speed_multiplier"] * min(elapsed, 0.5),
+                max(0.0, distance - 0.5),
+            )
             next_x, next_z = _safe_hunter_step(
                 seeker.position.x, seeker.position.z,
                 intent["target"]["x"], intent["target"]["z"], step,
@@ -180,7 +213,9 @@ def advance_hunter(session: Any) -> dict:
 
 def hunter_snapshot(session: Any) -> dict:
     seeker = session.state.get_player("seeker")
-    intent = session.hunter_last_intent or decide_hunter_intent(session)
+    intent = session.hunter_last_intent or {
+        **decide_hunter_intent(session), **director_snapshot(session),
+    }
     return {**intent, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
 
 

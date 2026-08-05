@@ -10,5 +10,11 @@
   "investigateSpeed": 2.8,
   "chaseSpeed": 3.6,
   "rushSpeed": 5.2,
-  "catchDistance": 1.1
+  "catchDistance": 1.1,
+  "director": {
+    "targetRoundSeconds": 180,
+    "minSpeedMultiplier": 0.72,
+    "maxSpeedMultiplier": 1.08,
+    "frozenRelief": 0.18
+  }
 }
