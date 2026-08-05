@@ -18,6 +18,10 @@ import { sendGameMessage } from '../hooks/useWebSocket'
 const MOVE_SPEED = 5
 const JUMP_FORCE = 5
 const GROUND_THRESHOLD = 0.1
+const MOVE_ACCELERATION = 18
+const MOVE_DECELERATION = 26
+const VISUAL_FOLLOW_SPEED = 30
+const ROTATION_SPEED = 14
 // 캐릭터 모델의 원점은 발바닥이다. 물리 바디 원점과 캡슐 하단의 차이를 보정한다.
 const COLLIDER_BOTTOM_Y = COLLIDER.offsetY - COLLIDER.halfHeight - COLLIDER.radius
 
@@ -45,7 +49,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     getGroup: () => visualRef.current,
   }))
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, delta) => {
     if (!rigidBodyRef.current || !visualRef.current) return
 
     const store = useGameStore.getState()
@@ -60,7 +64,11 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     if (isFrozen || !controlsEnabled) {
       rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true)
       const pos = rigidBodyRef.current.translation()
-      visualRef.current.position.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
+      const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
+      visualRef.current.position.lerp(
+        new THREE.Vector3(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z),
+        follow,
+      )
       return
     }
 
@@ -95,14 +103,18 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       velY = JUMP_FORCE
     }
 
-    rigidBodyRef.current.setLinvel(
-      { x: moveX * MOVE_SPEED, y: velY, z: moveZ * MOVE_SPEED },
-      true,
-    )
+    const velocityResponse = isMoving.current ? MOVE_ACCELERATION : MOVE_DECELERATION
+    const nextVelX = THREE.MathUtils.damp(currentVel.x, moveX * MOVE_SPEED, velocityResponse, delta)
+    const nextVelZ = THREE.MathUtils.damp(currentVel.z, moveZ * MOVE_SPEED, velocityResponse, delta)
+    rigidBodyRef.current.setLinvel({ x: nextVelX, y: velY, z: nextVelZ }, true)
 
     // visual을 rigid body 위치에 동기화
     const pos = rigidBodyRef.current.translation()
-    visualRef.current.position.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
+    const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
+    visualRef.current.position.lerp(
+      new THREE.Vector3(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z),
+      follow,
+    )
 
     // 서버가 빙결 핑과 청각 이벤트에 실제 좌표를 사용하도록 10Hz로 동기화한다.
     const now = clock.elapsedTime
@@ -117,11 +129,12 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     // 이동 방향으로 회전
     if (isMoving.current) {
       const targetAngle = Math.atan2(moveX, moveZ)
-      visualRef.current.rotation.y = THREE.MathUtils.lerp(
-        visualRef.current.rotation.y,
-        targetAngle,
-        0.15,
-      )
+      const angleDelta = THREE.MathUtils.euclideanModulo(
+        targetAngle - visualRef.current.rotation.y + Math.PI,
+        Math.PI * 2,
+      ) - Math.PI
+      const turn = 1 - Math.exp(-ROTATION_SPEED * delta)
+      visualRef.current.rotation.y += angleDelta * turn
     }
 
   })
