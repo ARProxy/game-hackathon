@@ -13,6 +13,7 @@ import Partner from './game/Partner'
 import ThirdPersonCamera from './game/ThirdPersonCamera'
 import ThreatFeedback from './game/ThreatFeedback'
 import Fog from './game/Fog'
+import InteriorDetails from './game/InteriorDetails'
 import HUD from './components/HUD'
 import Onboarding from './components/Onboarding'
 import ForbiddenReveal from './components/ForbiddenReveal'
@@ -155,8 +156,9 @@ function Scene({
         />
       </Physics>
 
-      {/* ── 비주얼 오버레이 — 성능 최적화 전까지 비활성화 ── */}
-      {/* TODO: GLB InstancedMesh로 교체 후 재활성화 */}
+      {/* ── 비주얼 오버레이 — 맵 네이티브 인스턴싱으로 핵심 실내 가구 복구 ── */}
+      <InteriorDetails visibleFloors={visibleFloors} />
+      {/* Kenney GLB 오버레이는 실제 GLB 인스턴싱 전까지 비활성화한다. */}
       {/* <WallOverlay visibleFloors={visibleFloors} /> */}
       {/* <Furnishings visibleFloors={visibleFloors} /> */}
 
