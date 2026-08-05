@@ -547,7 +547,11 @@ class ConnectionManager:
         is_correct = prop.prop_id == mission.real_prop.prop_id
         clue = None
         if is_correct:
-            clue = mission.clue_word
+            clue = {
+                "word": mission.clue_word,
+                "order": mission.clue_order,
+                "total": len(session.spell_words),
+            }
             session.current_mission_index += 1
         all_complete = bool(
             session.round_data
@@ -713,13 +717,27 @@ class ConnectionManager:
                 "type": "spell_success",
                 "player_id": player_id,
                 "matched": result["matched"],
+                "order_valid": result["order_valid"],
                 "transcript": result["transcript"],
             })
         else:
+            # 틀린 주문도 큰 소리로 외친 행동이다. 무료 재시도가 되지 않도록
+            # 술래와 팀에 현재 위치를 강한 청각 단서로 전달한다.
+            await self.broadcast(room_id, {
+                "type": "sound_ping",
+                "player_id": player_id,
+                "position": {"x": player.position.x, "z": player.position.z},
+                "source": "failed_spell",
+            })
             await self.send_to(room_id, player_id, {
                 "type": "spell_failed",
-                "matched": result["matched"],
-                "missing": result["missing"],
+                "matched_count": len(result["matched"]),
+                "required_count": result["required_count"],
+                "order_valid": result["order_valid"],
+                "failure_reason": (
+                    "order" if len(result["matched"]) >= result["required_count"]
+                    else "incomplete"
+                ),
                 "transcript": result["transcript"],
             })
 

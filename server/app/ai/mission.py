@@ -60,6 +60,7 @@ class Mission:
     mission_id: int
     forbidden_word: str
     clue_word: str       # 클리어 시 획득하는 단서
+    clue_order: int      # 최종 주문 안에서의 순서 (1부터 시작)
     real_prop: PropPlacement
     decoy_props: list[PropPlacement]
 
@@ -83,6 +84,8 @@ def generate_round(forbidden_words: list[str]) -> RoundData:
     random.shuffle(available_slots)
 
     clues = random.sample(CLUE_WORDS, min(len(forbidden_words), len(CLUE_WORDS)))
+    clue_orders = list(range(1, len(clues) + 1))
+    random.shuffle(clue_orders)
     missions: list[Mission] = []
     all_props: list[PropPlacement] = []
     slot_index = 0
@@ -155,6 +158,7 @@ def generate_round(forbidden_words: list[str]) -> RoundData:
             mission_id=i,
             forbidden_word=word,
             clue_word=clue_word,
+            clue_order=clue_orders[i],
             real_prop=real_prop,
             decoy_props=decoy_props,
         )
@@ -162,7 +166,7 @@ def generate_round(forbidden_words: list[str]) -> RoundData:
         all_props.append(real_prop)
         all_props.extend(decoy_props)
 
-    spell_words = [m.clue_word for m in missions]
+    spell_words = [m.clue_word for m in sorted(missions, key=lambda mission: mission.clue_order)]
 
     logger.info(
         "round generated: words=%s, missions=%d, props=%d, spell=%s",
@@ -179,7 +183,6 @@ def round_to_dict(rd: RoundData) -> dict:
             {
                 "mission_id": m.mission_id,
                 "forbidden_word": m.forbidden_word,
-                "clue_word": m.clue_word,
             }
             for m in rd.missions
         ],
@@ -195,5 +198,5 @@ def round_to_dict(rd: RoundData) -> dict:
             }
             for p in rd.all_props
         ],
-        "spell_words": rd.spell_words,
+        "total_clues": len(rd.spell_words),
     }

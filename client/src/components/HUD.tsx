@@ -278,7 +278,7 @@ export default function HUD() {
   const missions = useGameStore((s) => s.missions)
   const currentMissionIndex = useGameStore((s) => s.currentMissionIndex)
   const acquiredClues = useGameStore((s) => s.acquiredClues)
-  const spellWords = useGameStore((s) => s.spellWords)
+  const totalClues = useGameStore((s) => s.totalClues)
   const gateArrived = useGameStore((s) => s.gateArrived)
   const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
 
@@ -388,7 +388,7 @@ export default function HUD() {
             )}
             {acquiredClues.length > 0 && (
               <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
-                단서: {acquiredClues.map((c) => `"${c}"`).join(' ')}
+                주문 조각: {acquiredClues.map((clue) => `[${clue.order}] ${clue.word}`).join(' · ')}
               </div>
             )}
           </div>
@@ -405,13 +405,17 @@ export default function HUD() {
             <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
               최종 주문
             </div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#B6FF3D' }}>
-              "{spellWords.join(' ')}"
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {acquiredClues.map((clue) => (
+                <span key={`${clue.order}-${clue.word}`} style={{ padding: '5px 8px', border: '1px solid rgba(182,255,61,.35)', borderRadius: 6, color: '#B6FF3D' }}>
+                  {clue.order}/{clue.total} · {clue.word}
+                </span>
+              ))}
             </div>
             <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
               {gateArrived
-                ? '도착 확인 완료 — Q를 누르고 주문을 외치세요!'
-                : '노란빛으로 표시된 잠긴 게이트 앞으로 이동하세요.'}
+                ? `도착 확인 완료 — ${totalClues}개 조각을 표식 순서로 조합해 외치세요!`
+                : '노란빛 게이트로 이동하며 조각의 순서를 기억하세요.'}
             </div>
           </div>
         )}

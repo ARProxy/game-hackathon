@@ -38,6 +38,7 @@ def make_round() -> RoundData:
         mission_id=0,
         forbidden_word="열쇠",
         clue_word="별",
+        clue_order=1,
         real_prop=real,
         decoy_props=[decoy],
     )
@@ -229,7 +230,7 @@ class TestPartnerMissionFlow(unittest.IsolatedAsyncioTestCase):
             "type": "prop_inspected",
             "prop_id": "key",
             "is_correct": True,
-            "clue": "별",
+            "clue": {"word": "별", "order": 1, "total": 1},
             "mission_index": 0,
             "next_mission_index": 1,
             "all_complete": True,

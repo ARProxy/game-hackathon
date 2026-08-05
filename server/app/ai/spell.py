@@ -1,14 +1,13 @@
 """최종 주문 판정
 
-단서 단어들이 발화에 포함되어 있는지 퍼지 매칭으로 판정한다.
-- 2/3 이상 포함 → 통과 (관대 판정)
-- 자모 분리 + 편집거리로 유사 발음도 허용
+단서 단어들이 표식 순서대로 발화됐는지 퍼지 매칭으로 판정한다.
+- 모든 조각 포함 + 올바른 순서 → 통과
+- 자모 분리 + 편집거리로 개별 단서의 유사 발음은 허용
 """
 
 from __future__ import annotations
 
 import logging
-import math
 
 from jamo import h2j, j2hcj
 from Levenshtein import ratio as levenshtein_ratio
@@ -21,26 +20,27 @@ MATCH_THRESHOLD = 0.7  # 자모 유사도 기준
 def check_spell(
     transcript: str,
     spell_words: list[str],
-    required_ratio: float = 0.6,  # 전체 단서 중 몇 비율 이상 매칭돼야 통과
 ) -> dict:
     """주문 판정 결과를 반환한다."""
     if not transcript or not spell_words:
-        return {"success": False, "matched": [], "missing": spell_words}
+        return {"success": False, "matched": [], "missing": spell_words, "order_valid": False, "required_count": len(spell_words)}
 
     transcript_lower = transcript.strip()
     matched: list[str] = []
     missing: list[str] = []
 
+    positions: list[int] = []
     for word in spell_words:
-        if _is_match(transcript_lower, word):
+        position = _match_position(transcript_lower, word)
+        if position is not None:
             matched.append(word)
+            positions.append(position)
         else:
             missing.append(word)
 
-    # 3개 단서의 60%는 1.8이므로 반드시 2개가 필요하다.
-    # int() 내림을 사용하면 단서 하나만으로 성공하는 치명적인 허점이 생긴다.
-    required_count = max(1, math.ceil(len(spell_words) * required_ratio))
-    success = len(matched) >= required_count
+    required_count = len(spell_words)
+    order_valid = all(left < right for left, right in zip(positions, positions[1:]))
+    success = len(matched) >= required_count and order_valid
 
     logger.info(
         "spell check: transcript='%s' words=%s matched=%s missing=%s success=%s",
@@ -51,27 +51,35 @@ def check_spell(
         "success": success,
         "matched": matched,
         "missing": missing,
+        "order_valid": order_valid,
+        "required_count": required_count,
         "transcript": transcript,
     }
 
 
 def _is_match(transcript: str, word: str) -> bool:
     """transcript에 word가 포함되어 있는지 퍼지 매칭."""
-    # 1단계: 직접 포함
-    if word in transcript:
-        return True
+    return _match_position(transcript, word) is not None
 
-    # 2단계: 어절별 자모 유사도
+
+def _match_position(transcript: str, word: str) -> int | None:
+    """일치한 단서의 문자 위치를 반환해 공백 유무와 무관하게 순서를 검증한다."""
+    direct_position = transcript.find(word)
+    if direct_position >= 0:
+        return direct_position
+
     chunks = transcript.split()
     word_jamo = _to_jamo(word)
-
+    cursor = 0
     for chunk in chunks:
+        chunk_position = transcript.find(chunk, cursor)
+        cursor = chunk_position + len(chunk)
         chunk_jamo = _to_jamo(chunk)
         score = levenshtein_ratio(word_jamo, chunk_jamo)
         if score >= MATCH_THRESHOLD:
-            return True
+            return chunk_position
 
-    return False
+    return None
 
 
 def _to_jamo(text: str) -> str:

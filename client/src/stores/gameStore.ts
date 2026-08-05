@@ -49,8 +49,9 @@ export interface ActiveGate {
 export interface MissionData {
   mission_id: number
   forbidden_word: string
-  clue_word: string
 }
+
+export interface ClueFragment { word: string; order: number; total: number }
 
 export interface FreezeEvent {
   playerId: string
@@ -89,9 +90,9 @@ interface GameStore {
   // 라운드 데이터 (미션, 프롭)
   props: PropData[]
   missions: MissionData[]
-  spellWords: string[]
+  totalClues: number
   currentMissionIndex: number
-  acquiredClues: string[]
+  acquiredClues: ClueFragment[]
   activeGate: ActiveGate | null
   gateArrived: boolean
 
@@ -121,11 +122,11 @@ interface GameStore {
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
   setSourceAnswers: (answers: string[]) => void
-  setRoundData: (props: PropData[], missions: MissionData[], spellWords: string[]) => void
+  setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   hydratePlayers: (players: Record<string, Omit<PlayerState, 'playerId'>>) => void
   setActiveGate: (gate: ActiveGate) => void
   setGateArrived: (arrived: boolean) => void
-  acquireClue: (clueWord: string) => void
+  acquireClue: (clue: ClueFragment) => void
   setCurrentMissionIndex: (index: number) => void
   setInspectingProp: (propId: string | null) => void
   removeProp: (propId: string) => void
@@ -160,9 +161,9 @@ const initialState = {
   elapsedSeconds: null as number | null,
   props: [] as PropData[],
   missions: [] as MissionData[],
-  spellWords: [] as string[],
+  totalClues: 0,
   currentMissionIndex: 0,
-  acquiredClues: [] as string[],
+  acquiredClues: [] as ClueFragment[],
   activeGate: null as ActiveGate | null,
   gateArrived: false,
   inspectingPropId: null as string | null,
@@ -207,11 +208,11 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setSourceAnswers: (sourceAnswers) => set({ sourceAnswers }),
 
-  setRoundData: (props, missions, spellWords) =>
+  setRoundData: (props, missions, totalClues) =>
     set({
       props,
       missions,
-      spellWords,
+      totalClues,
       currentMissionIndex: 0,
       acquiredClues: [],
       removedPropIds: [],
@@ -231,9 +232,9 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setGateArrived: (gateArrived) => set({ gateArrived }),
 
-  acquireClue: (clueWord) =>
+  acquireClue: (clue) =>
     set((state) => ({
-      acquiredClues: [...state.acquiredClues, clueWord],
+      acquiredClues: [...state.acquiredClues, clue],
     })),
 
   setCurrentMissionIndex: (currentMissionIndex) => set({ currentMissionIndex }),

@@ -34,6 +34,11 @@ def test_every_selected_word_has_two_cue_partner_command() -> None:
 
     assert len(words) == 3
     assert len(round_data.missions) == 3
+    assert sorted(mission.clue_order for mission in round_data.missions) == [1, 2, 3]
+    assert round_data.spell_words == [
+        mission.clue_word
+        for mission in sorted(round_data.missions, key=lambda mission: mission.clue_order)
+    ]
     for mission in round_data.missions:
         prop = prop_dict[mission.forbidden_word]
         descriptions = prop["descriptions"]

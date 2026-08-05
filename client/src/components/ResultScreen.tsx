@@ -21,7 +21,7 @@ export default function ResultScreen() {
   const sourceAnswers = useGameStore((s) => s.sourceAnswers)
   const freezeCount = useGameStore((s) => s.freezeCount)
   const acquiredClues = useGameStore((s) => s.acquiredClues)
-  const spellWords = useGameStore((s) => s.spellWords)
+  const totalClues = useGameStore((s) => s.totalClues)
   const outcome = useGameStore((s) => s.outcome)
   const resultReason = useGameStore((s) => s.resultReason)
   const elapsedSeconds = useGameStore((s) => s.elapsedSeconds)
@@ -86,7 +86,7 @@ export default function ResultScreen() {
         gap: 32,
         marginBottom: 48,
       }}>
-        <StatBox label="획득 단서" value={`${acquiredClues.length} / ${spellWords.length}`} color="#52E5FF" />
+        <StatBox label="획득 단서" value={`${acquiredClues.length} / ${totalClues}`} color="#52E5FF" />
         <StatBox label="금기어 위반" value={`${freezeCount}회`} color="#FF2F6E" />
         <StatBox label="플레이 시간" value={formatElapsed(elapsedSeconds ?? 0)} color="#B6FF3D" />
       </div>

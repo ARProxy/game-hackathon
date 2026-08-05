@@ -127,7 +127,7 @@ export default function useWebSocket() {
         setForbiddenWords(data.state.forbidden_words)
         if (data.state.players) hydratePlayers(data.state.players)
         if (data.round) {
-          setRoundData(data.round.props, data.round.missions, data.round.spell_words)
+          setRoundData(data.round.props, data.round.missions, data.round.total_clues)
         }
         if (data.active_gate) {
           setActiveGate({
@@ -200,7 +200,7 @@ export default function useWebSocket() {
         setCurrentMissionIndex(data.next_mission_index)
         if (data.is_correct && data.clue) {
           acquireClue(data.clue)
-          addSubtitle('partner', `찾았어! 단서 "${data.clue}" 획득!`)
+          addSubtitle('partner', `찾았어! ${data.clue.order}번째 주문 조각 "${data.clue.word}" 획득!`)
         } else {
           addSubtitle('partner', '이 물건은 아니야. 다른 특징으로 설명해줘.')
         }
@@ -238,7 +238,9 @@ export default function useWebSocket() {
         break
 
       case 'spell_failed':
-        addSubtitle('system', `주문이 달라요! 빠진 단서: ${data.missing.join(', ')}`)
+        addSubtitle('system', data.failure_reason === 'order'
+          ? '주문 조각의 순서가 맞지 않습니다. 표식을 다시 확인하세요.'
+          : `주문 조각이 부족합니다. ${data.matched_count}/${data.required_count}개 인식`)
         break
 
       case 'spell_rejected':

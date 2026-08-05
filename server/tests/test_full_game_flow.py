@@ -47,11 +47,14 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
         assert started["state"]["phase"] == "playing"
         assert started["state"]["forbidden_words"] == forbidden_ready["forbidden_words"]
         assert len(started["round"]["missions"]) == 3
-        assert len(started["round"]["spell_words"]) == 3
+        assert started["round"]["total_clues"] == 3
+        assert "spell_words" not in started["round"]
+        assert all("clue_word" not in mission for mission in started["round"]["missions"])
         active_gate = started["active_gate"]
         assert active_gate["gate_id"] in {"gate_back", "gate_main", "gate_gym"}
 
         # 각 T1은 안전한 우회 발화 → AI 명령 → AI 전용 조사 순서를 지킨다.
+        collected_clues = []
         for mission_index, mission in enumerate(started["round"]["missions"]):
             utterance = _safe_indirect_command(mission["forbidden_word"])
             assert mission["forbidden_word"] not in utterance
@@ -90,7 +93,8 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
             assert inspected["is_correct"] is True
             assert inspected["mission_index"] == mission_index
             assert inspected["next_mission_index"] == mission_index + 1
-            assert inspected["clue"] == mission["clue_word"]
+            assert set(inspected["clue"]) == {"word", "order", "total"}
+            collected_clues.append(inspected["clue"])
             assert inspected["all_complete"] is (mission_index == 2)
 
         session = session_manager.get_or_create(room_id)
@@ -124,12 +128,15 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
             "gate_id": active_gate["gate_id"],
         }
 
-        # 세 단서 중 두 단서(2/3)로 관대한 주문 판정을 통과한다.
-        spell_text = " ".join(started["round"]["spell_words"][:2])
+        # 획득 순서와 별개인 표식을 보고 세 조각을 직접 재배열한다.
+        spell_text = " ".join(
+            clue["word"] for clue in sorted(collected_clues, key=lambda clue: clue["order"])
+        )
         ws.send_json({"type": "spell", "payload": {"spell_text": spell_text}})
         spell_success = ws.receive_json()
         assert spell_success["type"] == "spell_success"
-        assert len(spell_success["matched"]) == 2
+        assert len(spell_success["matched"]) == 3
+        assert spell_success["order_valid"] is True
         assert session.state.phase.value == "escape"
 
         # 열린 동일 게이트를 통과해야 서버가 최종 승리를 확정한다.

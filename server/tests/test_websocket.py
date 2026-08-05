@@ -443,7 +443,23 @@ class TestEscapeFlow:
 
             ws.send_json({
                 "type": "spell",
-                "payload": {"spell_text": "파란 하늘"},
+                "payload": {"spell_text": "별 하늘 파란"},
+            })
+            failed_ping = ws.receive_json()
+            failed = ws.receive_json()
+            assert failed_ping["type"] == "sound_ping"
+            assert failed_ping["source"] == "failed_spell"
+            assert failed_ping["position"] == gate["position"]
+            assert failed["type"] == "spell_failed"
+            assert failed["failure_reason"] == "order"
+            assert failed["matched_count"] == 3
+            assert "missing" not in failed
+            assert "matched" not in failed
+            assert session.state.phase.value == "final_spell"
+
+            ws.send_json({
+                "type": "spell",
+                "payload": {"spell_text": "파란 하늘 별"},
             })
             spell = ws.receive_json()
             assert spell["type"] == "spell_success"
