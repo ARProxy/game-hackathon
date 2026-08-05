@@ -13,6 +13,7 @@ interface UseSpeechOptions {
   onFinal?: (transcript: string) => void
   onStart?: () => void
   onEnd?: () => void
+  onUnavailable?: (reason: 'unsupported' | 'permission_denied' | 'recognition_error') => void
   lang?: string
 }
 
@@ -22,6 +23,7 @@ export default function useSpeech({
   onFinal,
   onStart,
   onEnd,
+  onUnavailable,
   lang = 'ko-KR',
 }: UseSpeechOptions) {
   const recognitionRef = useRef<SpeechRecognition | null>(null)
@@ -34,6 +36,7 @@ export default function useSpeech({
       window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) {
       console.warn('[Speech] Web Speech API not supported')
+      onUnavailable?.('unsupported')
       return
     }
 
@@ -77,6 +80,11 @@ export default function useSpeech({
 
     recognition.onerror = (event) => {
       console.error('[Speech] error:', event.error)
+      onUnavailable?.(
+        event.error === 'not-allowed' || event.error === 'service-not-allowed'
+          ? 'permission_denied'
+          : 'recognition_error',
+      )
       finish()
     }
 
@@ -87,9 +95,10 @@ export default function useSpeech({
       recognition.start()
     } catch (error) {
       console.error('[Speech] failed to start:', error)
+      onUnavailable?.('recognition_error')
       finish()
     }
-  }, [lang, onInterim, onFinal, onStart, onEnd])
+  }, [lang, onInterim, onFinal, onStart, onEnd, onUnavailable])
 
   const stopListening = useCallback(() => {
     const recognition = recognitionRef.current

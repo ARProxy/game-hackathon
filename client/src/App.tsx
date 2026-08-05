@@ -194,6 +194,7 @@ function GameController() {
   const { connect, send, disconnect } = useWebSocket()
   const { phase, connected, forbiddenWords, setRoom, setPhase } = useGameStore()
   const playerStatus = useGameStore((state) => state.players[state.playerId]?.status)
+  const [speechFallbackReason, setSpeechFallbackReason] = useState<string | null>(null)
   const speechEnabled = phase === 'onboarding' || (
     (phase === 'playing' || phase === 'final_spell')
     && playerStatus !== 'frozen'
@@ -228,6 +229,15 @@ function GameController() {
     onStart: () => useGameStore.getState().setSpeaking(true),
     onEnd: () => useGameStore.getState().setSpeaking(false),
     onInterim: (t) => useGameStore.getState().setLastTranscript(t),
+    onUnavailable: (reason) => {
+      const message = reason === 'unsupported'
+        ? '이 브라우저는 음성 인식을 지원하지 않습니다.'
+        : reason === 'permission_denied'
+          ? '마이크 권한이 거부되었습니다.'
+          : '음성 인식을 시작하지 못했습니다.'
+      setSpeechFallbackReason(message)
+      useGameStore.getState().setSpeaking(false)
+    },
     onFinal: (transcript) => {
       useGameStore.getState().setLastTranscript(transcript)
       const p = useGameStore.getState().phase
@@ -250,6 +260,13 @@ function GameController() {
     <>
       {phase === 'onboarding' && <Onboarding onComplete={handleOnboardingComplete} />}
       {phase === 'reveal' && <ForbiddenReveal words={forbiddenWords} onComplete={handleRevealComplete} />}
+      {speechFallbackReason && phase !== 'result' && (
+        <div role="alert" className="speech-fallback-alert">
+          <strong>{speechFallbackReason}</strong>
+          <span>{phase === 'onboarding' ? '아래 입력창에 답변하세요.' : 'Enter를 눌러 텍스트로 말할 수 있습니다.'}</span>
+          <button type="button" onClick={() => setSpeechFallbackReason(null)} aria-label="음성 입력 안내 닫기">×</button>
+        </div>
+      )}
     </>
   )
 }

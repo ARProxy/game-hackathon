@@ -22,6 +22,9 @@ button { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) { .chase-feedback { animation: none; } }
 
+.speech-fallback-alert { position: fixed; left: 50%; bottom: 78px; z-index: 190; display: grid; grid-template-columns: 1fr auto; gap: 3px 16px; width: min(520px, calc(100vw - 32px)); padding: 12px 16px; border: 1px solid rgba(255, 194, 74, .68); border-radius: 12px; color: #fff1ce; background: rgba(38, 25, 5, .94); box-shadow: 0 12px 36px rgba(0, 0, 0, .42); transform: translateX(-50%); font-family: ui-rounded, "Apple SD Gothic Neo", sans-serif; }
+.speech-fallback-alert strong { font-size: 13px; }.speech-fallback-alert span { grid-column: 1; color: #d9c79c; font-size: 12px; }.speech-fallback-alert button { grid-column: 2; grid-row: 1 / span 2; align-self: center; border: 0; color: #fff1ce; background: transparent; cursor: pointer; font-size: 22px; }
+
 .start-flow { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; overflow: auto; padding: 32px; color: #f6f3e7; font-family: ui-rounded, "Apple SD Gothic Neo", sans-serif; background: radial-gradient(circle at 72% 28%, rgba(25, 108, 125, .24), transparent 28%), radial-gradient(circle at 20% 80%, rgba(226, 59, 46, .12), transparent 30%), linear-gradient(145deg, #071017, #05070b 65%); }
 .start-flow::before { content: ""; position: fixed; inset: 0; background: linear-gradient(90deg, transparent 49.8%, rgba(143,211,232,.08) 50%, transparent 50.2%), linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px); background-size: 100% 100%, 100% 4px; pointer-events: none; }
 .start-noise { position: fixed; inset: 0; pointer-events: none; opacity: .25; background: repeating-radial-gradient(circle at 30% 40%, transparent 0 12px, rgba(255,255,255,.015) 13px 14px); }

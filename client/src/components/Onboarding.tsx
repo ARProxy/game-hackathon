@@ -29,7 +29,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   // 답변 확정
   const confirmAnswer = () => {
-    const answer = lastTranscript || currentAnswer
+    // 마이크 오류 뒤 남은 부분 전사보다 사용자가 직접 고친 입력을 우선한다.
+    const answer = currentAnswer.trim() || lastTranscript.trim()
     if (!answer.trim()) return
 
     const newAnswers = [...answers, answer]
