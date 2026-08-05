@@ -1,35 +1,49 @@
-/**
- * 플레이어 주변 시야 조명
- * - PointLight가 플레이어를 따라다님
- * - Fog와 함께 작동하여 시야 반경 5m만 밝게
- * - 시야 밖은 Fog가 완전히 가림
- */
+/** 플레이어가 바라보는 방향을 비추는 손전등. */
 
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { VISION_RADIUS } from './Fog'
-
 interface PlayerLightProps {
   targetRef: React.RefObject<THREE.Group | null>
 }
 
 export default function PlayerLight({ targetRef }: PlayerLightProps) {
-  const lightRef = useRef<THREE.PointLight>(null)
+  const lightRef = useRef<THREE.SpotLight>(null)
+  const aimRef = useRef<THREE.Object3D>(null)
 
   useFrame(() => {
-    if (!targetRef.current || !lightRef.current) return
-    const pos = targetRef.current.position
-    lightRef.current.position.set(pos.x, 4, pos.z)
+    if (!targetRef.current || !lightRef.current || !aimRef.current) return
+    const player = targetRef.current
+    const pos = player.position
+    const yaw = player.rotation.y
+    const forwardX = Math.sin(yaw)
+    const forwardZ = Math.cos(yaw)
+
+    lightRef.current.position.set(
+      pos.x + forwardX * 0.3,
+      pos.y + 1.15,
+      pos.z + forwardZ * 0.3,
+    )
+    aimRef.current.position.set(
+      pos.x + forwardX * 12,
+      pos.y + 0.55,
+      pos.z + forwardZ * 12,
+    )
+    lightRef.current.target = aimRef.current
   })
 
   return (
-    <pointLight
-      ref={lightRef}
-      intensity={8}
-      distance={VISION_RADIUS * 1.5}
-      color="#c0d8f0"
-      decay={2}
-    />
+    <>
+      <spotLight
+        ref={lightRef}
+        intensity={95}
+        distance={18}
+        angle={Math.PI / 7}
+        penumbra={0.5}
+        color="#d9ecff"
+        decay={1.5}
+      />
+      <object3D ref={aimRef} />
+    </>
   )
 }
