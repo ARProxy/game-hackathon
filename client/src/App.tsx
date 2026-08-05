@@ -1,7 +1,8 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
+import * as THREE from 'three'
 import SchoolCampus, { SPAWNS, type FloorKey } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
 import { CHARACTERS } from './game/Characters'
@@ -47,6 +48,26 @@ const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
 }
 
 const runnerIds = CHARACTERS.filter((character) => character.role === 'runner').map((character) => character.id)
+
+/** 개발용 전경 확인 모드는 공포용 암부와 독립된 판독 가능한 노출을 쓴다. */
+function CCTVVisuals() {
+  const { gl, scene } = useThree()
+
+  useEffect(() => {
+    const previousExposure = gl.toneMappingExposure
+    const previousBackground = scene.background
+    gl.toneMappingExposure = 1.35
+    scene.background = new THREE.Color('#263443')
+
+    return () => {
+      gl.toneMappingExposure = previousExposure
+      scene.background = previousBackground
+    }
+  }, [gl, scene])
+
+  return null
+}
+
 function Scene({
   cameraMode,
   visibleFloors,
@@ -71,8 +92,19 @@ function Scene({
   return (
     <>
       {/* ── 조명 ── */}
-      <ambientLight intensity={cameraMode === 'cctv' ? 0.6 : 0.08} />
-      <directionalLight position={[10, 30, 10]} intensity={cameraMode === 'cctv' ? 0.8 : 0.16} />
+      <ambientLight intensity={cameraMode === 'cctv' ? 1.4 : 0.08} />
+      <directionalLight
+        position={[10, 30, 10]}
+        intensity={cameraMode === 'cctv' ? 2.4 : 0.16}
+        color={cameraMode === 'cctv' ? '#f2f7ff' : '#ffffff'}
+      />
+      {cameraMode === 'cctv' && (
+        <>
+          <hemisphereLight args={['#dbeeff', '#59636d', 1.6]} />
+          <directionalLight position={[-35, 18, -25]} intensity={1.1} color="#b9d8ff" />
+          <CCTVVisuals />
+        </>
+      )}
       {cameraMode === '3d' && <Fog />}
 
       {/* ── 물리 월드 ── */}
@@ -127,7 +159,7 @@ function Scene({
       {/* <Furnishings visibleFloors={visibleFloors} /> */}
 
       {/* ── 플레이어 시야 조명 ── */}
-      <PlayerLight targetRef={playerGroupRef} />
+      {cameraMode === '3d' && <PlayerLight targetRef={playerGroupRef} />}
 
       {/* ── 카메라 ── */}
       {/* CCTV 모드: OrbitControls — 마우스로 자유 이동/회전/줌 */}
