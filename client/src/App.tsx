@@ -214,8 +214,13 @@ function GameController() {
     const roomId = `solo-${Date.now()}`
     const playerId = `player-${Math.random().toString(36).slice(2, 8)}`
     setRoom(roomId, playerId)
-    connect(roomId, playerId)
-    return () => disconnect()
+    // 개발 Strict Mode의 setup → cleanup → setup 검사에서 CONNECTING 소켓을
+    // 즉시 닫지 않도록 실제 연결은 다음 이벤트 루프에 생성한다.
+    const connectTimer = window.setTimeout(() => connect(roomId, playerId), 0)
+    return () => {
+      window.clearTimeout(connectTimer)
+      disconnect()
+    }
   }, [connect, disconnect, setRoom])
 
   /* 연결 → 온보딩 */
