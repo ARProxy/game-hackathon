@@ -71,7 +71,7 @@ export default function useSound() {
     oscillator.stop(start + duration + 0.02)
   }, [])
 
-  const noise = useCallback((delay: number, duration: number, volume: number, highpass: number) => {
+  const noise = useCallback((delay: number, duration: number, volume: number, highpass: number, pan = 0) => {
     const context = contextRef.current
     const master = masterRef.current
     if (!context || context.state !== 'running' || !master) return
@@ -89,7 +89,9 @@ export default function useSound() {
     filter.frequency.value = highpass
     gain.gain.setValueAtTime(volume, start)
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
-    source.connect(filter).connect(gain).connect(master)
+    const panner = context.createStereoPanner()
+    panner.pan.value = Math.min(1, Math.max(-1, pan))
+    source.connect(filter).connect(gain).connect(panner).connect(master)
     source.start(start)
   }, [])
 
@@ -142,6 +144,21 @@ export default function useSound() {
     tone(760, 0.44, 0.28, 0.1, 500, 'square')
   }, [tone])
 
+  const playSeekerFootstep = useCallback((intensity: number, pan: number, running: boolean) => {
+    const proximity = Math.min(1, Math.max(0, intensity))
+    if (proximity <= 0) return
+    const volume = (running ? 0.065 : 0.038) * proximity
+    tone(running ? 82 : 68, 0, 0.1, volume, 42, 'triangle', pan)
+    noise(0.015, 0.09, volume * 0.52, 190, pan)
+  }, [noise, tone])
+
+  const playSeekerSiren = useCallback((intensity: number, pan: number) => {
+    const proximity = Math.min(1, Math.max(0, intensity))
+    const volume = 0.025 + proximity * 0.04
+    tone(610, 0, 0.24, volume, 880, 'sawtooth', pan)
+    tone(880, 0.25, 0.24, volume, 610, 'sawtooth', pan)
+  }, [tone])
+
   return {
     playFreeze,
     playRescue,
@@ -150,5 +167,7 @@ export default function useSound() {
     playDefeat,
     playSeekerProximity,
     playSeekerDetected,
+    playSeekerFootstep,
+    playSeekerSiren,
   }
 }

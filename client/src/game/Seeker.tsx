@@ -31,7 +31,7 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const { world, rapier } = useRapier()
   const navigationShape = useMemo(() => new rapier.Ball(0.36), [rapier])
-  const { playSeekerProximity, playSeekerDetected } = useSound()
+  const { playSeekerProximity, playSeekerDetected, playSeekerFootstep, playSeekerSiren } = useSound()
   const hunterIntent = useGameStore((store) => store.hunterIntent)
   const redLightRef = useRef<THREE.PointLight>(null)
   const previousState = useRef<HunterState | null>(null)
@@ -39,6 +39,8 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
   const lastAuthorityPosition = useRef<{ x: number; z: number } | null>(null)
   const lastCatchAttempt = useRef(-Infinity)
   const lastProximitySound = useRef(-Infinity)
+  const lastFootstepSound = useRef(-Infinity)
+  const lastSirenSound = useRef(-Infinity)
   const lastPos = useRef(new THREE.Vector3(spawn[0], 0, spawn[1]))
   const avoidanceSide = useRef(1)
   const fixedSolidFilters = rapier.QueryFilterFlags.EXCLUDE_SENSORS
@@ -118,11 +120,38 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
         playSeekerProximity(proximity, pan)
         lastProximitySound.current = clock.elapsedTime
       }
+
+      const detected = intent?.state === 'DETECTED' || intent?.state === 'CHASE'
+      if (detected && clock.elapsedTime - lastSirenSound.current >= 1.15) {
+        const rightX = Math.cos(playerRef.current?.rotation.y ?? 0)
+        const rightZ = -Math.sin(playerRef.current?.rotation.y ?? 0)
+        const pan = threatDistance > 0.001
+          ? THREE.MathUtils.clamp((threatX * rightX + threatZ * rightZ) / threatDistance, -1, 1)
+          : 0
+        playSeekerSiren(Math.max(0.35, proximity), pan)
+        lastSirenSound.current = clock.elapsedTime
+      }
     }
 
     const moved = pos.distanceTo(lastPos.current) > 0.01
     lastPos.current.copy(pos)
     const running = intent?.state === 'CHASE' || intent?.state === 'RUSH_GATE'
+    if (moved && playerPos) {
+      const threatX = pos.x - playerPos.x
+      const threatZ = pos.z - playerPos.z
+      const distance = Math.hypot(threatX, threatZ)
+      const proximity = THREE.MathUtils.clamp(1 - distance / PROXIMITY_SOUND_RANGE, 0, 1)
+      const stepInterval = running ? 0.28 : 0.52
+      if (proximity > 0 && clock.elapsedTime - lastFootstepSound.current >= stepInterval) {
+        const rightX = Math.cos(playerRef.current?.rotation.y ?? 0)
+        const rightZ = -Math.sin(playerRef.current?.rotation.y ?? 0)
+        const pan = distance > 0.001
+          ? THREE.MathUtils.clamp((threatX * rightX + threatZ * rightZ) / distance, -1, 1)
+          : 0
+        playSeekerFootstep(proximity, pan, running)
+        lastFootstepSound.current = clock.elapsedTime
+      }
+    }
     pos.y = moved ? Math.abs(Math.sin(clock.elapsedTime * (running ? 6 : 3))) * (running ? 0.08 : 0.04) : 0
     if (redLightRef.current) {
       redLightRef.current.intensity = 32 + Math.sin(clock.elapsedTime * 12) * 22
