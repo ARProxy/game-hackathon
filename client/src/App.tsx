@@ -20,6 +20,7 @@ import ForbiddenReveal from './components/ForbiddenReveal'
 import ResultScreen from './components/ResultScreen'
 import SoundController from './components/SoundController'
 import StartFlow, { type EntryScreen } from './components/StartFlow'
+import GameErrorBoundary from './components/GameErrorBoundary'
 import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
@@ -296,11 +297,18 @@ function App() {
   const [cameraMode, setCameraMode] = useState<CameraMode>('3d')
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
+  const [sceneKey, setSceneKey] = useState(0)
   const startSolo = useCallback((characterId: string) => {
     setPlayerCharacterId(characterId)
     useGameStore.getState().reset()
     useGameStore.getState().setSelectedCharacter(characterId)
     setGameRunning(true)
+  }, [])
+  const returnToMainMenu = useCallback(() => {
+    useGameStore.getState().reset()
+    setEntryScreen('title')
+    setGameRunning(false)
+    setSceneKey((key) => key + 1)
   }, [])
 
   useEffect(() => {
@@ -338,11 +346,15 @@ function App() {
         <StartFlow screen={entryScreen} onScreenChange={setEntryScreen} onStartSolo={startSolo} />
       )}
 
-      {isGameRunning && <>
+      {isGameRunning && <GameErrorBoundary
+        onRetry={() => setSceneKey((key) => key + 1)}
+        onMainMenu={returnToMainMenu}
+      >
       <SoundController />
       <GameController />
 
       <Canvas
+        key={sceneKey}
         dpr={[1, 1.5]}
         fallback={(
           <div role="alert" style={{
@@ -408,7 +420,7 @@ function App() {
           </div>
         )}
       </div>}
-      </>}
+      </GameErrorBoundary>}
     </div>
   )
 }
