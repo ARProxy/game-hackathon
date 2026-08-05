@@ -939,40 +939,52 @@ class ConnectionManager:
 
     async def _run_companion(self, room_id: str) -> None:
         interval = float(COMPANION_CONTRACT["thinkIntervalSeconds"])
+        consecutive_failures = 0
         try:
             while room_id in self.rooms:
                 session = session_manager.get_or_create(room_id)
                 if session.state.phase == GamePhase.RESULT:
                     return
-                if session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
-                    intent, action = advance_companion(session)
-                    if action and action["type"] == "report":
-                        await self._broadcast_companion_speech(room_id, {
-                            "type": "companion_report", "prop_id": action["prop_id"],
-                            "zone": action["zone"], "appearance": action["appearance"],
-                            "message": (
-                                f"{action['zone']} 구역에서 {action['appearance'].get('color', '알 수 없는 색')} "
-                                f"{action['appearance'].get('mesh', '물체')} 후보를 발견했어. 이 특징과 맞는지 말해줘."
-                            ),
-                        })
-                    elif action and action["type"] == "seeker_report":
-                        await self._broadcast_companion_speech(room_id, {
-                            "type": "companion_seeker_report",
-                            "position": action["position"],
-                            "message": "술래를 봤어! 마지막 위치를 공유할게.",
-                        })
-                    elif action and action["type"] == "inspect":
-                        controller_id = next(iter(self.rooms[room_id].players), "")
-                        await self._handle_inspect_prop(
-                            room_id, controller_id, session.state.get_player("partner"),
-                            {"prop_id": action["prop_id"]},
-                        )
-                    elif action and action["type"] == "rescue":
-                        await self._complete_partner_rescue(room_id, action["target_id"])
-                    elif action and action["type"] == "trap":
-                        await self._freeze_companion_from_trap(room_id, action["trap_id"])
-                    elif action and action["type"] == "escape":
-                        await self._complete_companion_escape(room_id)
+                try:
+                    if session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
+                        intent, action = advance_companion(session)
+                        if action and action["type"] == "report":
+                            await self._broadcast_companion_speech(room_id, {
+                                "type": "companion_report", "prop_id": action["prop_id"],
+                                "zone": action["zone"], "appearance": action["appearance"],
+                                "message": (
+                                    f"{action['zone']} 구역에서 {action['appearance'].get('color', '알 수 없는 색')} "
+                                    f"{action['appearance'].get('mesh', '물체')} 후보를 발견했어. 이 특징과 맞는지 말해줘."
+                                ),
+                            })
+                        elif action and action["type"] == "seeker_report":
+                            await self._broadcast_companion_speech(room_id, {
+                                "type": "companion_seeker_report",
+                                "position": action["position"],
+                                "message": "술래를 봤어! 마지막 위치를 공유할게.",
+                            })
+                        elif action and action["type"] == "inspect":
+                            controller_id = next(iter(self.rooms[room_id].players), "")
+                            await self._handle_inspect_prop(
+                                room_id, controller_id, session.state.get_player("partner"),
+                                {"prop_id": action["prop_id"]},
+                            )
+                        elif action and action["type"] == "rescue":
+                            await self._complete_partner_rescue(room_id, action["target_id"])
+                        elif action and action["type"] == "trap":
+                            await self._freeze_companion_from_trap(room_id, action["trap_id"])
+                        elif action and action["type"] == "escape":
+                            await self._complete_companion_escape(room_id)
+                    consecutive_failures = 0
+                except Exception:
+                    consecutive_failures += 1
+                    retry_delay = min(interval * (2 ** min(consecutive_failures, 4)), 5.0)
+                    logger.exception(
+                        "companion tick failed; retrying: room=%s delay=%.2fs failures=%d",
+                        room_id, retry_delay, consecutive_failures,
+                    )
+                    await asyncio.sleep(retry_delay)
+                    continue
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:
             raise
