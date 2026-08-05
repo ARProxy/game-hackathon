@@ -130,6 +130,12 @@ class ConnectionManager:
         session = session_manager.get_or_create(room_id)
         player = session.state.get_player(player_id)
 
+        if session.is_paused:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected", "action_type": "speech", "reason": "game_paused",
+            })
+            return
+
         # 빙결된 플레이어의 발화는 무시
         if player and player.status != PlayerStatus.ALIVE:
             return
@@ -854,6 +860,11 @@ class ConnectionManager:
     ) -> None:
         spell_text = payload.get("spell_text", "")
         session = session_manager.get_or_create(room_id)
+        if session.is_paused:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected", "action_type": "spell", "reason": "game_paused",
+            })
+            return
         player = session.state.get_player(player_id)
 
         if (

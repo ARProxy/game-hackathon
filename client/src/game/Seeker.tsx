@@ -65,6 +65,7 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
     const group = groupRef.current
     if (!group) return
     const store = useGameStore.getState()
+    if (store.isPaused) return
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
     if (!active) { group.position.y = 0; return }
 

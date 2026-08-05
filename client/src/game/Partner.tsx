@@ -53,6 +53,7 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
     const group = groupRef.current
     if (!group) return
     const store = useGameStore.getState()
+    if (store.isPaused) return
     const gameActive = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
     if (gameActive && clock.elapsedTime - lastThink.current >= companion.thinkIntervalSeconds) {
       sendGameMessage({ type: 'action', payload: { action_type: 'companion_think' } })

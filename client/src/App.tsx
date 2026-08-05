@@ -21,6 +21,7 @@ import ResultScreen from './components/ResultScreen'
 import SoundController from './components/SoundController'
 import StartFlow, { type EntryScreen } from './components/StartFlow'
 import GameErrorBoundary from './components/GameErrorBoundary'
+import PauseMenu from './components/PauseMenu'
 import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
@@ -84,6 +85,7 @@ function Scene({
   const phase = useGameStore((state) => state.phase)
   const activeGate = useGameStore((state) => state.activeGate)
   const activeTrapIds = useGameStore((state) => state.activeTrapIds)
+  const isPaused = useGameStore((state) => state.isPaused)
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
   const playerGroupRef = {
@@ -112,7 +114,7 @@ function Scene({
       {cameraMode === '3d' && <Fog />}
 
       {/* ── 물리 월드 ── */}
-      <Physics gravity={[0, -9.81, 0]}>
+      <Physics gravity={[0, -9.81, 0]} paused={isPaused}>
         <SchoolCampus
           visibleFloors={visibleFloors}
           activeTraps={activeTrapIds}
@@ -159,7 +161,7 @@ function Scene({
         {/* 카메라 충돌 ray cast는 Rapier 컨텍스트 안에서 실행해야 한다. */}
         <ThirdPersonCamera
           targetRef={playerGroupRef}
-          enabled={cameraMode === '3d'}
+          enabled={cameraMode === '3d' && !isPaused}
         />
       </Physics>
 
@@ -171,7 +173,7 @@ function Scene({
 
       {/* ── 플레이어 시야 조명 ── */}
       {cameraMode === '3d' && <PlayerLight targetRef={playerGroupRef} />}
-      <ThreatFeedback playerRef={playerGroupRef} enabled={cameraMode === '3d'} />
+      <ThreatFeedback playerRef={playerGroupRef} enabled={cameraMode === '3d' && !isPaused} />
 
       {/* ── 카메라 ── */}
       {/* CCTV 모드: OrbitControls — 마우스로 자유 이동/회전/줌 */}
@@ -200,15 +202,16 @@ function GameController() {
   const phase = useGameStore((state) => state.phase)
   const connected = useGameStore((state) => state.connected)
   const forbiddenWords = useGameStore((state) => state.forbiddenWords)
+  const isPaused = useGameStore((state) => state.isPaused)
   const setRoom = useGameStore((state) => state.setRoom)
   const setPhase = useGameStore((state) => state.setPhase)
   const playerStatus = useGameStore((state) => state.players[state.playerId]?.status)
   const [speechFallbackReason, setSpeechFallbackReason] = useState<string | null>(null)
-  const speechEnabled = phase === 'onboarding' || (
+  const speechEnabled = !isPaused && (phase === 'onboarding' || (
     (phase === 'playing' || phase === 'final_spell')
     && playerStatus !== 'frozen'
     && playerStatus !== 'eliminated'
-  )
+  ))
 
   /* 서버 자동 연결 */
   useEffect(() => {
@@ -384,6 +387,7 @@ function App() {
         <i className="chase-feedback-right" />
       </div>
       <ResultScreen />
+      <PauseMenu onMainMenu={returnToMainMenu} />
 
       {/* ── 개발 서버 전용 CCTV/층 필터 패널 ── */}
       {DEV_TOOLS_ENABLED && <div style={{

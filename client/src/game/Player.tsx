@@ -62,9 +62,9 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     const playerId = store.playerId
     const playerState = store.players[playerId]
     const isFrozen = playerState?.status === 'frozen'
-    const controlsEnabled = store.phase === 'playing'
+    const controlsEnabled = !store.isPaused && (store.phase === 'playing'
       || store.phase === 'final_spell'
-      || store.phase === 'escape'
+      || store.phase === 'escape')
 
     // 온보딩·결과 화면과 빙결 상태에서는 이동 및 위치 송신을 멈춘다.
     if (isFrozen || !controlsEnabled) {

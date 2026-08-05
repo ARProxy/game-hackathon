@@ -164,6 +164,14 @@ export default function useWebSocket() {
         if (data.active_traps) useGameStore.getState().setActiveTraps(data.active_traps)
         break
 
+      case 'game_paused':
+        useGameStore.getState().setPaused(true)
+        break
+
+      case 'game_resumed':
+        useGameStore.getState().setPaused(false)
+        break
+
       case 'freeze':
         if (data.trap_id) useGameStore.getState().consumeTrap(data.trap_id)
         freezePlayer({

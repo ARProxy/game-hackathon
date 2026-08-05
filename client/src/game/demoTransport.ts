@@ -24,6 +24,7 @@ export default class DemoTransport {
   private playerPosition = { x: -9.8, z: -22 }
   private seekerPosition = { x: 26, z: -27 }
   private pendingInspection = false
+  private paused = false
   private timers = new Set<number>()
 
   constructor(playerId: string, emit: Emit) {
@@ -52,6 +53,10 @@ export default class DemoTransport {
   private later(callback: () => void, delay: number) {
     const timer = window.setTimeout(() => {
       this.timers.delete(timer)
+      if (this.paused) {
+        this.later(callback, 100)
+        return
+      }
       callback()
     }, delay)
     this.timers.add(timer)
@@ -133,6 +138,17 @@ export default class DemoTransport {
 
   private action(payload: any) {
     const action = payload.action_type
+    if (action === 'pause_game' && !this.paused && this.phase !== 'result') {
+      this.paused = true
+      this.send({ type: 'game_paused', player_id: this.playerId })
+      return
+    }
+    if (action === 'resume_game' && this.paused) {
+      this.paused = false
+      this.send({ type: 'game_resumed', player_id: this.playerId })
+      return
+    }
+    if (this.paused) return
     if (action === 'move') {
       this.playerPosition = { x: Number(payload.x), z: Number(payload.z) }
     } else if (action === 'seeker_think') {
