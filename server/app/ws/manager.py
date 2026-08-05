@@ -253,7 +253,17 @@ class ConnectionManager:
         actor_id = payload.get("actor_id")
         actor = session.state.get_player(actor_id) if actor_id else player
 
-        if action_type == "move" and player and not player.is_frozen:
+        if action_type == "pause_game" and player and player.role == PlayerRole.HUMAN:
+            if session.pause():
+                await self.broadcast(room_id, {"type": "game_paused", "player_id": player_id})
+        elif action_type == "resume_game" and player and player.role == PlayerRole.HUMAN:
+            if session.resume():
+                await self.broadcast(room_id, {"type": "game_resumed", "player_id": player_id})
+        elif session.is_paused:
+            await self.send_to(room_id, player_id, {
+                "type": "action_rejected", "action_type": action_type, "reason": "game_paused",
+            })
+        elif action_type == "move" and player and not player.is_frozen:
             if (
                 session.state.phase not in {
                     GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
@@ -728,7 +738,17 @@ class ConnectionManager:
             0.0,
             session.state.freeze_timeout_sec - (time.time() - frozen_at),
         )
-        await asyncio.sleep(remaining)
+        while remaining > 0:
+            await asyncio.sleep(min(remaining, 0.1))
+            session = session_manager.sessions.get(room_id)
+            if not session:
+                return
+            player = session.state.get_player(player_id)
+            if not player or not player.is_frozen:
+                return
+            if session.is_paused:
+                continue
+            remaining = max(0.0, session.state.freeze_timeout_sec - (time.time() - (player.frozen_at or frozen_at)))
 
         # 구조 후 재빙결되었거나 방이 종료된 오래된 task는 상태를 바꾸지 않는다.
         session = session_manager.sessions.get(room_id)
@@ -915,7 +935,7 @@ class ConnectionManager:
                 session = session_manager.get_or_create(room_id)
                 if session.state.phase == GamePhase.RESULT:
                     return
-                if session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
+                if not session.is_paused and session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
                     advance_hunter(session)
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:
@@ -946,7 +966,7 @@ class ConnectionManager:
                 if session.state.phase == GamePhase.RESULT:
                     return
                 try:
-                    if session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
+                    if not session.is_paused and session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
                         intent, action = advance_companion(session)
                         if action and action["type"] == "report":
                             await self._broadcast_companion_speech(room_id, {

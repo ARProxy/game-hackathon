@@ -73,6 +73,32 @@ class GameSession:
         self.active_trap_ids: set[str] = set()
         self.triggered_trap_ids: set[str] = set()
         self.escaped_player_ids: set[str] = set()
+        self.paused_at: float | None = None
+
+    @property
+    def is_paused(self) -> bool:
+        return self.paused_at is not None
+
+    def pause(self) -> bool:
+        if self.is_paused or self.state.phase not in {
+            GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
+        }:
+            return False
+        self.paused_at = time.time()
+        return True
+
+    def resume(self) -> bool:
+        if self.paused_at is None:
+            return False
+        paused_for = max(0.0, time.time() - self.paused_at)
+        for player in self.state.players.values():
+            if player.frozen_at is not None:
+                player.frozen_at += paused_for
+        self.paused_at = None
+        now = time.monotonic()
+        self.hunter_last_tick = now
+        self.companion_last_tick = now
+        return True
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
@@ -107,6 +133,7 @@ class GameSession:
         ))
         self.triggered_trap_ids.clear()
         self.escaped_player_ids.clear()
+        self.paused_at = None
         # 싱글 플레이도 기획서의 최소 팀 구성을 서버 상태에 명시한다.
         # 화면에만 존재하는 동료를 서버가 모르면 인간 플레이어가 얼자마자
         # all_frozen으로 판정되므로, AI 동료와 술래를 결정적인 ID로 등록한다.
