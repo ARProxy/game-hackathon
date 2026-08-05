@@ -14,6 +14,27 @@ import { useSettingsStore } from '../stores/settingsStore'
 
 const FREEZE_TIMEOUT_MS = 30_000
 
+const HUNTER_LABELS: Record<string, string> = {
+  HUNT: '술래가 주변을 수색 중',
+  INVESTIGATE: '술래가 들린 소리를 확인 중',
+  DETECTED: '발견됨 · 즉시 시야를 끊으세요',
+  CHASE: '추격 중 · 코너와 장애물을 이용하세요',
+  SEARCH: '술래가 마지막 목격 위치를 수색 중',
+  RUSH_GATE: '술래가 탈출구로 돌진 중',
+}
+
+const COMPANION_LABELS: Record<string, string> = {
+  EXPLORE_ZONE: '동료가 독립적으로 구역 탐색 중',
+  INSPECT_CANDIDATE: '동료가 후보 물건을 확인 중',
+  REPORT_FINDING: '동료가 발견 정보를 정리 중',
+  AVOID_SEEKER: '동료가 술래를 피해 우회 중',
+  RESCUE_TEAMMATE: '동료가 구조하러 이동 중',
+  REGROUP: '동료가 팀과 합류 중',
+  MOVE_TO_GATE: '동료가 탈출구로 이동 중',
+  ESCAPE: '동료가 탈출구를 통과 중',
+  INCAPACITATED: '동료가 움직일 수 없음',
+}
+
 function formatElapsed(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
@@ -38,8 +59,8 @@ function RoundElapsedTime() {
   const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000))
 
   return (
-    <span style={{ marginLeft: 10, opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>
-      · 경과 {formatElapsed(elapsed)}
+    <span style={{ opacity: 0.72, fontVariantNumeric: 'tabular-nums' }}>
+      생존 시간 {formatElapsed(elapsed)}
     </span>
   )
 }
@@ -341,9 +362,8 @@ export default function HUD() {
         gap: 8,
       }}>
         {/* 연결 상태 */}
-        <div style={{ fontSize: 12, opacity: 0.5 }}>
-          {connected ? '● 서버 연결됨' : '○ 연결 중...'}
-          <RoundElapsedTime />
+        <div style={{ fontSize: 12, opacity: 0.58 }}>
+          {connected ? <RoundElapsedTime /> : '○ 게임 연결 중...'}
         </div>
         {connectionError && (
           <div role="alert" style={{
@@ -396,6 +416,9 @@ export default function HUD() {
             borderRadius: 8,
             padding: '8px 12px',
           }}>
+            <div style={{ height: 3, marginBottom: 8, borderRadius: 999, overflow: 'hidden', background: 'rgba(255,255,255,.12)' }}>
+              <div style={{ width: `${Math.min(100, (currentMissionIndex / missions.length) * 100)}%`, height: '100%', background: '#52E5FF', transition: 'width .3s ease' }} />
+            </div>
             <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
               미션 {Math.min(currentMissionIndex + 1, missions.length)} / {missions.length}
             </div>
@@ -485,7 +508,7 @@ export default function HUD() {
           color: hunterState === 'CHASE' || hunterState === 'DETECTED' ? '#FF8BAD' : 'rgba(255,255,255,.7)',
           fontSize: 11, fontWeight: 800, letterSpacing: '.08em',
         }}>
-          술래 · {hunterState}
+          {HUNTER_LABELS[hunterState] ?? '술래의 움직임을 확인할 수 없음'}
         </div>
       )}
 
@@ -496,7 +519,7 @@ export default function HUD() {
           border: '1px solid rgba(182,255,61,.4)', background: 'rgba(20,40,12,.72)',
           color: '#B6FF3D', fontSize: 10, fontWeight: 800, letterSpacing: '.06em',
         }}>
-          AI 동료 · {companionState}
+          {COMPANION_LABELS[companionState] ?? '동료가 다음 행동을 판단 중'}
         </div>
       )}
 
