@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useCallback } from 'react'
 import { useGameStore } from '../stores/gameStore'
+import DemoTransport from '../game/demoTransport'
 
 function resolveWebSocketBaseUrl(): string {
   const configured = import.meta.env.VITE_WS_URL?.trim()
@@ -35,12 +36,15 @@ function resolveWebSocketBaseUrl(): string {
 
 const WS_URL = resolveWebSocketBaseUrl()
 let activeSocket: WebSocket | null = null
+let activeDemo: DemoTransport | null = null
 
 /** Three.js 프레임 루프에서도 동일한 게임 연결을 사용한다. */
 export function sendGameMessage(message: object): boolean {
-  if (activeSocket?.readyState !== WebSocket.OPEN) return false
-  activeSocket.send(JSON.stringify(message))
-  return true
+  if (activeSocket?.readyState === WebSocket.OPEN) {
+    activeSocket.send(JSON.stringify(message))
+    return true
+  }
+  return activeDemo?.handle(message) ?? false
 }
 
 export default function useWebSocket() {
@@ -76,12 +80,23 @@ export default function useWebSocket() {
     ) return
 
     useGameStore.getState().setConnectionError(null)
+    let opened = false
+    const activateDemo = () => {
+      if (opened || activeDemo) return
+      wsRef.current = null
+      activeSocket = null
+      activeDemo = new DemoTransport(playerId, (data) => handleMessageRef.current(data))
+      useGameStore.getState().setConnected(true)
+      useGameStore.getState().setConnectionError(null)
+      useGameStore.getState().addSubtitle('system', '로컬 데모 모드로 시작합니다.')
+    }
     const ws = new WebSocket(
       `${WS_URL}/${encodeURIComponent(roomId)}/${encodeURIComponent(playerId)}`,
     )
 
     ws.onopen = () => {
       if (wsRef.current !== ws) return
+      opened = true
       activeSocket = ws
       console.log('[WS] connected')
       useGameStore.getState().setConnected(true)
@@ -92,6 +107,10 @@ export default function useWebSocket() {
       if (wsRef.current !== ws) return
       wsRef.current = null
       if (activeSocket === ws) activeSocket = null
+      if (!opened) {
+        activateDemo()
+        return
+      }
       console.log('[WS] disconnected')
       useGameStore.getState().setConnected(false)
       useGameStore.getState().setConnectionError('서버 연결이 끊겼습니다. 페이지를 새로고침해 주세요.')
@@ -114,6 +133,12 @@ export default function useWebSocket() {
     }
 
     wsRef.current = ws
+    window.setTimeout(() => {
+      if (!opened && wsRef.current === ws) {
+        ws.close()
+        activateDemo()
+      }
+    }, 2500)
   }, [])
 
   const handleMessage = useCallback((data: any) => {
@@ -315,6 +340,8 @@ export default function useWebSocket() {
     wsRef.current?.close()
     if (activeSocket === wsRef.current) activeSocket = null
     wsRef.current = null
+    activeDemo?.dispose()
+    activeDemo = null
   }, [])
 
   // 컴포넌트 언마운트 시 정리
@@ -324,6 +351,8 @@ export default function useWebSocket() {
       wsRef.current = null
       if (activeSocket === ws) activeSocket = null
       ws?.close()
+      activeDemo?.dispose()
+      activeDemo = null
     }
   }, [])
 
