@@ -154,6 +154,12 @@ function Scene({
           playerRef={playerGroupRef}
           spawn={SPAWNS.seeker}
         />
+
+        {/* 카메라 충돌 ray cast는 Rapier 컨텍스트 안에서 실행해야 한다. */}
+        <ThirdPersonCamera
+          targetRef={playerGroupRef}
+          enabled={cameraMode === '3d'}
+        />
       </Physics>
 
       {/* ── 비주얼 오버레이 — 맵 네이티브 인스턴싱으로 핵심 실내 가구 복구 ── */}
@@ -179,11 +185,6 @@ function Scene({
           maxDistance={200}             /* 최대 줌 거리 */
         />
       )}
-      {/* 3D 모드: 3인칭 카메라 — 플레이어 뒤에서 추종 */}
-      <ThirdPersonCamera
-        targetRef={playerGroupRef}
-        enabled={cameraMode === '3d'}
-      />
     </>
   )
 }
