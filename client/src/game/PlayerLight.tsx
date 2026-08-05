@@ -9,10 +9,11 @@ interface PlayerLightProps {
 
 export default function PlayerLight({ targetRef }: PlayerLightProps) {
   const lightRef = useRef<THREE.SpotLight>(null)
+  const fillRef = useRef<THREE.PointLight>(null)
   const aimRef = useRef<THREE.Object3D>(null)
 
   useFrame(() => {
-    if (!targetRef.current || !lightRef.current || !aimRef.current) return
+    if (!targetRef.current || !lightRef.current || !fillRef.current || !aimRef.current) return
     const player = targetRef.current
     const pos = player.position
     const yaw = player.rotation.y
@@ -30,19 +31,21 @@ export default function PlayerLight({ targetRef }: PlayerLightProps) {
       pos.z + forwardZ * 12,
     )
     lightRef.current.target = aimRef.current
+    fillRef.current.position.set(pos.x, pos.y + 1.0, pos.z)
   })
 
   return (
     <>
       <spotLight
         ref={lightRef}
-        intensity={95}
-        distance={18}
-        angle={Math.PI / 7}
-        penumbra={0.5}
+        intensity={115}
+        distance={26}
+        angle={Math.PI / 5}
+        penumbra={0.62}
         color="#d9ecff"
         decay={1.5}
       />
+      <pointLight ref={fillRef} intensity={4.5} distance={5} decay={1.8} color="#a9c6d8" />
       <object3D ref={aimRef} />
     </>
   )

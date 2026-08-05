@@ -2235,6 +2235,25 @@ export const LAMPS: { p: V2; h: number; c: string; tone: LampTone }[] = [
 
 ]
 
+const INTERIOR_LIGHTS: { floor: FloorKey; p: V3; color: string; dynamic: boolean }[] = [
+  { floor: 'F1', p: [-29, 3.05, -27.2], color: '#d8ecff', dynamic: true },
+  { floor: 'F1', p: [-20, 3.05, -27.2], color: '#d8ecff', dynamic: false },
+  { floor: 'F1', p: [-11, 3.05, -27.2], color: '#d8ecff', dynamic: true },
+  { floor: 'F1', p: [-2, 3.05, -27.2], color: '#d8ecff', dynamic: false },
+  { floor: 'F1', p: [-29, 3.05, -16.5], color: '#ffe2b8', dynamic: true },
+  { floor: 'F1', p: [-22, 3.05, -11.5], color: '#ffe2b8', dynamic: false },
+  { floor: 'F1', p: [21, 7.6, -27], color: '#e7f0ff', dynamic: true },
+  { floor: 'F1', p: [29, 7.6, -27], color: '#e7f0ff', dynamic: true },
+  { floor: 'F2', p: [-29, 6.65, -27.2], color: '#d8ecff', dynamic: true },
+  { floor: 'F2', p: [-20, 6.65, -27.2], color: '#d8ecff', dynamic: false },
+  { floor: 'F2', p: [-11, 6.65, -27.2], color: '#d8ecff', dynamic: true },
+  { floor: 'F2', p: [-2, 6.65, -27.2], color: '#d8ecff', dynamic: false },
+  { floor: 'F3', p: [-29, 10.25, -27.2], color: '#c9e3ff', dynamic: true },
+  { floor: 'F3', p: [-20, 10.25, -27.2], color: '#c9e3ff', dynamic: false },
+  { floor: 'F3', p: [-11, 10.25, -27.2], color: '#c9e3ff', dynamic: true },
+  { floor: 'F3', p: [-2, 10.25, -27.2], color: '#c9e3ff', dynamic: false },
+]
+
 /** 스폰 */
 export const SPAWNS = {
   player: actorContract.spawns.human as V2,   // 본관 현관 앞
@@ -2543,6 +2562,30 @@ function BoxInstances({ boxes }: { boxes: typeof BOXES }) {
   )
 }
 
+const LIGHTING_COLOR_OVERRIDES: Record<string, string> = {
+  '#0c1117': '#1b252d',
+  '#161d26': '#26343f',
+  '#171f27': '#2d3b46',
+  '#1c242e': '#344653',
+  '#232c38': '#3b4a57',
+  '#242e39': '#40505d',
+  '#262028': '#3b3641',
+}
+
+function InteriorLight({ fixture }: { fixture: (typeof INTERIOR_LIGHTS)[number] }) {
+  return (
+    <group position={fixture.p}>
+      <mesh>
+        <boxGeometry args={[2.4, 0.08, 0.34]} />
+        <meshStandardMaterial color="#d9e3e8" emissive={fixture.color} emissiveIntensity={1.8} />
+      </mesh>
+      {fixture.dynamic && (
+        <pointLight position={[0, -0.35, 0]} intensity={7.5} distance={9} decay={1.7} color={fixture.color} />
+      )}
+    </group>
+  )
+}
+
 function BoxColorBatch({ items, color }: { items: typeof BOXES; color: string }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   useEffect(() => {
@@ -2567,7 +2610,7 @@ function BoxColorBatch({ items, color }: { items: typeof BOXES; color: string })
   return (
     <instancedMesh ref={ref} args={[undefined, undefined, items.length]} frustumCulled={false}>
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={color} />
+      <meshStandardMaterial color={LIGHTING_COLOR_OVERRIDES[color] ?? color} />
     </instancedMesh>
   )
 }
@@ -2661,7 +2704,7 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateO
       <RigidBody type="fixed" position={[0, -0.5, 0]}>
         <mesh>
           <boxGeometry args={[MAP_SIZE + 4, 1, MAP_SIZE + 4]} />
-          <meshStandardMaterial color="#0c1117" />
+          <meshStandardMaterial color="#1b252d" />
         </mesh>
       </RigidBody>
 
@@ -2735,6 +2778,10 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateO
       {LAMPS.map((l, i) => (
         <Lamp key={`l${i}`} position={l.p} h={l.h} color={l.c}
           dynamicLight={i % 5 < 2} />
+      ))}
+
+      {INTERIOR_LIGHTS.filter((light) => show(light.floor)).map((fixture, index) => (
+        <InteriorLight key={`interior-light-${index}`} fixture={fixture} />
       ))}
 
       <ElevatorCar y={elevatorY} />

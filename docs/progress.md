@@ -21,6 +21,7 @@
 - [x] AI 동료 판단 task 예외 격리·지수 백오프 자동 복구
 - [x] 4Hz actor snapshot 중복 제거와 HUD·WebSocket 전역 재렌더 차단
 - [x] 3인칭 카메라 고정 collider 관통 방지와 벽 앞 자동 줌인
+- [x] 가독성 중심 Fog·손전등·구조 팔레트·실내 천장등 재설계
 
 현재 자동 검증 기준은 서버 `248 passed`, 클라이언트 build 성공, lint 오류 0개다.
 
