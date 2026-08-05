@@ -11,6 +11,7 @@ import Seeker from './game/Seeker'
 import Props from './game/Props'
 import Partner from './game/Partner'
 import ThirdPersonCamera from './game/ThirdPersonCamera'
+import ThreatFeedback from './game/ThreatFeedback'
 import Fog from './game/Fog'
 import HUD from './components/HUD'
 import Onboarding from './components/Onboarding'
@@ -160,6 +161,7 @@ function Scene({
 
       {/* ── 플레이어 시야 조명 ── */}
       {cameraMode === '3d' && <PlayerLight targetRef={playerGroupRef} />}
+      <ThreatFeedback playerRef={playerGroupRef} enabled={cameraMode === '3d'} />
 
       {/* ── 카메라 ── */}
       {/* CCTV 모드: OrbitControls — 마우스로 자유 이동/회전/줌 */}
@@ -335,6 +337,10 @@ function App() {
       </Canvas>
 
       <HUD />
+      <div className="chase-feedback" aria-hidden="true">
+        <i className="chase-feedback-left" />
+        <i className="chase-feedback-right" />
+      </div>
       <ResultScreen />
 
       {/* ── 개발 서버 전용 CCTV/층 필터 패널 ── */}

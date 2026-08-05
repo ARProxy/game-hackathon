@@ -104,10 +104,18 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
 
     const playerPos = playerRef.current?.position
     if (playerPos) {
-      const proximity = THREE.MathUtils.clamp(1 - Math.hypot(playerPos.x - pos.x, playerPos.z - pos.z) / PROXIMITY_SOUND_RANGE, 0, 1)
+      const threatX = pos.x - playerPos.x
+      const threatZ = pos.z - playerPos.z
+      const threatDistance = Math.hypot(threatX, threatZ)
+      const proximity = THREE.MathUtils.clamp(1 - threatDistance / PROXIMITY_SOUND_RANGE, 0, 1)
       const interval = THREE.MathUtils.lerp(1.55, 0.38, proximity)
       if (proximity > 0 && clock.elapsedTime - lastProximitySound.current >= interval) {
-        playSeekerProximity(proximity)
+        const rightX = Math.cos(playerRef.current?.rotation.y ?? 0)
+        const rightZ = -Math.sin(playerRef.current?.rotation.y ?? 0)
+        const pan = threatDistance > 0.001
+          ? THREE.MathUtils.clamp((threatX * rightX + threatZ * rightZ) / threatDistance, -1, 1)
+          : 0
+        playSeekerProximity(proximity, pan)
         lastProximitySound.current = clock.elapsedTime
       }
     }

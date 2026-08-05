@@ -51,7 +51,7 @@ export default function useSound() {
   }, [ensureContext])
 
   const tone = useCallback((frequency: number, delay: number, duration: number, volume: number,
-    endFrequency = frequency, shape: ToneShape = 'sine') => {
+    endFrequency = frequency, shape: ToneShape = 'sine', pan = 0) => {
     const context = contextRef.current
     const master = masterRef.current
     if (!context || context.state !== 'running' || !master) return
@@ -64,7 +64,9 @@ export default function useSound() {
     gain.gain.setValueAtTime(0.0001, start)
     gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(0.025, duration / 3))
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
-    oscillator.connect(gain).connect(master)
+    const panner = context.createStereoPanner()
+    panner.pan.value = Math.min(1, Math.max(-1, pan))
+    oscillator.connect(gain).connect(panner).connect(master)
     oscillator.start(start)
     oscillator.stop(start + duration + 0.02)
   }, [])
@@ -119,18 +121,18 @@ export default function useSound() {
     tone(180, 0.3, 0.65, 0.11, 55, 'triangle')
   }, [tone])
 
-  const playSeekerProximity = useCallback((intensity: number) => {
+  const playSeekerProximity = useCallback((intensity: number, pan = 0) => {
     const proximity = Math.min(1, Math.max(0, intensity))
     if (proximity <= 0) return
 
     // 가까울수록 묵직한 두 박자가 커지고, 짧은 휘파람 배음이 선명해진다.
     const volume = 0.025 + proximity * 0.065
     const baseFrequency = 58 + proximity * 20
-    tone(baseFrequency, 0, 0.13, volume, baseFrequency * 0.82, 'triangle')
-    tone(baseFrequency * 0.9, 0.16, 0.11, volume * 0.72, baseFrequency * 0.72, 'sine')
+    tone(baseFrequency, 0, 0.13, volume, baseFrequency * 0.82, 'triangle', pan)
+    tone(baseFrequency * 0.9, 0.16, 0.11, volume * 0.72, baseFrequency * 0.72, 'sine', pan)
     if (proximity >= 0.45) {
       tone(520 + proximity * 150, 0.03, 0.19, 0.012 + proximity * 0.016,
-        430 + proximity * 110, 'sine')
+        430 + proximity * 110, 'sine', pan)
     }
   }, [tone])
 
