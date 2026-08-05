@@ -45,6 +45,17 @@ def test_nearest_visible_human_or_ai_is_selected_equally() -> None:
     assert intent["target_id"] == "partner"
 
 
+def test_escaped_ai_is_removed_from_hunter_targets() -> None:
+    session = make_session("hunter-escaped-ai")
+    seeker = session.state.get_player("seeker")
+    partner = session.state.get_player("partner")
+    seeker.position.x, seeker.position.z = 12.0, 0.0
+    partner.position.x, partner.position.z = 15.0, 0.0
+    partner.escape()
+    session.hunter_forward = {"x": 1.0, "z": 0.0}
+    assert decide_hunter_intent(session)["target_id"] != "partner"
+
+
 def test_wall_blocks_visual_detection() -> None:
     session = make_session("hunter-wall")
     seeker = session.state.get_player("seeker")

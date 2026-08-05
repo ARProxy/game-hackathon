@@ -136,9 +136,11 @@ export default function useWebSocket() {
             position: data.active_gate.position,
           })
         }
+        if (data.active_traps) useGameStore.getState().setActiveTraps(data.active_traps)
         break
 
       case 'freeze':
+        if (data.trap_id) useGameStore.getState().consumeTrap(data.trap_id)
         freezePlayer({
           playerId: data.player_id,
           matchedWord: data.matched_word,
@@ -146,6 +148,8 @@ export default function useWebSocket() {
           confidence: data.confidence,
           position: data.position,
           timestamp: Date.now(),
+          remainingSeconds: data.remaining_seconds,
+          danger: data.danger ? { seekerLastSeen: data.danger.seeker_last_seen } : undefined,
         })
         break
 
@@ -156,6 +160,11 @@ export default function useWebSocket() {
 
       case 'eliminated':
         eliminatePlayer(data.player_id)
+        break
+
+      case 'runner_escaped':
+        useGameStore.getState().escapePlayer(data.player_id)
+        addSubtitle(data.player_id, '탈출구를 통과했어! 밖에서 기다릴게!')
         break
 
       case 'speech_safe':
@@ -285,6 +294,7 @@ export default function useWebSocket() {
         break
 
       case 'game_won':
+        if (data.partner_status) useGameStore.getState().setPartnerResultStatus(data.partner_status)
         finishGame('win', data.reason ?? 'escaped')
         break
 

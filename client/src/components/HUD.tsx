@@ -136,6 +136,39 @@ function FrozenCountdown() {
   )
 }
 
+function PartnerFrozenAlert() {
+  const phase = useGameStore((s) => s.phase)
+  const partnerStatus = useGameStore((s) => s.players.partner?.status)
+  const freezeEvent = useGameStore((s) => s.lastFreezeEvent)
+  const [now, setNow] = useState(Date.now())
+  const visible = partnerStatus === 'frozen'
+    && freezeEvent?.playerId === 'partner'
+    && (phase === 'playing' || phase === 'final_spell' || phase === 'escape')
+
+  useEffect(() => {
+    if (!visible) return
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(timer)
+  }, [visible, freezeEvent?.timestamp])
+
+  if (!visible || !freezeEvent) return null
+  const totalMs = (freezeEvent.remainingSeconds ?? 30) * 1000
+  const remaining = Math.max(0, Math.ceil((totalMs - (now - freezeEvent.timestamp)) / 1000))
+  const seekerKnown = Boolean(freezeEvent.danger?.seekerLastSeen?.position)
+  return (
+    <div role="alert" style={{
+      position: 'absolute', left: '50%', bottom: 118, transform: 'translateX(-50%)',
+      padding: '10px 16px', borderRadius: 10,
+      border: '1px solid #B6FF3D', background: 'rgba(18,38,12,.9)',
+      color: '#DFFF9A', fontSize: 12, fontWeight: 800,
+    }}>
+      AI 동료 빙결 · {remaining}초 · 가까이 가서 E로 “땡”
+      {seekerKnown && <span style={{ color: '#FF8BAD', marginLeft: 8 }}>술래 마지막 위치 공유됨</span>}
+    </div>
+  )
+}
+
 function TextSpeechFallback({ phase, connected, gateArrived, playerStatus }: {
   phase: GamePhase
   connected: boolean
@@ -465,6 +498,8 @@ export default function HUD() {
           AI 동료 · {companionIntent.state}
         </div>
       )}
+
+      <PartnerFrozenAlert />
 
       {phase === 'playing' && partnerDecision && (
         <div style={{

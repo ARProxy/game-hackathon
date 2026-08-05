@@ -15,6 +15,9 @@ from app.game.state import GamePhase, PlayerRole, PlayerStatus
 CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/companionContract.json"
 with CONTRACT_PATH.open(encoding="utf-8") as contract_file:
     CONTRACT = json.load(contract_file)
+TRAP_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/trapContract.json"
+with TRAP_CONTRACT_PATH.open(encoding="utf-8") as trap_contract_file:
+    TRAP_CONTRACT = json.load(trap_contract_file)
 
 
 def command_companion(session: Any, prop_id: str, position: dict, utterance: str) -> None:
@@ -82,7 +85,10 @@ def decide_companion_intent(session: Any) -> dict:
         state = "ESCAPE" if session.state.phase == GamePhase.ESCAPE else "MOVE_TO_GATE"
         return {
             "state": state, "target_id": None,
-            "target": session.active_gate_payload()["position"],
+            "target": (
+                session.active_gate_escape_position()
+                if state == "ESCAPE" else session.active_gate_payload()["position"]
+            ),
             "reason": "team_objective",
         }
 
@@ -133,6 +139,13 @@ def advance_companion(session: Any) -> tuple[dict, dict | None]:
     action = None
     if not partner:
         return intent, None
+    if partner.status != PlayerStatus.ALIVE:
+        session.companion_last_tick = now
+        session.companion_last_intent = intent
+        return {
+            **intent,
+            "partner_position": {"x": partner.position.x, "z": partner.position.z},
+        }, None
 
     distance = math.hypot(intent["target"]["x"] - partner.position.x, intent["target"]["z"] - partner.position.z)
     speed_key = {
@@ -152,7 +165,19 @@ def advance_companion(session: Any) -> tuple[dict, dict | None]:
         intent["target"]["z"] - partner.position.z,
     ) <= CONTRACT["arrivalDistance"] + 0.05
     sighting = session.companion_last_seeker_seen
-    if intent["state"] == "AVOID_SEEKER" and sighting and not sighting.get("reported"):
+    triggered_trap = next((
+        trap for trap in TRAP_CONTRACT["traps"]
+        if trap["id"] in session.active_trap_ids
+        and trap["id"] not in session.triggered_trap_ids
+        and math.hypot(partner.position.x - trap["x"], partner.position.z - trap["z"])
+        <= TRAP_CONTRACT["triggerDistance"]
+    ), None)
+    if triggered_trap:
+        session.triggered_trap_ids.add(triggered_trap["id"])
+        action = {"type": "trap", "trap_id": triggered_trap["id"]}
+    elif intent["state"] == "ESCAPE" and arrived:
+        action = {"type": "escape"}
+    elif intent["state"] == "AVOID_SEEKER" and sighting and not sighting.get("reported"):
         sighting["reported"] = True
         action = {"type": "seeker_report", "position": sighting["position"]}
     elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] not in session.companion_memory:

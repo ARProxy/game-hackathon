@@ -146,10 +146,13 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
                 "gate_id": active_gate["gate_id"],
             },
         })
-        assert ws.receive_json() == {
+        won = ws.receive_json()
+        assert won == {
             "type": "game_won",
             "player_id": player_id,
             "reason": "escaped",
             "gate_id": active_gate["gate_id"],
+            "escaped_player_ids": [player_id],
+            "partner_status": "alive",
         }
         assert session.state.phase.value == "result"

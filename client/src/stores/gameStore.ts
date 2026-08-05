@@ -8,7 +8,7 @@
 import { create } from 'zustand'
 
 export type GamePhase = 'lobby' | 'onboarding' | 'reveal' | 'playing' | 'final_spell' | 'escape' | 'result'
-export type PlayerStatus = 'alive' | 'frozen' | 'eliminated'
+export type PlayerStatus = 'alive' | 'frozen' | 'eliminated' | 'escaped'
 export type GameOutcome = 'win' | 'lose' | null
 
 export interface PlayerState {
@@ -60,6 +60,8 @@ export interface FreezeEvent {
   confidence: number
   position: { x: number; z: number }
   timestamp: number
+  remainingSeconds?: number
+  danger?: { seekerLastSeen?: { position?: { x: number; z: number } } | null }
 }
 
 export interface SoundEvent {
@@ -113,7 +115,9 @@ interface GameStore {
   currentMissionIndex: number
   acquiredClues: ClueFragment[]
   activeGate: ActiveGate | null
+  activeTrapIds: string[]
   gateArrived: boolean
+  partnerResultStatus: PlayerStatus | 'missing' | null
 
   // 프롭 상호작용
   inspectingPropId: string | null  // AI 동료가 조사 중인 프롭
@@ -146,6 +150,8 @@ interface GameStore {
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   hydratePlayers: (players: Record<string, Omit<PlayerState, 'playerId'>>) => void
   setActiveGate: (gate: ActiveGate) => void
+  setActiveTraps: (trapIds: string[]) => void
+  consumeTrap: (trapId: string) => void
   setGateArrived: (arrived: boolean) => void
   acquireClue: (clue: ClueFragment) => void
   setCurrentMissionIndex: (index: number) => void
@@ -162,6 +168,8 @@ interface GameStore {
   setCompanionIntent: (intent: CompanionIntent) => void
   unfreezePlayer: (playerId: string) => void
   eliminatePlayer: (playerId: string) => void
+  escapePlayer: (playerId: string) => void
+  setPartnerResultStatus: (status: PlayerStatus | 'missing') => void
   setSpeaking: (isSpeaking: boolean) => void
   setLastTranscript: (transcript: string) => void
   addSubtitle: (playerId: string, text: string) => void
@@ -188,7 +196,9 @@ const initialState = {
   currentMissionIndex: 0,
   acquiredClues: [] as ClueFragment[],
   activeGate: null as ActiveGate | null,
+  activeTrapIds: [] as string[],
   gateArrived: false,
+  partnerResultStatus: null as PlayerStatus | 'missing' | null,
   inspectingPropId: null as string | null,
   removedPropIds: [] as string[],
   partnerTarget: null as PartnerTarget | null,
@@ -254,6 +264,12 @@ export const useGameStore = create<GameStore>((set) => ({
   }),
 
   setActiveGate: (activeGate) => set({ activeGate, gateArrived: false }),
+
+  setActiveTraps: (activeTrapIds) => set({ activeTrapIds }),
+
+  consumeTrap: (trapId) => set((state) => ({
+    activeTrapIds: state.activeTrapIds.filter((id) => id !== trapId),
+  })),
 
   setGateArrived: (gateArrived) => set({ gateArrived }),
 
@@ -337,6 +353,16 @@ export const useGameStore = create<GameStore>((set) => ({
         },
       },
     })),
+
+  escapePlayer: (playerId) =>
+    set((state) => ({
+      players: {
+        ...state.players,
+        [playerId]: { ...state.players[playerId], status: 'escaped' },
+      },
+    })),
+
+  setPartnerResultStatus: (partnerResultStatus) => set({ partnerResultStatus }),
 
   setSpeaking: (isSpeaking) => set({ isSpeaking }),
 

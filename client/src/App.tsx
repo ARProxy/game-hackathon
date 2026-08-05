@@ -2,7 +2,7 @@ import { useRef, useEffect, useCallback, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
-import SchoolCampus, { pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
+import SchoolCampus, { SPAWNS, type FloorKey } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
 import { CHARACTERS } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
@@ -50,17 +50,16 @@ const runnerIds = CHARACTERS.filter((character) => character.role === 'runner').
 function Scene({
   cameraMode,
   visibleFloors,
-  roundPlan,
   playerCharacterId,
 }: {
   cameraMode: CameraMode
   visibleFloors: FloorKey[] | undefined
-  roundPlan: RoundPlan
   playerCharacterId: string
 }) {
   const playerRef = useRef<PlayerHandle>(null)
   const phase = useGameStore((state) => state.phase)
   const activeGate = useGameStore((state) => state.activeGate)
+  const activeTrapIds = useGameStore((state) => state.activeTrapIds)
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
   const playerGroupRef = {
@@ -80,7 +79,7 @@ function Scene({
       <Physics gravity={[0, -9.81, 0]}>
         <SchoolCampus
           visibleFloors={visibleFloors}
-          activeTraps={roundPlan.traps}
+          activeTraps={activeTrapIds}
           gateId={phase === 'final_spell' || phase === 'escape' ? activeGate?.gateId : undefined}
           gateOpen={phase === 'escape'}
           onGateArrive={(id) => {
@@ -112,6 +111,7 @@ function Scene({
         <Props />
         <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={playerCharacterId} />
         <Partner
+          playerRef={playerGroupRef}
           characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
           spawn={SPAWNS.ai}
         />
@@ -232,7 +232,6 @@ function App() {
   const [cameraMode, setCameraMode] = useState<CameraMode>('3d')
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
-  const [roundPlan] = useState(() => pickRound())
   const startSolo = useCallback((characterId: string) => {
     setPlayerCharacterId(characterId)
     useGameStore.getState().reset()
@@ -300,7 +299,7 @@ function App() {
           far: 1000,
         }}
       >
-        <Scene cameraMode={cameraMode} visibleFloors={visibleFloors} roundPlan={roundPlan} playerCharacterId={playerCharacterId} />
+        <Scene cameraMode={cameraMode} visibleFloors={visibleFloors} playerCharacterId={playerCharacterId} />
       </Canvas>
 
       <HUD />

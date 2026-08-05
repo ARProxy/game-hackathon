@@ -1,0 +1,18 @@
+{
+  "triggerDistance": 1.0,
+  "activeCount": 5,
+  "traps": [
+    { "id": "trap_1f_corridor", "floor": "F1", "x": -8.0, "z": -27.2 },
+    { "id": "trap_2f_science", "floor": "F2", "x": -9.5, "z": -27.2 },
+    { "id": "trap_1f_kitchen", "floor": "F1", "x": -25.1, "z": -19.0 },
+    { "id": "trap_field_gate", "floor": "OUT", "x": 13.5, "z": 22.0 },
+    { "id": "trap_field_diag", "floor": "OUT", "x": 2.0, "z": 6.0 },
+    { "id": "trap_alley_curve", "floor": "OUT", "x": -2.5, "z": 30.5 },
+    { "id": "trap_gym_stage", "floor": "F1", "x": 21.0, "z": -27.0 },
+    { "id": "trap_1f_storage", "floor": "F1", "x": -21.0, "z": -12.5 },
+    { "id": "trap_gym_bleacher", "floor": "F1", "x": 27.5, "z": -31.5 },
+    { "id": "trap_3f_end", "floor": "F3", "x": 5.5, "z": -27.2 },
+    { "id": "trap_play_bridge", "floor": "OUT", "x": -27.4, "z": 2.0 },
+    { "id": "trap_roof_tank", "floor": "ROOF", "x": -2.0, "z": -33.5 }
+  ]
+}

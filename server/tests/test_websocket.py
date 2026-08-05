@@ -254,25 +254,26 @@ class TestActions:
             session = session_manager.get_or_create("room9")
             player = session.state.get_player("player1")
             assert player is not None
-            player.position.x = 7.5
-            player.position.z = -2.25
+            session.active_trap_ids.add("trap_field_diag")
+            player.position.x = 2.0
+            player.position.z = 6.0
             session.position_samples["player1"] = MovementSample(
-                7.5, -2.25, session.position_samples["player1"].timestamp
+                2.0, 6.0, session.position_samples["player1"].timestamp
             )
             ws.send_json({
                 "type": "action",
                 "payload": {
                     "action_type": "trap",
                     "trap_id": "trap_field_diag",
-                    "x": 7.5,
-                    "z": -2.25,
+                    "x": 2.0,
+                    "z": 6.0,
                 },
             })
             frozen = ws.receive_json()
             assert frozen["type"] == "freeze"
             assert frozen["matched_stage"] == "trap"
             assert frozen["trap_id"] == "trap_field_diag"
-            assert frozen["position"] == {"x": 7.5, "z": -2.25}
+            assert frozen["position"] == {"x": 2.0, "z": 6.0}
 
     def test_seeker_catch_eliminates_human_and_ends_game(self, client):
         from app.game.session import session_manager
@@ -409,7 +410,7 @@ class TestActiveHunterFlow:
             assert intent["state"] in {"HUNT", "INVESTIGATE", "DETECTED", "CHASE", "SEARCH", "RUSH_GATE"}
             assert set(intent["target"]) == {"x", "z"}
 
-    def test_seeker_can_eliminate_ai_without_immediately_ending_human_run(self, client):
+    def test_seeker_eliminating_required_ai_ends_mission_run(self, client):
         from app.game.session import session_manager
 
         with client.websocket_connect("/ws/hunter-ai-catch/player1") as ws:
@@ -432,7 +433,9 @@ class TestActiveHunterFlow:
                 "reason": "caught_by_seeker",
             }
             assert partner.status.value == "eliminated"
-            assert session.state.phase.value == "playing"
+            game_over = ws.receive_json()
+            assert game_over == {"type": "game_over", "reason": "caught_by_seeker"}
+            assert session.state.phase.value == "result"
 
     def test_client_cannot_move_seeker_or_accelerate_server_tick(self, client):
         from app.game.session import session_manager
@@ -530,6 +533,8 @@ class TestEscapeFlow:
                 "player_id": "player1",
                 "reason": "escaped",
                 "gate_id": gate["gate_id"],
+                "escaped_player_ids": ["player1"],
+                "partner_status": "alive",
             }
             assert session.state.phase.value == "result"
 

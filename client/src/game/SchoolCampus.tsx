@@ -77,6 +77,7 @@ import {
   GATE_SLOTS,
 } from './gateContract'
 import actorContract from './actorContract.json'
+import trapContract from './trapContract.json'
 
 export { GATE_SLOTS } from './gateContract'
 
@@ -2166,7 +2167,7 @@ export type TrapKind = 'gap' | 'shortcut' | 'deadend' | 'vertical'
 
 /** 트랩 슬롯 12곳 — 한 판에 4~5개만 활성화 (pickRound 참조)
  *  gap 병목 · shortcut 지름길의 대가 · deadend 막다른 곳(최악) · vertical 수직 루트 고립 */
-export const TRAP_SLOTS: { id: string; p: V2; floor: FloorKey; kind: TrapKind; risk: 1 | 2 | 3 }[] = [
+const TRAP_METADATA: { id: string; p: V2; floor: FloorKey; kind: TrapKind; risk: 1 | 2 | 3 }[] = [
   { id: 'trap_1f_corridor', p: [-8, -27.2], floor: 'F1', kind: 'gap', risk: 2 }, // 1F 중앙 복도 — 교실 문 사이 병목
   { id: 'trap_2f_science', p: [-9.5, -27.2], floor: 'F2', kind: 'gap', risk: 3 }, // 과학실(미션 방) 앞 — 미션 동선 필수 통과
   { id: 'trap_1f_kitchen', p: [-25.1, -19], floor: 'F1', kind: 'gap', risk: 2 }, // 급식실 앞 복도 — 윙 진입 병목
@@ -2181,6 +2182,17 @@ export const TRAP_SLOTS: { id: string; p: V2; floor: FloorKey; kind: TrapKind; r
   { id: 'trap_roof_tank', p: [-2, -33.5], floor: 'ROOF', kind: 'vertical', risk: 3 }, // 옥상 물탱크 사이 — 최상층 고립
 
 ]
+
+/** 위치와 층은 서버도 읽는 공통 계약을 정본으로 사용한다. */
+export const TRAP_SLOTS = TRAP_METADATA.map((metadata) => {
+  const contract = trapContract.traps.find((trap) => trap.id === metadata.id)
+  if (!contract) throw new Error(`Missing trap contract: ${metadata.id}`)
+  return {
+    ...metadata,
+    p: [contract.x, contract.z] as V2,
+    floor: contract.floor as FloorKey,
+  }
+})
 
 /** T1 미션용 프롭 슬롯 — surfaceY는 프롭이 놓일 표면 높이(책상/무대/조회대 위) */
 export const PROP_SLOTS: { id: string; p: V2; floor: FloorKey; surfaceY: number }[] = [

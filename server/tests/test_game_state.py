@@ -43,6 +43,13 @@ class TestPlayer:
         assert p.status == PlayerStatus.ELIMINATED
         assert not p.is_frozen
 
+    def test_escape_is_a_distinct_terminal_runner_status(self):
+        p = Player(player_id="p1", role=PlayerRole.AI_PARTNER)
+        p.freeze()
+        p.escape()
+        assert p.status == PlayerStatus.ESCAPED
+        assert p.frozen_at is None
+
 
 class TestGameState:
     @pytest.fixture

@@ -26,6 +26,7 @@ export default function ResultScreen() {
   const resultReason = useGameStore((s) => s.resultReason)
   const elapsedSeconds = useGameStore((s) => s.elapsedSeconds)
   const selectedCharacterId = useGameStore((s) => s.selectedCharacterId)
+  const partnerResultStatus = useGameStore((s) => s.partnerResultStatus)
 
   if (phase !== 'result') return null
 
@@ -65,6 +66,22 @@ export default function ResultScreen() {
       }}>
         {isWin ? '탈출 성공!' : '게임 오버'}
       </div>
+
+      {isWin && partnerResultStatus && (
+        <div style={{
+          marginTop: -34, marginBottom: 34, padding: '8px 14px', borderRadius: 8,
+          background: partnerResultStatus === 'escaped' ? 'rgba(182,255,61,.12)' : 'rgba(255,209,102,.12)',
+          color: partnerResultStatus === 'escaped' ? '#B6FF3D' : '#FFD166', fontSize: 13,
+        }}>
+          AI 동료 · {partnerResultStatus === 'escaped'
+            ? '함께 탈출'
+            : partnerResultStatus === 'eliminated'
+              ? '탈락'
+              : partnerResultStatus === 'frozen'
+                ? '빙결 상태로 남음'
+                : '탈출구 안쪽에 남음'}
+        </div>
+      )}
 
       {selectedCharacter && <div style={{ color: selectedCharacter.glow, fontSize: 13, marginBottom: 10 }}>
         NO. {selectedCharacter.tag} · {selectedCharacter.name}

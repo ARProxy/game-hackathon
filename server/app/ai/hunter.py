@@ -60,7 +60,9 @@ def decide_hunter_intent(session: Any) -> dict:
     now = time.monotonic()
     visible: list[tuple[float, Any]] = []
     for runner in session.state.players.values():
-        if runner.role == PlayerRole.SEEKER or runner.status == PlayerStatus.ELIMINATED:
+        if runner.role == PlayerRole.SEEKER or runner.status in {
+            PlayerStatus.ELIMINATED, PlayerStatus.ESCAPED,
+        }:
             continue
         dx = runner.position.x - seeker.position.x
         dz = runner.position.z - seeker.position.z

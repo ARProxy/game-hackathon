@@ -7,8 +7,11 @@ Room별로 GameState와 ForbiddenWordEngine을 관리한다.
 from __future__ import annotations
 
 import logging
+import json
+import math
 import random
 import time
+from pathlib import Path
 
 from app.ai.forbidden import ForbiddenWordEngine
 from app.ai.mission import Mission, RoundData
@@ -21,16 +24,25 @@ logger = logging.getLogger(__name__)
 DEFAULT_FORBIDDEN_WORDS = ["열쇠", "커피", "빨간"]
 DEFAULT_AI_PARTNER_ID = "partner"
 DEFAULT_SEEKER_ID = "seeker"
+RESERVED_ACTOR_ROLES: dict[str, PlayerRole] = {
+    DEFAULT_AI_PARTNER_ID: PlayerRole.AI_PARTNER,
+    DEFAULT_SEEKER_ID: PlayerRole.SEEKER,
+}
+GATE_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/gateContract.json"
+with GATE_CONTRACT_PATH.open(encoding="utf-8") as gate_contract_file:
+    GATE_CONTRACT = json.load(gate_contract_file)
 GATE_POSITIONS: dict[str, dict[str, float]] = {
-    "gate_back": {"x": -7.0, "z": 38.0},
-    "gate_main": {"x": 38.5, "z": 27.5},
-    "gate_gym": {"x": 38.0, "z": -22.5},
+    gate["id"]: {"x": gate["position"][0], "z": gate["position"][1]}
+    for gate in GATE_CONTRACT["gates"]
 }
 ROLE_SPAWNS: dict[PlayerRole, tuple[float, float]] = {
     PlayerRole.HUMAN: (-9.8, -22.0),
     PlayerRole.AI_PARTNER: (-16.0, -2.0),
     PlayerRole.SEEKER: (26.0, -27.0),
 }
+TRAP_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/trapContract.json"
+with TRAP_CONTRACT_PATH.open(encoding="utf-8") as trap_contract_file:
+    TRAP_CONTRACT = json.load(trap_contract_file)
 
 
 class GameSession:
@@ -58,6 +70,9 @@ class GameSession:
         self.companion_goal_changed_at = 0.0
         self.companion_last_seeker_seen: dict | None = None
         self.companion_candidate_memory: list[dict] = []
+        self.active_trap_ids: set[str] = set()
+        self.triggered_trap_ids: set[str] = set()
+        self.escaped_player_ids: set[str] = set()
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
@@ -82,13 +97,25 @@ class GameSession:
         self.companion_goal_changed_at = 0.0
         self.companion_last_seeker_seen = None
         self.companion_candidate_memory = []
+        reachable_traps = [
+            trap["id"] for trap in TRAP_CONTRACT["traps"]
+            if trap["floor"] in {"OUT", "F1"}
+        ]
+        self.active_trap_ids = set(random.sample(
+            reachable_traps,
+            min(int(TRAP_CONTRACT["activeCount"]), len(reachable_traps)),
+        ))
+        self.triggered_trap_ids.clear()
+        self.escaped_player_ids.clear()
         # 싱글 플레이도 기획서의 최소 팀 구성을 서버 상태에 명시한다.
         # 화면에만 존재하는 동료를 서버가 모르면 인간 플레이어가 얼자마자
         # all_frozen으로 판정되므로, AI 동료와 술래를 결정적인 ID로 등록한다.
-        if self.state.get_player(DEFAULT_AI_PARTNER_ID) is None:
-            self.state.add_player(DEFAULT_AI_PARTNER_ID, PlayerRole.AI_PARTNER)
-        if self.state.get_player(DEFAULT_SEEKER_ID) is None:
-            self.state.add_player(DEFAULT_SEEKER_ID, PlayerRole.SEEKER)
+        for actor_id, required_role in RESERVED_ACTOR_ROLES.items():
+            actor = self.state.get_player(actor_id)
+            if actor is None or actor.role != required_role:
+                # 연결 검사를 우회하거나 오래된 상태를 복원하더라도 예약
+                # actor ID의 서버 권위 역할은 매 판 시작 시 복구한다.
+                self.state.add_player(actor_id, required_role)
         now = time.monotonic()
         for player in self.state.players.values():
             x, z = ROLE_SPAWNS[player.role]
@@ -121,6 +148,17 @@ class GameSession:
         return {
             "gate_id": self.active_gate_id,
             "position": GATE_POSITIONS[self.active_gate_id],
+        }
+
+    def active_traps_payload(self) -> list[str]:
+        return sorted(self.active_trap_ids)
+
+    def active_gate_escape_position(self) -> dict[str, float]:
+        gate = next(item for item in GATE_CONTRACT["gates"] if item["id"] == self.active_gate_id)
+        local_z = float(GATE_CONTRACT["escapeSensorLocalZ"])
+        return {
+            "x": gate["position"][0] + math.sin(gate["rotationY"]) * local_z,
+            "z": gate["position"][1] + math.cos(gate["rotationY"]) * local_z,
         }
 
     def is_near_active_gate(self, player_id: str, radius: float = 2.75) -> bool:

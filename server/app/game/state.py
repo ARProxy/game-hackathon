@@ -21,6 +21,7 @@ class PlayerStatus(str, Enum):
     ALIVE = "alive"
     FROZEN = "frozen"
     ELIMINATED = "eliminated"
+    ESCAPED = "escaped"
 
 
 class GamePhase(str, Enum):
@@ -60,6 +61,10 @@ class Player:
 
     def eliminate(self) -> None:
         self.status = PlayerStatus.ELIMINATED
+        self.frozen_at = None
+
+    def escape(self) -> None:
+        self.status = PlayerStatus.ESCAPED
         self.frozen_at = None
 
 
