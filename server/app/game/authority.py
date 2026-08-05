@@ -1,4 +1,4 @@
-"""서버 권위 이동 속도와 1층 주요 벽의 2D 시야 계약."""
+"""서버 권위 이동 속도와 플레이 구역 주요 벽의 2D 시야 계약."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ ACTOR_MAX_SPEED = 7.0
 POSITION_JITTER_ALLOWANCE = 0.65
 
 # SchoolCampus BOXES 중 F1에서 사람 키를 막는 구조 벽. (cx, cz, sx, sz)
-WALL_RECTS: tuple[tuple[float, float, float, float], ...] = (
+INTERIOR_WALL_RECTS: tuple[tuple[float, float, float, float], ...] = (
     (-13, -35.7, 42, 0.4),
     (-30.45, -25.4, 7.1, 0.4), (-22.3, -25.4, 1.4, 0.4),
     (-15.95, -25.4, 8.9, 0.4), (0, -25.4, 16, 0.4),
@@ -36,6 +36,28 @@ WALL_RECTS: tuple[tuple[float, float, float, float], ...] = (
     (-21, -22.4, 3, 0.3), (-22.5, -23.8, 0.3, 2.8),
     (-19.5, -23.8, 0.3, 2.8),
 )
+
+# 운동장·골목의 사람 키 이상 벽과 대형 장애물. 낮은 벤치·화분은
+# 구조/포획 시야를 막지 않으며, 실제 통로를 나누는 구조만 포함한다.
+OUTDOOR_WALL_RECTS: tuple[tuple[float, float, float, float], ...] = (
+    (-16, -6, 6, 3.6),
+    (8, 17, 26, 2.1),
+    (-14, 22, 12, 0.4), (3.5, 22, 17, 0.4), (26.5, 22, 23, 0.4),
+    (-14, 29, 0.35, 10), (-11, 28, 6, 0.35), (-4, 28, 4, 0.35),
+    (-2, 28, 0.35, 4), (-2, 34, 0.35, 4), (-5, 32, 14, 0.35),
+    (6, 32, 4, 0.35), (8, 28, 0.35, 8),
+    (10.5, 26, 5, 0.35), (17.5, 26, 5, 0.35),
+    (20, 28.5, 0.35, 5), (20, 34.5, 0.35, 3),
+    (-8, 36, 8, 0.35), (-12, 34, 0.35, 4),
+    (26, 27, 2.2, 4.4), (30, 27, 2.2, 4.4), (34, 27, 2.2, 4.4),
+    (30, 33, 5, 3.4),
+    (0, -40, 80.6, 0.6), (-24.65, 40, 31.3, 0.6),
+    (17.65, 40, 45.3, 0.6), (-40, 0, 0.6, 80.6),
+    (40, -32.4, 0.6, 15.8), (40, 2.5, 0.6, 46),
+    (40, 34.9, 0.6, 10.8),
+)
+
+WALL_RECTS = INTERIOR_WALL_RECTS + OUTDOOR_WALL_RECTS
 
 
 @dataclass(frozen=True)
@@ -92,4 +114,3 @@ def has_clear_catch_line(
     start: tuple[float, float], end: tuple[float, float]
 ) -> bool:
     return not any(segment_intersects_rect(start, end, wall) for wall in WALL_RECTS)
-
