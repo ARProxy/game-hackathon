@@ -315,8 +315,9 @@ export default function HUD() {
   const totalClues = useGameStore((s) => s.totalClues)
   const gateArrived = useGameStore((s) => s.gateArrived)
   const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
-  const hunterIntent = useGameStore((s) => s.hunterIntent)
-  const companionIntent = useGameStore((s) => s.companionIntent)
+  // 좌표 snapshot은 3D 프레임 루프가 직접 읽고 HUD는 상태 전환만 구독한다.
+  const hunterState = useGameStore((s) => s.hunterIntent?.state ?? null)
+  const companionState = useGameStore((s) => s.companionIntent?.state ?? null)
 
   return (
     <div style={{
@@ -475,27 +476,27 @@ export default function HUD() {
       </div>
 
       {/* 조사 중 표시 */}
-      {hunterIntent && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
+      {hunterState && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
         <div style={{
           position: 'absolute', top: 24, left: '50%', transform: 'translateX(-50%)',
           padding: '7px 12px', borderRadius: 20,
-          border: `1px solid ${hunterIntent.state === 'CHASE' || hunterIntent.state === 'DETECTED' ? '#FF2F6E' : 'rgba(255,255,255,.25)'}`,
-          background: hunterIntent.state === 'CHASE' || hunterIntent.state === 'DETECTED' ? 'rgba(120,10,35,.78)' : 'rgba(7,9,13,.7)',
-          color: hunterIntent.state === 'CHASE' || hunterIntent.state === 'DETECTED' ? '#FF8BAD' : 'rgba(255,255,255,.7)',
+          border: `1px solid ${hunterState === 'CHASE' || hunterState === 'DETECTED' ? '#FF2F6E' : 'rgba(255,255,255,.25)'}`,
+          background: hunterState === 'CHASE' || hunterState === 'DETECTED' ? 'rgba(120,10,35,.78)' : 'rgba(7,9,13,.7)',
+          color: hunterState === 'CHASE' || hunterState === 'DETECTED' ? '#FF8BAD' : 'rgba(255,255,255,.7)',
           fontSize: 11, fontWeight: 800, letterSpacing: '.08em',
         }}>
-          술래 · {hunterIntent.state}
+          술래 · {hunterState}
         </div>
       )}
 
-      {companionIntent && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
+      {companionState && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
         <div style={{
           position: 'absolute', top: 62, left: '50%', transform: 'translateX(-50%)',
           padding: '6px 11px', borderRadius: 20,
           border: '1px solid rgba(182,255,61,.4)', background: 'rgba(20,40,12,.72)',
           color: '#B6FF3D', fontSize: 10, fontWeight: 800, letterSpacing: '.06em',
         }}>
-          AI 동료 · {companionIntent.state}
+          AI 동료 · {companionState}
         </div>
       )}
 

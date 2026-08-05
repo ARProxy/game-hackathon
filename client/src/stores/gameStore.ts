@@ -214,6 +214,31 @@ const initialState = {
   subtitles: [],
 }
 
+function samePosition(
+  left: { x: number; z: number },
+  right: { x: number; z: number },
+): boolean {
+  return left.x === right.x && left.z === right.z
+}
+
+function sameHunterIntent(left: HunterIntent | null, right: HunterIntent): boolean {
+  return Boolean(left
+    && left.state === right.state
+    && left.targetId === right.targetId
+    && left.reason === right.reason
+    && samePosition(left.target, right.target)
+    && samePosition(left.seekerPosition, right.seekerPosition))
+}
+
+function sameCompanionIntent(left: CompanionIntent | null, right: CompanionIntent): boolean {
+  return Boolean(left
+    && left.state === right.state
+    && left.targetId === right.targetId
+    && left.reason === right.reason
+    && samePosition(left.target, right.target)
+    && samePosition(left.partnerPosition, right.partnerPosition))
+}
+
 export const useGameStore = create<GameStore>((set) => ({
   ...initialState,
 
@@ -325,9 +350,13 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setLastSoundEvent: (event) => set({ lastSoundEvent: event }),
 
-  setHunterIntent: (hunterIntent) => set({ hunterIntent }),
+  setHunterIntent: (hunterIntent) => set((state) => (
+    sameHunterIntent(state.hunterIntent, hunterIntent) ? state : { hunterIntent }
+  )),
 
-  setCompanionIntent: (companionIntent) => set({ companionIntent }),
+  setCompanionIntent: (companionIntent) => set((state) => (
+    sameCompanionIntent(state.companionIntent, companionIntent) ? state : { companionIntent }
+  )),
 
   requestRescue: () => set({ rescueRequested: true }),
 

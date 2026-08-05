@@ -192,7 +192,11 @@ function Scene({
  * ───────────────────────────────────────────── */
 function GameController() {
   const { connect, send, disconnect } = useWebSocket()
-  const { phase, connected, forbiddenWords, setRoom, setPhase } = useGameStore()
+  const phase = useGameStore((state) => state.phase)
+  const connected = useGameStore((state) => state.connected)
+  const forbiddenWords = useGameStore((state) => state.forbiddenWords)
+  const setRoom = useGameStore((state) => state.setRoom)
+  const setPhase = useGameStore((state) => state.setPhase)
   const playerStatus = useGameStore((state) => state.players[state.playerId]?.status)
   const [speechFallbackReason, setSpeechFallbackReason] = useState<string | null>(null)
   const speechEnabled = phase === 'onboarding' || (

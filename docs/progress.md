@@ -19,6 +19,7 @@
 - [x] CCTV 개발 모드 전용 전역 조명·노출·배경 가독성 보정
 - [x] 실내·외 주요 장애물을 포괄하는 구조·포획 LOS 계약
 - [x] AI 동료 판단 task 예외 격리·지수 백오프 자동 복구
+- [x] 4Hz actor snapshot 중복 제거와 HUD·WebSocket 전역 재렌더 차단
 
 현재 자동 검증 기준은 서버 `246 passed`, 클라이언트 build 성공, lint 오류 0개다.
 

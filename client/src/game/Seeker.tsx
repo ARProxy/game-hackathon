@@ -32,7 +32,10 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
   const { world, rapier } = useRapier()
   const navigationShape = useMemo(() => new rapier.Ball(0.36), [rapier])
   const { playSeekerProximity, playSeekerDetected, playSeekerFootstep, playSeekerSiren } = useSound()
-  const hunterIntent = useGameStore((store) => store.hunterIntent)
+  // 이동 좌표는 useFrame에서 읽고, React 렌더는 경광등 상태 전환만 구독한다.
+  const dangerLightActive = useGameStore((store) => (
+    store.hunterIntent?.state === 'DETECTED' || store.hunterIntent?.state === 'CHASE'
+  ))
   const redLightRef = useRef<THREE.PointLight>(null)
   const previousState = useRef<HunterState | null>(null)
   const lastThink = useRef(-Infinity)
@@ -161,7 +164,7 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
   return (
     <group ref={groupRef} position={[spawn[0], 0, spawn[1]]}>
       <CharacterModel id="R00" camo={false} />
-      {(hunterIntent?.state === 'DETECTED' || hunterIntent?.state === 'CHASE') && (
+      {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />
       )}
     </group>

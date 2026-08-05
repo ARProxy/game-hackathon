@@ -67,7 +67,7 @@ export default function useWebSocket() {
     setCurrentMissionIndex,
     setActiveGate,
     setGateArrived,
-  } = useGameStore()
+  } = useGameStore.getState()
 
   const connect = useCallback((roomId: string, playerId: string) => {
     if (
