@@ -115,7 +115,7 @@ function Scene({
           }}
         />
         <Props />
-        <Player ref={playerRef} position={[SPAWNS.player[0], 1, SPAWNS.player[1]]} characterId={cast.runners[0]} />
+        <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={cast.runners[0]} />
         <Partner
           playerRef={playerGroupRef}
           characterId={cast.runners[1] ?? 'R05'}

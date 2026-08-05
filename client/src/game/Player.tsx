@@ -18,6 +18,8 @@ import { sendGameMessage } from '../hooks/useWebSocket'
 const MOVE_SPEED = 5
 const JUMP_FORCE = 5
 const GROUND_THRESHOLD = 0.1
+// 캐릭터 모델의 원점은 발바닥이다. 물리 바디 원점과 캡슐 하단의 차이를 보정한다.
+const COLLIDER_BOTTOM_Y = COLLIDER.offsetY - COLLIDER.halfHeight - COLLIDER.radius
 
 interface PlayerProps {
   position?: [number, number, number]
@@ -58,7 +60,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     if (isFrozen || !controlsEnabled) {
       rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true)
       const pos = rigidBodyRef.current.translation()
-      visualRef.current.position.set(pos.x, pos.y - COLLIDER.offsetY, pos.z)
+      visualRef.current.position.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
       return
     }
 
@@ -100,7 +102,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
 
     // visual을 rigid body 위치에 동기화
     const pos = rigidBodyRef.current.translation()
-    visualRef.current.position.set(pos.x, pos.y - COLLIDER.offsetY, pos.z)
+    visualRef.current.position.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
 
     // 서버가 빙결 핑과 청각 이벤트에 실제 좌표를 사용하도록 10Hz로 동기화한다.
     const now = clock.elapsedTime
@@ -122,13 +124,6 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       )
     }
 
-    // 바운스
-    if (isGrounded) {
-      const t = clock.getElapsedTime()
-      const bounceAmount = isMoving.current ? 0.08 : 0.03
-      const bounceSpeed = isMoving.current ? 8 : 2
-      visualRef.current.position.y += Math.abs(Math.sin(t * bounceSpeed)) * bounceAmount
-    }
   })
 
   const playerId = useGameStore((s) => s.playerId)
@@ -140,7 +135,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       <RigidBody
         ref={rigidBodyRef}
         type="dynamic"
-        position={[position[0], 1, position[2]]}
+        position={[position[0], position[1] - COLLIDER_BOTTOM_Y, position[2]]}
         lockRotations
         colliders={false}
         mass={1}
