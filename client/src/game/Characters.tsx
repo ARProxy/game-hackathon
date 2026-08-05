@@ -15,7 +15,8 @@
  * 규격: 키 1.7m · 콜라이더 캡슐 r0.4 halfHeight 0.35 (offsetY 0.85)
  * 상태: 기본 / 빙결(얼음 껍질) / 위장(술래 전용)
  */
-import { useMemo, type Ref } from 'react'
+import { useMemo, useRef, type Ref, type RefObject } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
 
@@ -384,7 +385,7 @@ function PartMesh({ part, opacity, tint, tagMap }: {
 /**
  * 캐릭터 메시 (물리 없음) — 다른 리그에 붙이거나 UI 프리뷰에 쓸 때
  */
-export function CharacterModel({ id, frozen = false, camo = false, glowPulse = 1 }: {
+export function CharacterModel({ id, frozen = false, camo = false, glowPulse = 1, movementRef }: {
   id: string
   /** 빙결 — 얼음 껍질이 덮이고 발광이 죽는다 */
   frozen?: boolean
@@ -392,28 +393,68 @@ export function CharacterModel({ id, frozen = false, camo = false, glowPulse = 1
   camo?: boolean
   /** 발광 강도 배수 — 숨소리처럼 맥동시킬 때 */
   glowPulse?: number
+  /** 실제 수평 이동 속도를 0~1로 정규화한 값 */
+  movementRef?: RefObject<number>
 }) {
   const ch = byId(id)
+  const bodyRef = useRef<THREE.Group>(null)
+  const leftFootRef = useRef<THREE.Group>(null)
+  const rightFootRef = useRef<THREE.Group>(null)
+  const stridePhase = useRef(0)
+  const motion = useRef(0)
   // 훅은 반드시 얼리 리턴보다 먼저 — id가 유효하지 않은 프레임에서도 훅 수가 변하지 않는다
   const tagMap = useNameTagTexture(ch)
+
+  useFrame((_, delta) => {
+    const targetMotion = frozen ? 0 : THREE.MathUtils.clamp(movementRef?.current ?? 0, 0, 1)
+    motion.current = THREE.MathUtils.damp(motion.current, targetMotion, targetMotion > 0 ? 12 : 18, delta)
+    stridePhase.current += delta * THREE.MathUtils.lerp(5.5, 10.5, motion.current)
+
+    const stride = Math.sin(stridePhase.current) * motion.current
+    const leftLift = Math.max(0, stride) * 0.055
+    const rightLift = Math.max(0, -stride) * 0.055
+    if (leftFootRef.current) {
+      leftFootRef.current.position.set(0, leftLift, stride * 0.12)
+      leftFootRef.current.rotation.x = stride * 0.16
+    }
+    if (rightFootRef.current) {
+      rightFootRef.current.position.set(0, rightLift, -stride * 0.12)
+      rightFootRef.current.rotation.x = -stride * 0.16
+    }
+    if (bodyRef.current) {
+      bodyRef.current.position.y = Math.abs(Math.sin(stridePhase.current * 2)) * 0.025 * motion.current
+      bodyRef.current.rotation.z = stride * 0.025
+    }
+  })
+
   if (!ch) return null
   const camoOn = camo && ch.role === 'seeker'
+  const isFootPart = (part: Part) => part.part === 'leg' || part.part === 'shoe' || part.part === 'sock'
+  const renderPart = (p: Part, i: number) => {
+    // 위장·빙결 중에는 발광을 죽인다 (위치가 드러나지 않게)
+    const em = p.em ? (camoOn ? 0 : frozen ? p.em * 0.15 : p.em * glowPulse) : undefined
+    return (
+      <PartMesh
+        key={i}
+        part={em !== undefined ? { ...p, em } : p}
+        opacity={camoOn ? CAMO.opacity : undefined}
+        tint={camoOn ? CAMO.color : undefined}
+        tagMap={p.tag ? tagMap ?? undefined : undefined}
+      />
+    )
+  }
 
   return (
     <group>
-      {ch.parts.map((p, i) => {
-        // 위장·빙결 중에는 발광을 죽인다 (위치가 드러나지 않게)
-        const em = p.em ? (camoOn ? 0 : frozen ? p.em * 0.15 : p.em * glowPulse) : undefined
-        return (
-          <PartMesh
-            key={i}
-            part={em !== undefined ? { ...p, em } : p}
-            opacity={camoOn ? CAMO.opacity : undefined}
-            tint={camoOn ? CAMO.color : undefined}
-            tagMap={p.tag ? tagMap ?? undefined : undefined}
-          />
-        )
-      })}
+      <group ref={bodyRef}>
+        {ch.parts.map((p, i) => !isFootPart(p) && renderPart(p, i))}
+      </group>
+      <group ref={leftFootRef}>
+        {ch.parts.map((p, i) => isFootPart(p) && p.p[0] < 0 && renderPart(p, i))}
+      </group>
+      <group ref={rightFootRef}>
+        {ch.parts.map((p, i) => isFootPart(p) && p.p[0] >= 0 && renderPart(p, i))}
+      </group>
       {frozen && ICE_SHELL.map((p, i) => <PartMesh key={`ice${i}`} part={p} />)}
     </group>
   )

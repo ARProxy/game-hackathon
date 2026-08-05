@@ -14,6 +14,7 @@ import useKeyboard from '../hooks/useKeyboard'
 import { useGameStore } from '../stores/gameStore'
 import { CharacterModel, COLLIDER } from './Characters'
 import { sendGameMessage } from '../hooks/useWebSocket'
+import useSound from '../hooks/useSound'
 
 const MOVE_SPEED = 5
 const JUMP_FORCE = 5
@@ -42,8 +43,13 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   const rigidBodyRef = useRef<RapierRigidBody>(null)
   const keys = useKeyboard()
   const isMoving = useRef(false)
+  const movementRef = useRef(0)
+  const lastMotionPosition = useRef(new THREE.Vector3(position[0], position[1], position[2]))
+  const lastFootstep = useRef(-Infinity)
+  const rightFootstep = useRef(false)
   const lastPositionSync = useRef(0)
   const { camera } = useThree()
+  const { playPlayerFootstep } = useSound()
 
   useImperativeHandle(ref, () => ({
     getGroup: () => visualRef.current,
@@ -62,8 +68,10 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
 
     // 온보딩·결과 화면과 빙결 상태에서는 이동 및 위치 송신을 멈춘다.
     if (isFrozen || !controlsEnabled) {
+      movementRef.current = 0
       rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true)
       const pos = rigidBodyRef.current.translation()
+      lastMotionPosition.current.set(pos.x, pos.y, pos.z)
       const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
       visualRef.current.position.lerp(
         new THREE.Vector3(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z),
@@ -107,9 +115,23 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     const nextVelX = THREE.MathUtils.damp(currentVel.x, moveX * MOVE_SPEED, velocityResponse, delta)
     const nextVelZ = THREE.MathUtils.damp(currentVel.z, moveZ * MOVE_SPEED, velocityResponse, delta)
     rigidBodyRef.current.setLinvel({ x: nextVelX, y: velY, z: nextVelZ }, true)
-
     // visual을 rigid body 위치에 동기화
     const pos = rigidBodyRef.current.translation()
+    const movedDistance = Math.hypot(
+      pos.x - lastMotionPosition.current.x,
+      pos.z - lastMotionPosition.current.z,
+    )
+    const measuredSpeed = delta > 0 ? movedDistance / delta : 0
+    movementRef.current = THREE.MathUtils.clamp(measuredSpeed / MOVE_SPEED, 0, 1)
+    lastMotionPosition.current.set(pos.x, pos.y, pos.z)
+
+    const grounded = Math.abs(velY) < GROUND_THRESHOLD
+    const footstepInterval = THREE.MathUtils.lerp(0.5, 0.34, movementRef.current)
+    if (grounded && movementRef.current > 0.18 && clock.elapsedTime - lastFootstep.current >= footstepInterval) {
+      rightFootstep.current = !rightFootstep.current
+      playPlayerFootstep(rightFootstep.current, movementRef.current)
+      lastFootstep.current = clock.elapsedTime
+    }
     const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
     visualRef.current.position.lerp(
       new THREE.Vector3(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z),
@@ -159,7 +181,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
 
       {/* 비주얼 — CharacterModel */}
       <group ref={visualRef} position={position}>
-        <CharacterModel id={characterId} frozen={isFrozen} />
+        <CharacterModel id={characterId} frozen={isFrozen} movementRef={movementRef} />
       </group>
     </>
   )

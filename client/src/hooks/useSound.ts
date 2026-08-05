@@ -159,6 +159,15 @@ export default function useSound() {
     tone(880, 0.25, 0.24, volume, 610, 'sawtooth', pan)
   }, [tone])
 
+  const playPlayerFootstep = useCallback((rightFoot: boolean, intensity: number) => {
+    const strength = Math.min(1, Math.max(0, intensity))
+    if (strength <= 0) return
+    const pan = rightFoot ? 0.06 : -0.06
+    const volume = 0.018 + strength * 0.022
+    tone(rightFoot ? 118 : 108, 0, 0.065, volume, 62, 'triangle', pan)
+    noise(0.008, 0.055, volume * 0.42, 260, pan)
+  }, [noise, tone])
+
   return {
     playFreeze,
     playRescue,
@@ -169,5 +178,6 @@ export default function useSound() {
     playSeekerDetected,
     playSeekerFootstep,
     playSeekerSiren,
+    playPlayerFootstep,
   }
 }
