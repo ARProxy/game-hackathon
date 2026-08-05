@@ -11,7 +11,7 @@ from fastapi import WebSocket
 
 from app.ai.mission import generate_round, round_to_dict
 from app.ai.onboarding import extract_forbidden_words
-from app.ai.partner import match_partner_command
+from app.ai.partner import compare_partner_candidates
 from app.ai.spell import check_spell
 from app.game.authority import (
     ACTOR_MAX_SPEED,
@@ -150,12 +150,36 @@ class ConnectionManager:
             })
             mission = session.current_mission()
             if mission and is_final and transcript.strip():
-                command = match_partner_command(transcript, mission.real_prop)
-                if command.matched:
+                decision = compare_partner_candidates(
+                    transcript, [mission.real_prop, *mission.decoy_props]
+                )
+                payload = {
+                    "type": "partner_decision",
+                    "decision": decision.action,
+                    "confidence": decision.confidence,
+                    "reply": decision.reply,
+                    "candidates": [
+                        {
+                            "prop_id": candidate.prop.prop_id,
+                            "zone": candidate.prop.zone,
+                            "score": candidate.score,
+                            "cues": candidate.cues,
+                        }
+                        for candidate in decision.ranked
+                    ],
+                    "utterance": transcript,
+                }
+                if decision.target:
+                    payload.update({
+                        "target_prop_id": decision.target.prop_id,
+                        "position": decision.target.position,
+                    })
+                await self.broadcast(room_id, payload)
+                if decision.target:
                     await self.broadcast(room_id, {
                         "type": "partner_command",
-                        "target_prop_id": mission.real_prop.prop_id,
-                        "position": mission.real_prop.position,
+                        "target_prop_id": decision.target.prop_id,
+                        "position": decision.target.position,
                         "utterance": transcript,
                     })
 

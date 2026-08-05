@@ -34,6 +34,13 @@ export interface PartnerTarget {
   utterance: string
 }
 
+export interface PartnerDecision {
+  decision: 'act' | 'clarify' | 'uncertain'
+  confidence: number
+  reply: string
+  candidates: { propId: string; zone: string; score: number; cues: string[] }[]
+}
+
 export interface ActiveGate {
   gateId: string
   position: { x: number; z: number }
@@ -92,6 +99,7 @@ interface GameStore {
   inspectingPropId: string | null  // AI 동료가 조사 중인 프롭
   removedPropIds: string[]  // 획득/제거된 프롭
   partnerTarget: PartnerTarget | null
+  partnerDecision: PartnerDecision | null
 
   // 빙결 이벤트 (연출용)
   lastFreezeEvent: FreezeEvent | null
@@ -122,6 +130,7 @@ interface GameStore {
   setInspectingProp: (propId: string | null) => void
   removeProp: (propId: string) => void
   setPartnerTarget: (target: PartnerTarget) => void
+  setPartnerDecision: (decision: PartnerDecision | null) => void
   clearPartnerTarget: () => void
   updatePlayer: (playerId: string, update: Partial<PlayerState>) => void
   freezePlayer: (event: FreezeEvent) => void
@@ -159,6 +168,7 @@ const initialState = {
   inspectingPropId: null as string | null,
   removedPropIds: [] as string[],
   partnerTarget: null as PartnerTarget | null,
+  partnerDecision: null as PartnerDecision | null,
   players: {},
   lastFreezeEvent: null,
   lastSoundEvent: null,
@@ -206,6 +216,7 @@ export const useGameStore = create<GameStore>((set) => ({
       acquiredClues: [],
       removedPropIds: [],
       partnerTarget: null,
+      partnerDecision: null,
       inspectingPropId: null,
       gateArrived: false,
     }),
@@ -237,6 +248,8 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
 
   setPartnerTarget: (partnerTarget) => set({ partnerTarget }),
+
+  setPartnerDecision: (partnerDecision) => set({ partnerDecision }),
 
   clearPartnerTarget: () => set({ partnerTarget: null, inspectingPropId: null }),
 

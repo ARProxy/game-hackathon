@@ -59,6 +59,7 @@ export default function useWebSocket() {
     eliminatePlayer,
     addSubtitle,
     setPartnerTarget,
+    setPartnerDecision,
     clearPartnerTarget,
     removeProp,
     acquireClue,
@@ -174,12 +175,28 @@ export default function useWebSocket() {
           position: data.position,
           utterance: data.utterance,
         })
-        addSubtitle('partner', '알겠어. 네가 설명한 물건을 확인하러 갈게!')
+        break
+
+      case 'partner_decision':
+        if (data.decision !== 'act') clearPartnerTarget()
+        setPartnerDecision({
+          decision: data.decision,
+          confidence: data.confidence,
+          reply: data.reply,
+          candidates: data.candidates.map((candidate: any) => ({
+            propId: candidate.prop_id,
+            zone: candidate.zone,
+            score: candidate.score,
+            cues: candidate.cues,
+          })),
+        })
+        addSubtitle('partner', data.reply)
         break
 
       case 'prop_inspected':
         removeProp(data.prop_id)
         clearPartnerTarget()
+        setPartnerDecision(null)
         setCurrentMissionIndex(data.next_mission_index)
         if (data.is_correct && data.clue) {
           acquireClue(data.clue)
@@ -239,7 +256,7 @@ export default function useWebSocket() {
       default:
         console.log('[WS] unhandled:', data.type, data)
     }
-  }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, hydratePlayers, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
+  }, [setPhase, startRound, finishGame, setForbiddenWords, setRoundData, hydratePlayers, freezePlayer, setLastSoundEvent, unfreezePlayer, eliminatePlayer, addSubtitle, setPartnerTarget, setPartnerDecision, clearPartnerTarget, removeProp, acquireClue, setCurrentMissionIndex, setActiveGate, setGateArrived])
 
   handleMessageRef.current = handleMessage
 

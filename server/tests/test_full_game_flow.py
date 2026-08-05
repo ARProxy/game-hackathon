@@ -10,13 +10,20 @@ from app.main import app
 
 def _safe_indirect_command(forbidden_word: str) -> str:
     """금기어 자체를 포함하지 않는 외형 단서 두 개로 동료 명령을 만든다."""
+    curated = {
+        "열쇠": "자물쇠에 넣어 돌리는 반짝이는 작은 물건 확인해줘",
+        "커피": "갈색이고 따뜻하고 컵에 담긴 마시는 것 확인해줘",
+        "빨간": "소방차 색이고 눈에 띄는 강렬한 색 물건 확인해줘",
+    }
+    if forbidden_word in curated:
+        return curated[forbidden_word]
     descriptions = [
         description
         for description in load_prop_dict()[forbidden_word]["descriptions"]
         if forbidden_word not in description
     ]
     assert len(descriptions) >= 2
-    return f"{descriptions[0]} {descriptions[1]} 물건 확인해줘"
+    return f"{' '.join(descriptions)} 물건 확인해줘"
 
 
 def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
@@ -55,6 +62,7 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
 
             sound_ping = ws.receive_json()
             speech_safe = ws.receive_json()
+            partner_decision = ws.receive_json()
             partner_command = ws.receive_json()
             assert sound_ping["type"] == "sound_ping"
             assert speech_safe == {
@@ -63,6 +71,9 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
                 "transcript": utterance,
                 "is_final": True,
             }
+            assert partner_decision["type"] == "partner_decision"
+            assert partner_decision["decision"] == "act"
+            assert len(partner_decision["candidates"]) == 3
             assert partner_command["type"] == "partner_command"
             assert partner_command["utterance"] == utterance
 

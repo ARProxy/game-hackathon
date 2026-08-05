@@ -146,7 +146,7 @@ def generate_round(forbidden_words: list[str]) -> RoundData:
                 zone=decoy_slot["zone"],
                 forbidden_word=word,
                 tags=decoy_data.get("tags", []),
-                descriptions=[],
+                descriptions=decoy_data.get("descriptions", []),
             )
             decoy_props.append(decoy)
 

@@ -10,7 +10,7 @@ from app.ai.mission import (
     RoundData,
     round_to_dict,
 )
-from app.ai.partner import match_partner_command
+from app.ai.partner import compare_partner_candidates, match_partner_command
 from app.game.session import session_manager
 from app.ws.manager import ConnectionManager
 
@@ -26,7 +26,7 @@ def make_prop(prop_id: str, *, real: bool) -> PropPlacement:
         is_real=real,
         zone="A",
         forbidden_word="열쇠",
-        tags=["shiny", "small", "metal"],
+        tags=["shiny", "small", "metal", "door-related"] if real else ["shiny", "small", "metal", "round"],
         descriptions=["반짝이는", "작은", "금속", "문을 열 때 쓰는"] if real else [],
     )
 
@@ -75,6 +75,32 @@ class TestPartnerMatcher:
         assert result.matched
         assert {"반짝이", "작은"}.issubset(result.cues)
 
+    def test_shared_cues_request_clarification_instead_of_revealing_truth(self) -> None:
+        real = make_prop("key", real=True)
+        decoy = make_prop("coin", real=False)
+        decision = compare_partner_candidates("반짝이는 작은 금속 물건", [real, decoy])
+        assert decision.action == "clarify"
+        assert decision.target is None
+        assert {item.prop.prop_id for item in decision.ranked} == {"key", "coin"}
+
+    def test_wrong_distinguishing_cue_can_select_a_decoy(self) -> None:
+        real = make_prop("key", real=True)
+        decoy = PropPlacement(
+            **{**make_prop("coin", real=False).__dict__, "tags": ["round", "small", "metal"]}
+        )
+        decision = compare_partner_candidates("둥근 작은 금속 물건", [real, decoy])
+        assert decision.action == "act"
+        assert decision.target is decoy
+
+    def test_additional_use_cue_corrects_ambiguous_shape(self) -> None:
+        real = make_prop("key", real=True)
+        decoy = make_prop("coin", real=False)
+        decision = compare_partner_candidates(
+            "문을 열 때 쓰는 반짝이는 작은 것", [real, decoy]
+        )
+        assert decision.action == "act"
+        assert decision.target is real
+
 
 class TestPublicRoundPayload:
     def test_hidden_truth_and_ai_matching_metadata_are_not_exposed(self) -> None:
@@ -107,19 +133,19 @@ class TestPartnerMissionFlow(unittest.IsolatedAsyncioTestCase):
         await self.manager.handle_message(self.room_id, self.player_id, {
             "type": "speech",
             "payload": {
-                "transcript": "반짝이는 작은 금속 물건 확인해줘",
+                "transcript": "자물쇠에 넣어 돌리는 반짝이는 작은 물건 확인해줘",
                 "is_final": True,
             },
         })
 
         assert [message["type"] for message in self.websocket.messages] == [
-            "sound_ping", "speech_safe", "partner_command",
+            "sound_ping", "speech_safe", "partner_decision", "partner_command",
         ]
         assert self.websocket.messages[-1] == {
             "type": "partner_command",
             "target_prop_id": "key",
             "position": {"x": 7.0, "z": -2.0},
-            "utterance": "반짝이는 작은 금속 물건 확인해줘",
+            "utterance": "자물쇠에 넣어 돌리는 반짝이는 작은 물건 확인해줘",
         }
 
     async def test_human_direct_inspect_is_rejected(self) -> None:
@@ -129,6 +155,40 @@ class TestPartnerMissionFlow(unittest.IsolatedAsyncioTestCase):
         })
         assert self.websocket.messages[-1]["reason"] == "ai_partner_only"
         assert self.session.current_mission_index == 0
+
+    async def test_ambiguous_command_questions_then_correction_moves(self) -> None:
+        await self.manager.handle_message(self.room_id, self.player_id, {
+            "type": "speech",
+            "payload": {"transcript": "반짝이는 작은 물건 봐줘", "is_final": True},
+        })
+        ambiguous = self.websocket.messages[-1]
+        assert ambiguous["type"] == "partner_decision"
+        assert ambiguous["decision"] == "clarify"
+        assert "target_prop_id" not in ambiguous
+
+        await self.manager.handle_message(self.room_id, self.player_id, {
+            "type": "speech",
+            "payload": {
+                "transcript": "자물쇠에 넣어 돌리는 반짝이는 작은 물건 봐줘",
+                "is_final": True,
+            },
+        })
+        corrected = self.websocket.messages[-2]
+        command = self.websocket.messages[-1]
+        assert corrected["type"] == "partner_decision"
+        assert corrected["decision"] == "act"
+        assert command["type"] == "partner_command"
+        assert command["target_prop_id"] == "key"
+
+    async def test_misleading_cue_commands_decoy_instead_of_hidden_truth(self) -> None:
+        await self.manager.handle_message(self.room_id, self.player_id, {
+            "type": "speech",
+            "payload": {"transcript": "둥근 작은 금속 물건 봐줘", "is_final": True},
+        })
+        decision = self.websocket.messages[-2]
+        command = self.websocket.messages[-1]
+        assert decision["decision"] == "act"
+        assert command["target_prop_id"] == "coin"
 
     async def test_wrong_and_duplicate_prop_are_defended(self) -> None:
         await self.manager.handle_message(self.room_id, self.player_id, {

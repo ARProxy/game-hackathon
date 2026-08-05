@@ -274,6 +274,7 @@ export default function HUD() {
   const subtitlesEnabled = useSettingsStore((s) => s.subtitlesEnabled)
   const inspectingPropId = useGameStore((s) => s.inspectingPropId)
   const partnerTarget = useGameStore((s) => s.partnerTarget)
+  const partnerDecision = useGameStore((s) => s.partnerDecision)
   const missions = useGameStore((s) => s.missions)
   const currentMissionIndex = useGameStore((s) => s.currentMissionIndex)
   const acquiredClues = useGameStore((s) => s.acquiredClues)
@@ -434,6 +435,37 @@ export default function HUD() {
       </div>
 
       {/* 조사 중 표시 */}
+      {phase === 'playing' && partnerDecision && (
+        <div style={{
+          position: 'absolute',
+          right: 24,
+          bottom: 96,
+          width: 260,
+          background: 'rgba(7, 16, 25, 0.86)',
+          border: `1px solid ${partnerDecision.decision === 'act' ? 'rgba(182,255,61,.5)' : 'rgba(82,229,255,.45)'}`,
+          borderRadius: 10,
+          padding: '12px 14px',
+          fontSize: 12,
+        }}>
+          <div style={{ color: '#B6FF3D', fontWeight: 800, marginBottom: 7 }}>
+            AI 후보 비교 · 확신 {Math.round(partnerDecision.confidence * 100)}%
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 7 }}>
+            {partnerDecision.candidates.slice(0, 3).map((candidate) => (
+              <span key={candidate.propId} style={{ padding: '3px 6px', borderRadius: 5, background: 'rgba(255,255,255,.08)' }}>
+                {candidate.zone}구역 {candidate.score.toFixed(0)}점
+              </span>
+            ))}
+          </div>
+          <div style={{ color: 'rgba(255,255,255,.72)', lineHeight: 1.45 }}>{partnerDecision.reply}</div>
+          {partnerDecision.candidates[0]?.cues.length > 0 && (
+            <div style={{ marginTop: 6, color: 'rgba(143,211,232,.7)' }}>
+              일치 단서 · {partnerDecision.candidates[0].cues.join(', ')}
+            </div>
+          )}
+        </div>
+      )}
+
       {inspectingPropId && (
         <div style={{
           position: 'absolute',
