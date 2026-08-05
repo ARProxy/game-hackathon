@@ -9,3 +9,48 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
 }
+
+button, input { font: inherit; }
+button { color: inherit; }
+
+.start-flow { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; overflow: auto; padding: 32px; color: #f6f3e7; font-family: ui-rounded, "Apple SD Gothic Neo", sans-serif; background: radial-gradient(circle at 72% 28%, rgba(25, 108, 125, .24), transparent 28%), radial-gradient(circle at 20% 80%, rgba(226, 59, 46, .12), transparent 30%), linear-gradient(145deg, #071017, #05070b 65%); }
+.start-flow::before { content: ""; position: fixed; inset: 0; background: linear-gradient(90deg, transparent 49.8%, rgba(143,211,232,.08) 50%, transparent 50.2%), linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px); background-size: 100% 100%, 100% 4px; pointer-events: none; }
+.start-noise { position: fixed; inset: 0; pointer-events: none; opacity: .25; background: repeating-radial-gradient(circle at 30% 40%, transparent 0 12px, rgba(255,255,255,.015) 13px 14px); }
+.title-panel, .flow-panel { position: relative; width: min(520px, 100%); padding: 48px; border: 1px solid rgba(143,211,232,.25); background: rgba(6, 12, 18, .84); box-shadow: 0 30px 90px rgba(0,0,0,.55), inset 0 0 50px rgba(77,166,181,.04); backdrop-filter: blur(14px); }
+.flow-panel.wide { width: min(1040px, 100%); }
+.start-kicker { margin-bottom: 12px; color: #8fd3e8; font-size: 12px; font-weight: 800; letter-spacing: .28em; }
+.title-panel h1 { margin: 0 0 18px; font-size: clamp(64px, 9vw, 112px); line-height: .84; letter-spacing: -.08em; text-shadow: 0 0 30px rgba(143,211,232,.22); }
+.title-panel h1 span { display: block; color: #c9edf5; }
+.title-copy { color: #a8b3bb; line-height: 1.75; }
+.start-actions { display: grid; gap: 10px; margin-top: 42px; }
+.start-button { min-height: 48px; padding: 0 20px; border: 1px solid #334852; background: #111b22; cursor: pointer; transition: .18s ease; }
+.start-button:hover { border-color: #8fd3e8; transform: translateY(-1px); }
+.start-button.primary { border-color: #8fd3e8; color: #071017; font-weight: 900; background: #8fd3e8; box-shadow: 0 0 24px rgba(143,211,232,.18); }
+.start-button.quiet { color: #7b8991; background: transparent; }
+.start-button.danger { border-color: #e23b2e; background: #6e201d; }
+.flow-panel h2, .start-modal h2 { margin: 0 0 30px; font-size: clamp(30px, 5vw, 52px); letter-spacing: -.04em; }
+.back-button { margin-bottom: 26px; border: 0; color: #8ca0aa; background: transparent; cursor: pointer; }
+.mode-grid, .multi-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.mode-card { display: flex; min-height: 190px; flex-direction: column; align-items: flex-start; padding: 26px; border: 1px solid #263943; text-align: left; background: linear-gradient(145deg, #101c24, #0a1016); cursor: pointer; transition: .2s ease; }
+.mode-card:not(:disabled):hover { border-color: #8fd3e8; transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,.25); }
+.mode-card b { margin-bottom: 12px; font-size: 24px; }.mode-card span { color: #91a1aa; line-height: 1.55; }.mode-card em { margin-top: auto; color: #8fd3e8; font-size: 12px; font-style: normal; }
+.mode-card:disabled { cursor: not-allowed; opacity: .58; }
+.character-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.character-card { display: flex; min-height: 220px; flex-direction: column; align-items: center; padding: 18px 10px; border: 1px solid #263943; background: #0b1218; cursor: pointer; }
+.character-card.selected { border-color: #8fd3e8; background: #12232c; box-shadow: 0 0 22px rgba(143,211,232,.15); }
+.character-card i { position: relative; width: 72px; height: 86px; margin: 5px 0 18px; border-radius: 45% 45% 38% 38%; background: var(--character-color); box-shadow: 0 0 22px var(--character-glow); }
+.character-card i::before { content: ""; position: absolute; top: 22px; right: -5px; width: 48px; height: 23px; border: 5px solid rgba(13,34,44,.6); border-radius: 50%; background: #8fd3e8; }
+.character-card i::after { content: ""; position: absolute; bottom: -9px; left: 9px; width: 20px; height: 24px; border-radius: 10px; background: var(--character-color); box-shadow: 35px 0 var(--character-color); }
+.character-card b { font-size: 17px; }.character-card > span { color: #8fd3e8; font-size: 11px; }.character-card small { margin-top: 10px; color: #74848d; text-align: center; line-height: 1.35; }
+.character-confirm { display: block; min-width: 260px; margin: 28px auto 0; }
+.multiplayer-panel { width: min(760px, 100%); }
+.text-field, .join-card { display: grid; gap: 8px; color: #9badb6; }
+.text-field { margin-bottom: 20px; }.text-field input, .join-card input { min-height: 48px; padding: 0 14px; border: 1px solid #334852; color: white; outline: 0; background: #080e13; }.text-field input:focus, .join-card input:focus { border-color: #8fd3e8; }
+.join-card { min-height: 190px; align-content: center; padding: 26px; border: 1px solid #263943; background: #0a1016; }.join-card button { min-height: 42px; border: 0; color: #071017; font-weight: 800; background: #8fd3e8; }.join-card button:disabled { opacity: .35; }
+.contract-note { margin-top: 18px; color: #778991; font-size: 12px; line-height: 1.6; }
+.exit-panel { text-align: center; }.exit-panel > p { color: #91a1aa; }.exit-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 28px; }
+.start-modal-backdrop { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.7); }
+.start-modal { width: min(470px, 100%); padding: 36px; border: 1px solid #46616e; background: #091219; box-shadow: 0 25px 80px #000; }
+.setting-row { display: grid; gap: 12px; margin-bottom: 24px; color: #b8c4ca; }.setting-row span { display: flex; justify-content: space-between; }.setting-row input { accent-color: #8fd3e8; }.setting-toggle { display: flex; justify-content: space-between; margin-bottom: 28px; }.setting-toggle input { width: 20px; accent-color: #8fd3e8; }
+
+@media (max-width: 760px) { .start-flow { padding: 16px; }.title-panel, .flow-panel { padding: 28px 22px; }.mode-grid, .multi-actions { grid-template-columns: 1fr; }.character-grid { grid-template-columns: repeat(2, 1fr); }.character-card { min-height: 190px; }.title-panel h1 { font-size: 64px; } }

@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import SchoolCampus, { PATROL, pickRound, SPAWNS, type FloorKey, type RoundPlan } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
-import { assignCharacters } from './game/Characters'
+import { CHARACTERS } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
 import Seeker from './game/Seeker'
 import Props from './game/Props'
@@ -16,6 +16,7 @@ import Onboarding from './components/Onboarding'
 import ForbiddenReveal from './components/ForbiddenReveal'
 import ResultScreen from './components/ResultScreen'
 import SoundController from './components/SoundController'
+import StartFlow, { type EntryScreen } from './components/StartFlow'
 import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
@@ -45,8 +46,7 @@ const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
   'Digit4': ['OUT', 'F1', 'F2', 'F3', 'ROOF'], // 전체 (옥상 포함)
 }
 
-/* 캐릭터 배정 — 시드 고정으로 매번 같은 배정 */
-const cast = assignCharacters(42, 3) // seeker + runner 2명
+const runnerIds = CHARACTERS.filter((character) => character.role === 'runner').map((character) => character.id)
 const SEEKER_PATROL = PATROL
   .filter(({ floor }) => floor === 'OUT' || floor === 'F1')
   .map(({ p }) => p)
@@ -55,10 +55,12 @@ function Scene({
   cameraMode,
   visibleFloors,
   roundPlan,
+  playerCharacterId,
 }: {
   cameraMode: CameraMode
   visibleFloors: FloorKey[] | undefined
   roundPlan: RoundPlan
+  playerCharacterId: string
 }) {
   const playerRef = useRef<PlayerHandle>(null)
   const phase = useGameStore((state) => state.phase)
@@ -115,10 +117,10 @@ function Scene({
           }}
         />
         <Props />
-        <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={cast.runners[0]} />
+        <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={playerCharacterId} />
         <Partner
           playerRef={playerGroupRef}
-          characterId={cast.runners[1] ?? 'R05'}
+          characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
           spawn={SPAWNS.ai}
         />
         <Seeker
@@ -234,10 +236,19 @@ function GameController() {
  * 숫자키 1~4, 0: 층별 필터 (CCTV 모드에서만)
  * ───────────────────────────────────────────── */
 function App() {
+  const [entryScreen, setEntryScreen] = useState<EntryScreen>('title')
+  const [playerCharacterId, setPlayerCharacterId] = useState(runnerIds[0] ?? 'R01')
+  const [isGameRunning, setGameRunning] = useState(false)
   const [cameraMode, setCameraMode] = useState<CameraMode>('3d')
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
   const [roundPlan] = useState(() => pickRound())
+  const startSolo = useCallback((characterId: string) => {
+    setPlayerCharacterId(characterId)
+    useGameStore.getState().reset()
+    useGameStore.getState().setSelectedCharacter(characterId)
+    setGameRunning(true)
+  }, [])
 
   useEffect(() => {
     if (!DEV_TOOLS_ENABLED) return
@@ -270,6 +281,11 @@ function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#07090D' }}>
+      {!isGameRunning && (
+        <StartFlow screen={entryScreen} onScreenChange={setEntryScreen} onStartSolo={startSolo} />
+      )}
+
+      {isGameRunning && <>
       <SoundController />
       <GameController />
 
@@ -294,7 +310,7 @@ function App() {
           far: 1000,
         }}
       >
-        <Scene cameraMode={cameraMode} visibleFloors={visibleFloors} roundPlan={roundPlan} />
+        <Scene cameraMode={cameraMode} visibleFloors={visibleFloors} roundPlan={roundPlan} playerCharacterId={playerCharacterId} />
       </Canvas>
 
       <HUD />
@@ -335,6 +351,7 @@ function App() {
           </div>
         )}
       </div>}
+      </>}
     </div>
   )
 }

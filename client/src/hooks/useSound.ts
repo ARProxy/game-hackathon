@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { useSettingsStore } from '../stores/settingsStore'
 
 type ToneShape = OscillatorType
 
 export default function useSound() {
+  const masterVolume = useSettingsStore((state) => state.masterVolume)
   const contextRef = useRef<AudioContext | null>(null)
   const masterRef = useRef<GainNode | null>(null)
 
@@ -16,7 +18,7 @@ export default function useSound() {
         return null
       }
       const master = context.createGain()
-      master.gain.value = 0.32
+      master.gain.value = masterVolume
       master.connect(context.destination)
       contextRef.current = context
       masterRef.current = master
@@ -27,7 +29,11 @@ export default function useSound() {
       })
     }
     return context
-  }, [])
+  }, [masterVolume])
+
+  useEffect(() => {
+    if (masterRef.current) masterRef.current.gain.value = masterVolume
+  }, [masterVolume])
 
   useEffect(() => {
     const unlock = () => ensureContext()

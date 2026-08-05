@@ -7,6 +7,7 @@
  */
 
 import { useGameStore } from '../stores/gameStore'
+import { CHARACTERS } from '../game/Characters'
 
 function formatElapsed(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60)
@@ -24,10 +25,12 @@ export default function ResultScreen() {
   const outcome = useGameStore((s) => s.outcome)
   const resultReason = useGameStore((s) => s.resultReason)
   const elapsedSeconds = useGameStore((s) => s.elapsedSeconds)
+  const selectedCharacterId = useGameStore((s) => s.selectedCharacterId)
 
   if (phase !== 'result') return null
 
   const isWin = outcome === 'win'
+  const selectedCharacter = CHARACTERS.find((character) => character.id === selectedCharacterId)
   const failureMessage = resultReason === 'caught_by_seeker'
     ? '탈출 직전 술래에게 잡혔습니다'
     : resultReason === 'human_eliminated'
@@ -62,6 +65,10 @@ export default function ResultScreen() {
       }}>
         {isWin ? '탈출 성공!' : '게임 오버'}
       </div>
+
+      {selectedCharacter && <div style={{ color: selectedCharacter.glow, fontSize: 13, marginBottom: 10 }}>
+        NO. {selectedCharacter.tag} · {selectedCharacter.name}
+      </div>}
 
       <div style={{
         fontSize: 16,

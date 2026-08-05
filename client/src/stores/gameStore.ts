@@ -66,6 +66,7 @@ interface GameStore {
   connectionError: string | null
   roomId: string
   playerId: string
+  selectedCharacterId: string
 
   // 게임 상태
   phase: GamePhase
@@ -106,6 +107,7 @@ interface GameStore {
   setConnected: (connected: boolean) => void
   setConnectionError: (message: string | null) => void
   setRoom: (roomId: string, playerId: string) => void
+  setSelectedCharacter: (characterId: string) => void
   setPhase: (phase: GamePhase) => void
   startRound: () => void
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
@@ -138,6 +140,7 @@ const initialState = {
   connectionError: null as string | null,
   roomId: '',
   playerId: '',
+  selectedCharacterId: 'R01',
   phase: 'lobby' as GamePhase,
   outcome: null as GameOutcome,
   resultReason: null as string | null,
@@ -173,6 +176,8 @@ export const useGameStore = create<GameStore>((set) => ({
   setConnectionError: (connectionError) => set({ connectionError }),
 
   setRoom: (roomId, playerId) => set({ roomId, playerId }),
+
+  setSelectedCharacter: (selectedCharacterId) => set({ selectedCharacterId }),
 
   setPhase: (phase) => set({ phase }),
 

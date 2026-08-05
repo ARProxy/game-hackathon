@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useGameStore, type GamePhase, type PlayerStatus } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import rescueContract from '../game/rescueContract.json'
+import { useSettingsStore } from '../stores/settingsStore'
 
 const FREEZE_TIMEOUT_MS = 30_000
 
@@ -270,6 +271,7 @@ export default function HUD() {
   const connected = useGameStore((s) => s.connected)
   const connectionError = useGameStore((s) => s.connectionError)
   const subtitles = useGameStore((s) => s.subtitles)
+  const subtitlesEnabled = useSettingsStore((s) => s.subtitlesEnabled)
   const inspectingPropId = useGameStore((s) => s.inspectingPropId)
   const partnerTarget = useGameStore((s) => s.partnerTarget)
   const missions = useGameStore((s) => s.missions)
@@ -461,7 +463,7 @@ export default function HUD() {
         gap: 8,
       }}>
         {/* 자막 */}
-        {subtitles.slice(-2).map((sub, i, visibleSubtitles) => (
+        {subtitlesEnabled && subtitles.slice(-2).map((sub, i, visibleSubtitles) => (
           <div key={sub.timestamp} style={{
             background: 'rgba(0, 0, 0, 0.6)',
             padding: '4px 12px',
@@ -474,7 +476,7 @@ export default function HUD() {
         ))}
 
         {/* 현재 인식 중인 텍스트 */}
-        {isSpeaking && lastTranscript && (
+        {subtitlesEnabled && isSpeaking && lastTranscript && (
           <div style={{
             background: 'rgba(82, 229, 255, 0.15)',
             border: '1px solid rgba(82, 229, 255, 0.4)',
