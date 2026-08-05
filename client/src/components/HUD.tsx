@@ -68,6 +68,7 @@ function FrozenCountdown() {
       if (event.code !== rescueContract.requestCode || event.repeat) return
       event.preventDefault()
       useGameStore.getState().requestRescue()
+      sendGameMessage({ type: 'action', payload: { action_type: 'rescue_request' } })
       useGameStore.getState().addSubtitle('partner', '알겠어! 하던 일을 멈추고 구조하러 갈게!')
     }
     window.addEventListener('keydown', request)
@@ -282,6 +283,7 @@ export default function HUD() {
   const gateArrived = useGameStore((s) => s.gateArrived)
   const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
   const hunterIntent = useGameStore((s) => s.hunterIntent)
+  const companionIntent = useGameStore((s) => s.companionIntent)
 
   return (
     <div style={{
@@ -450,6 +452,17 @@ export default function HUD() {
           fontSize: 11, fontWeight: 800, letterSpacing: '.08em',
         }}>
           술래 · {hunterIntent.state}
+        </div>
+      )}
+
+      {companionIntent && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
+        <div style={{
+          position: 'absolute', top: 62, left: '50%', transform: 'translateX(-50%)',
+          padding: '6px 11px', borderRadius: 20,
+          border: '1px solid rgba(182,255,61,.4)', background: 'rgba(20,40,12,.72)',
+          color: '#B6FF3D', fontSize: 10, fontWeight: 800, letterSpacing: '.06em',
+        }}>
+          AI 동료 · {companionIntent.state}
         </div>
       )}
 

@@ -112,7 +112,6 @@ function Scene({
         <Props />
         <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={playerCharacterId} />
         <Partner
-          playerRef={playerGroupRef}
           characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
           spawn={SPAWNS.ai}
         />

@@ -1,5 +1,7 @@
 """온보딩부터 게이트 탈출까지 한 연결로 완주하는 WebSocket 회귀 테스트."""
 
+import time
+
 from fastapi.testclient import TestClient
 
 from app.ai.mission import load_prop_dict
@@ -80,14 +82,11 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
             assert partner_command["type"] == "partner_command"
             assert partner_command["utterance"] == utterance
 
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "inspect_prop",
-                    "actor_id": "partner",
-                    "prop_id": partner_command["target_prop_id"],
-                },
-            })
+            session = session_manager.get_or_create(room_id)
+            partner = session.state.get_player("partner")
+            partner.position.x = partner_command["position"]["x"]
+            partner.position.z = partner_command["position"]["z"]
+            session.companion_goal_started = time.monotonic() - 4.0
             inspected = ws.receive_json()
             assert inspected["type"] == "prop_inspected"
             assert inspected["is_correct"] is True

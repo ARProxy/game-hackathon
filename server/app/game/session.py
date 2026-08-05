@@ -49,6 +49,15 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = 0.0
         self.hunter_last_intent: dict | None = None
+        self.companion_memory: dict[str, dict] = {}
+        self.companion_command: dict | None = None
+        self.companion_rescue_request: str | None = None
+        self.companion_goal_started: float | None = None
+        self.companion_last_tick = 0.0
+        self.companion_last_intent: dict | None = None
+        self.companion_goal_changed_at = 0.0
+        self.companion_last_seeker_seen: dict | None = None
+        self.companion_candidate_memory: list[dict] = []
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
@@ -64,6 +73,15 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = time.monotonic()
         self.hunter_last_intent = None
+        self.companion_memory.clear()
+        self.companion_command = None
+        self.companion_rescue_request = None
+        self.companion_goal_started = None
+        self.companion_last_tick = time.monotonic()
+        self.companion_last_intent = None
+        self.companion_goal_changed_at = 0.0
+        self.companion_last_seeker_seen = None
+        self.companion_candidate_memory = []
         # 싱글 플레이도 기획서의 최소 팀 구성을 서버 상태에 명시한다.
         # 화면에만 존재하는 동료를 서버가 모르면 인간 플레이어가 얼자마자
         # all_frozen으로 판정되므로, AI 동료와 술래를 결정적인 ID로 등록한다.

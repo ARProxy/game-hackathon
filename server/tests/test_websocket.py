@@ -186,14 +186,8 @@ class TestActions:
             assert ws.receive_json()["type"] == "sound_ping"
             assert ws.receive_json()["type"] == "freeze"
 
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "rescue",
-                    "actor_id": "partner",
-                    "target_id": "player1",
-                },
-            })
+            ws.send_json({"type": "action", "payload": {"action_type": "rescue_request"}})
+            assert ws.receive_json()["type"] == "companion_assignment"
             rescued = ws.receive_json()
             assert rescued["type"] == "rescued"
             assert rescued["rescuer_id"] == "partner"
@@ -221,7 +215,7 @@ class TestActions:
             assert ws.receive_json() == {
                 "type": "action_rejected",
                 "action_type": "rescue",
-                "reason": "invalid_rescue",
+                "reason": "server_authoritative_actor",
             }
             assert player.is_frozen
 
@@ -237,7 +231,7 @@ class TestActions:
             assert ws.receive_json() == {
                 "type": "action_rejected",
                 "action_type": "rescue",
-                "reason": "invalid_rescue",
+                "reason": "server_authoritative_actor",
             }
             assert player.is_frozen
 
@@ -246,14 +240,8 @@ class TestActions:
             assert partner is not None
             partner.position.x = player.position.x
             partner.position.z = player.position.z
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "rescue",
-                    "actor_id": "partner",
-                    "target_id": "player1",
-                },
-            })
+            ws.send_json({"type": "action", "payload": {"action_type": "rescue_request"}})
+            assert ws.receive_json()["type"] == "companion_assignment"
             assert ws.receive_json()["type"] == "rescued"
             assert player.status.value == "alive"
 

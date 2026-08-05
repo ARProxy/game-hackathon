@@ -77,6 +77,16 @@ export interface HunterIntent {
   reason: string
 }
 
+export type CompanionState = 'EXPLORE_ZONE' | 'INSPECT_CANDIDATE' | 'REPORT_FINDING'
+  | 'AVOID_SEEKER' | 'RESCUE_TEAMMATE' | 'REGROUP' | 'MOVE_TO_GATE' | 'ESCAPE' | 'INCAPACITATED'
+export interface CompanionIntent {
+  state: CompanionState
+  targetId: string | null
+  target: { x: number; z: number }
+  partnerPosition: { x: number; z: number }
+  reason: string
+}
+
 interface GameStore {
   // 연결 상태
   connected: boolean
@@ -115,6 +125,7 @@ interface GameStore {
   lastFreezeEvent: FreezeEvent | null
   lastSoundEvent: SoundEvent | null
   hunterIntent: HunterIntent | null
+  companionIntent: CompanionIntent | null
   rescueRequested: boolean
 
   // 음성 관련
@@ -148,6 +159,7 @@ interface GameStore {
   requestRescue: () => void
   setLastSoundEvent: (event: SoundEvent) => void
   setHunterIntent: (intent: HunterIntent) => void
+  setCompanionIntent: (intent: CompanionIntent) => void
   unfreezePlayer: (playerId: string) => void
   eliminatePlayer: (playerId: string) => void
   setSpeaking: (isSpeaking: boolean) => void
@@ -185,6 +197,7 @@ const initialState = {
   lastFreezeEvent: null,
   lastSoundEvent: null,
   hunterIntent: null as HunterIntent | null,
+  companionIntent: null as CompanionIntent | null,
   rescueRequested: false,
   isSpeaking: false,
   lastTranscript: '',
@@ -297,6 +310,8 @@ export const useGameStore = create<GameStore>((set) => ({
   setLastSoundEvent: (event) => set({ lastSoundEvent: event }),
 
   setHunterIntent: (hunterIntent) => set({ hunterIntent }),
+
+  setCompanionIntent: (companionIntent) => set({ companionIntent }),
 
   requestRescue: () => set({ rescueRequested: true }),
 

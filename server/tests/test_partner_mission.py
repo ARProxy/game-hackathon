@@ -148,13 +148,15 @@ class TestPartnerMissionFlow(unittest.IsolatedAsyncioTestCase):
             "position": {"x": 7.0, "z": -2.0},
             "utterance": "자물쇠에 넣어 돌리는 반짝이는 작은 물건 확인해줘",
         }
+        assert {item["prop_id"] for item in self.session.companion_candidate_memory} == {"key", "coin"}
+        assert all("confidence_score" in item and "matched_cues" in item for item in self.session.companion_candidate_memory)
 
     async def test_human_direct_inspect_is_rejected(self) -> None:
         await self.manager.handle_message(self.room_id, self.player_id, {
             "type": "action",
             "payload": {"action_type": "inspect_prop", "prop_id": "key"},
         })
-        assert self.websocket.messages[-1]["reason"] == "ai_partner_only"
+        assert self.websocket.messages[-1]["reason"] == "server_authoritative_actor"
         assert self.session.current_mission_index == 0
 
     async def test_ambiguous_command_questions_then_correction_moves(self) -> None:
@@ -192,39 +194,27 @@ class TestPartnerMissionFlow(unittest.IsolatedAsyncioTestCase):
         assert command["target_prop_id"] == "coin"
 
     async def test_wrong_and_duplicate_prop_are_defended(self) -> None:
-        await self.manager.handle_message(self.room_id, self.player_id, {
-            "type": "action",
-            "payload": {
-                "action_type": "inspect_prop",
-                "actor_id": "partner",
-                "prop_id": "coin",
-            },
-        })
+        await self.manager._handle_inspect_prop(
+            self.room_id, self.player_id, self.session.state.get_player("partner"),
+            {"prop_id": "coin"},
+        )
         inspected = self.websocket.messages[-1]
         assert inspected["type"] == "prop_inspected"
         assert inspected["is_correct"] is False
         assert inspected["clue"] is None
         assert self.session.current_mission_index == 0
 
-        await self.manager.handle_message(self.room_id, self.player_id, {
-            "type": "action",
-            "payload": {
-                "action_type": "inspect_prop",
-                "actor_id": "partner",
-                "prop_id": "coin",
-            },
-        })
+        await self.manager._handle_inspect_prop(
+            self.room_id, self.player_id, self.session.state.get_player("partner"),
+            {"prop_id": "coin"},
+        )
         assert self.websocket.messages[-1]["reason"] == "already_inspected"
 
     async def test_ai_inspects_real_prop_and_completes_mission(self) -> None:
-        await self.manager.handle_message(self.room_id, self.player_id, {
-            "type": "action",
-            "payload": {
-                "action_type": "inspect_prop",
-                "actor_id": "partner",
-                "prop_id": "key",
-            },
-        })
+        await self.manager._handle_inspect_prop(
+            self.room_id, self.player_id, self.session.state.get_player("partner"),
+            {"prop_id": "key"},
+        )
 
         assert self.websocket.messages[-1] == {
             "type": "prop_inspected",

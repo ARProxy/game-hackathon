@@ -86,14 +86,7 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         partner = self.session.state.get_player("partner")
         partner.position.x = player.position.x  # type: ignore[union-attr]
         partner.position.z = player.position.z  # type: ignore[union-attr]
-        await self.manager.handle_message(self.room_id, self.player_id, {
-            "type": "action",
-            "payload": {
-                "action_type": "rescue",
-                "actor_id": "partner",
-                "target_id": self.player_id,
-            },
-        })
+        await self.manager._complete_partner_rescue(self.room_id, self.player_id)
         await asyncio.sleep(0.04)
 
         player = self.session.state.get_player(self.player_id)

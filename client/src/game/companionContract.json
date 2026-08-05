@@ -1,0 +1,15 @@
+{
+  "thinkIntervalSeconds": 0.25,
+  "exploreSpeed": 3.4,
+  "missionSpeed": 4.2,
+  "rescueSpeed": 5.0,
+  "avoidSpeed": 5.4,
+  "gateSpeed": 4.6,
+  "arrivalDistance": 0.8,
+  "rescueDistance": 1.2,
+  "dangerDistance": 7.0,
+  "seekerMemorySeconds": 4.0,
+  "goalHoldSeconds": 1.5,
+  "inspectionDurationSeconds": 3.0,
+  "autoRescueDelaySeconds": 5.0
+}
