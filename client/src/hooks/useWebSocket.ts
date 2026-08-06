@@ -143,6 +143,10 @@ export default function useWebSocket() {
 
   const handleMessage = useCallback((data: any) => {
     switch (data.type) {
+      case 'onboarding_questions':
+        useGameStore.getState().setOnboardingQuestions(data.questions)
+        break
+
       case 'forbidden_words_ready':
         setForbiddenWords(data.forbidden_words)
         setPhase('reveal')

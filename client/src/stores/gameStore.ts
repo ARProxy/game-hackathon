@@ -108,6 +108,7 @@ interface GameStore {
   currentFloor: 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF'
   forbiddenWords: string[]
   sourceAnswers: string[]
+  onboardingQuestions: string[]
   freezeCount: number
   roundStartedAt: number | null
   elapsedSeconds: number | null
@@ -155,6 +156,7 @@ interface GameStore {
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
   setSourceAnswers: (answers: string[]) => void
+  setOnboardingQuestions: (questions: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   hydratePlayers: (players: Record<string, Omit<PlayerState, 'playerId'>>) => void
   setActiveGate: (gate: ActiveGate) => void
@@ -197,6 +199,7 @@ const initialState = {
   currentFloor: 'OUT' as const,
   forbiddenWords: [],
   sourceAnswers: [] as string[],
+  onboardingQuestions: [] as string[],
   freezeCount: 0,
   roundStartedAt: null as number | null,
   elapsedSeconds: null as number | null,
@@ -282,6 +285,8 @@ export const useGameStore = create<GameStore>((set) => ({
   setForbiddenWords: (words) => set({ forbiddenWords: words }),
 
   setSourceAnswers: (sourceAnswers) => set({ sourceAnswers }),
+
+  setOnboardingQuestions: (onboardingQuestions) => set({ onboardingQuestions }),
 
   setRoundData: (props, missions, totalClues) =>
     set({

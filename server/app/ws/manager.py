@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from fastapi import WebSocket, WebSocketException, status
 
 from app.ai.mission import generate_round, round_to_dict
-from app.ai.onboarding import extract_forbidden_words
+from app.ai.onboarding import generate_forbidden_words, generate_onboarding_questions
 from app.ai.partner import compare_partner_candidates
 from app.ai.companion import (
     CONTRACT as COMPANION_CONTRACT,
@@ -111,6 +111,11 @@ class ConnectionManager:
             await self._handle_action(room_id, player_id, payload)
         elif msg_type == "onboarding_complete":
             await self._handle_onboarding(room_id, player_id, payload)
+        elif msg_type == "request_onboarding_questions":
+            questions = await asyncio.to_thread(generate_onboarding_questions, 3)
+            await self.send_to(room_id, player_id, {
+                "type": "onboarding_questions", "questions": questions,
+            })
         elif msg_type == "spell":
             await self._handle_spell(room_id, player_id, payload)
         elif msg_type == "start_game":
@@ -835,7 +840,7 @@ class ConnectionManager:
         self, room_id: str, player_id: str, payload: dict
     ) -> None:
         answers = payload.get("answers", [])
-        forbidden_words = extract_forbidden_words(answers, count=3)
+        forbidden_words = await asyncio.to_thread(generate_forbidden_words, answers, 3)
 
         # 금기어 채집 결과를 클라이언트에 전달
         await self.broadcast(room_id, {

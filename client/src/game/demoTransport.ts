@@ -2,16 +2,22 @@
 
 type Emit = (message: Record<string, unknown>) => void
 
-const WORDS = ['열쇠', '커피', '빨간']
+const QUESTIONS = [
+  '어두운 교실에서 발견하고 싶은 물건은 무엇인가요?',
+  '비 오는 날 꼭 챙기는 물건을 말해 주세요.',
+  '가장 먼저 떠오르는 색과 음료는 무엇인가요?',
+]
 const CLUES = [
   { word: '별', order: 2, total: 3 },
   { word: '달', order: 1, total: 3 },
   { word: '새벽', order: 3, total: 3 },
 ]
-const PROPS = [
-  { prop_id: 'demo-key', name: '작은 열쇠', color: '#d8c36a', mesh: 'box', scale: 0.35, position: { x: -9, z: -5 }, zone: 'A' },
-  { prop_id: 'demo-coffee', name: '따뜻한 컵', color: '#70452b', mesh: 'cylinder', scale: 0.4, position: { x: 6, z: -6 }, zone: 'B' },
-  { prop_id: 'demo-red', name: '붉은 공', color: '#d93645', mesh: 'sphere', scale: 0.4, position: { x: -6, z: 6 }, zone: 'C' },
+const PROP_POOL = [
+  { word: '열쇠', prop_id: 'demo-key', name: '작은 열쇠', color: '#d8c36a', mesh: 'box', scale: 0.35 },
+  { word: '커피', prop_id: 'demo-coffee', name: '따뜻한 컵', color: '#70452b', mesh: 'cylinder', scale: 0.4 },
+  { word: '빨간', prop_id: 'demo-red', name: '붉은 공', color: '#d93645', mesh: 'sphere', scale: 0.4 },
+  { word: '우산', prop_id: 'demo-umbrella', name: '접힌 우산', color: '#466a8c', mesh: 'cylinder', scale: 0.45 },
+  { word: '책', prop_id: 'demo-book', name: '낡은 책', color: '#6d5038', mesh: 'box', scale: 0.4 },
 ]
 const GATE = { gate_id: 'gate_back', position: { x: -7, z: 38 } }
 
@@ -26,6 +32,11 @@ export default class DemoTransport {
   private pendingInspection = false
   private paused = false
   private timers = new Set<number>()
+  private selected = [...PROP_POOL].sort(() => Math.random() - 0.5).slice(0, 3).map((item, index) => ({
+    ...item,
+    position: [{ x: -9, z: -5 }, { x: 6, z: -6 }, { x: -6, z: 6 }][index],
+    zone: ['A', 'B', 'C'][index],
+  }))
 
   constructor(playerId: string, emit: Emit) {
     this.playerId = playerId
@@ -40,6 +51,9 @@ export default class DemoTransport {
   handle(message: any): boolean {
     const payload = message?.payload ?? {}
     if (message?.type === 'onboarding_complete') this.start()
+    if (message?.type === 'request_onboarding_questions') {
+      this.send({ type: 'onboarding_questions', questions: QUESTIONS })
+    }
     if (message?.type === 'speech') this.speech(String(payload.transcript ?? ''))
     if (message?.type === 'spell') this.spell(String(payload.spell_text ?? ''))
     if (message?.type === 'action') this.action(payload)
@@ -64,11 +78,12 @@ export default class DemoTransport {
 
   private start() {
     this.phase = 'playing'
-    this.send({ type: 'forbidden_words_ready', forbidden_words: WORDS })
+    const words = this.selected.map((item) => item.word)
+    this.send({ type: 'forbidden_words_ready', forbidden_words: words })
     this.send({
       type: 'game_started',
       state: {
-        forbidden_words: WORDS,
+        forbidden_words: words,
         players: {
           [this.playerId]: { role: 'human', status: 'alive', position: this.playerPosition },
           partner: { role: 'ai_partner', status: 'alive', position: { x: -16, z: -2 } },
@@ -77,8 +92,8 @@ export default class DemoTransport {
         },
       },
       round: {
-        missions: WORDS.map((forbidden_word, mission_id) => ({ mission_id, forbidden_word })),
-        props: PROPS,
+        missions: words.map((forbidden_word, mission_id) => ({ mission_id, forbidden_word })),
+        props: this.selected,
         total_clues: CLUES.length,
       },
       active_gate: GATE,
@@ -89,7 +104,7 @@ export default class DemoTransport {
   private speech(transcript: string) {
     if (this.phase !== 'playing' || !transcript.trim()) return
     this.send({ type: 'sound_ping', player_id: this.playerId, position: this.playerPosition })
-    const forbidden = WORDS.find((word) => transcript.includes(word))
+    const forbidden = this.selected.map((item) => item.word).find((word) => transcript.includes(word))
     if (forbidden) {
       this.send({
         type: 'freeze', player_id: this.playerId, matched_word: forbidden,
@@ -100,8 +115,8 @@ export default class DemoTransport {
       return
     }
     this.send({ type: 'speech_safe', player_id: this.playerId, transcript, is_final: true })
-    if (this.pendingInspection || this.missionIndex >= WORDS.length) return
-    const prop = PROPS[this.missionIndex]
+    if (this.pendingInspection || this.missionIndex >= this.selected.length) return
+    const prop = this.selected[this.missionIndex]
     this.pendingInspection = true
     this.send({
       type: 'partner_decision', decision: 'act', confidence: 0.84,
@@ -112,10 +127,10 @@ export default class DemoTransport {
     this.later(() => {
       const index = this.missionIndex++
       this.pendingInspection = false
-      const allComplete = this.missionIndex >= WORDS.length
+      const allComplete = this.missionIndex >= this.selected.length
       if (allComplete) this.phase = 'final_spell'
       this.send({
-        type: 'prop_inspected', prop_id: PROPS[index].prop_id, is_correct: true,
+        type: 'prop_inspected', prop_id: this.selected[index].prop_id, is_correct: true,
         mission_index: index, next_mission_index: this.missionIndex,
         clue: CLUES[index], all_complete: allComplete,
         ...(allComplete ? { active_gate: GATE } : {}),
@@ -162,7 +177,7 @@ export default class DemoTransport {
         ? GATE.position
         : chasing
           ? this.playerPosition
-          : PROPS[Math.min(this.missionIndex, PROPS.length - 1)].position
+          : this.selected[Math.min(this.missionIndex, this.selected.length - 1)].position
       const dx = target.x - this.seekerPosition.x
       const dz = target.z - this.seekerPosition.z
       const distance = Math.hypot(dx, dz)

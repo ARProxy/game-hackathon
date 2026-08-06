@@ -8,24 +8,28 @@
 import { useState } from 'react'
 import { useGameStore } from '../stores/gameStore'
 
-const QUESTIONS = [
-  '주말에 보통 뭐 해요?',
-  '책상 위에 지금 뭐가 있어요?',
-  '좋아하는 색이나 음식이 있나요?',
-]
-
 interface OnboardingProps {
   onComplete: (answers: string[]) => void
 }
 
 export default function Onboarding({ onComplete }: OnboardingProps) {
+  const generatedQuestions = useGameStore((s) => s.onboardingQuestions)
+  const questions = generatedQuestions
   const [currentIndex, setCurrentIndex] = useState(0)
   const [answers, setAnswers] = useState<string[]>([])
   const [currentAnswer, setCurrentAnswer] = useState('')
   const isSpeaking = useGameStore((s) => s.isSpeaking)
   const lastTranscript = useGameStore((s) => s.lastTranscript)
 
-  const isLastQuestion = currentIndex >= QUESTIONS.length
+  if (questions.length !== 3) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'grid', placeItems: 'center', background: '#07090D', color: '#BDEFFF' }}>
+        AI가 이번 판의 질문을 만들고 있습니다…
+      </div>
+    )
+  }
+
+  const isLastQuestion = currentIndex >= questions.length
 
   // 답변 확정
   const confirmAnswer = () => {
@@ -38,7 +42,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setCurrentAnswer('')
     useGameStore.getState().setLastTranscript('')
 
-    if (currentIndex + 1 >= QUESTIONS.length) {
+    if (currentIndex + 1 >= questions.length) {
       // 모든 질문 완료 → 서버로 전송
       onComplete(newAnswers)
     } else {
@@ -68,7 +72,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         display: 'flex',
         gap: 8,
       }}>
-        {QUESTIONS.map((_, i) => (
+        {questions.map((_, i) => (
           <div key={i} style={{
             width: 32,
             height: 4,
@@ -85,7 +89,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         opacity: 0.5,
         marginBottom: 12,
       }}>
-        질문 {currentIndex + 1} / {QUESTIONS.length}
+        질문 {currentIndex + 1} / {questions.length}
       </div>
 
       <div style={{
@@ -95,7 +99,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
         textAlign: 'center',
         lineHeight: 1.4,
       }}>
-        {QUESTIONS[currentIndex]}
+        {questions[currentIndex]}
       </div>
 
       {/* 음성 입력 상태 */}

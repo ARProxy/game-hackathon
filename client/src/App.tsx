@@ -241,9 +241,10 @@ function GameController() {
   /* 연결 → 온보딩 */
   useEffect(() => {
     if (connected && phase === 'lobby') {
+      send({ type: 'request_onboarding_questions' })
       setPhase('onboarding')
     }
-  }, [connected, phase, setPhase])
+  }, [connected, phase, send, setPhase])
 
   /* 온보딩 완료 → 서버에 답변 전송 */
   const handleOnboardingComplete = useCallback((answers: string[]) => {

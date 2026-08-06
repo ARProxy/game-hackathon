@@ -12,6 +12,10 @@
 from __future__ import annotations
 
 import logging
+import json
+import os
+import random
+import urllib.request
 from collections import Counter
 
 from kiwipiepy import Kiwi
@@ -55,7 +59,78 @@ EXCLUDED = {
 }
 
 # 기본 풀 — 후보 부족 시 사용
-FALLBACK_POOL = ["열쇠", "시계", "빨간", "커피", "우산"]
+FALLBACK_POOL = ["열쇠", "시계", "빨간", "커피", "우산", "책", "노트북", "파란"]
+QUESTION_POOL = [
+    "어두운 교실 책상 위에서 발견한 물건 세 가지를 말해 주세요.",
+    "비 오는 날 가방에 꼭 넣고 싶은 물건은 무엇인가요?",
+    "지금 가장 먼저 떠오르는 색과 음료를 하나씩 말해 주세요.",
+    "학교에 늦었을 때 급하게 챙길 물건 세 가지는 무엇인가요?",
+    "문이 잠긴 방에서 도움이 될 물건은 무엇일까요?",
+    "친구의 책상에서 쉽게 발견할 법한 물건을 말해 주세요.",
+    "파란색과 빨간색 중 좋아하는 색과 그 이유를 말해 주세요.",
+    "밤 산책을 나갈 때 챙기고 싶은 물건은 무엇인가요?",
+]
+
+
+def _ollama_json(prompt: str) -> dict | None:
+    """선택적 로컬 Ollama 호출. 실패는 게임 흐름을 막지 않는다."""
+    base_url = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+    model = os.getenv("OLLAMA_MODEL", "gemma3:4b")
+    request = urllib.request.Request(
+        f"{base_url}/api/generate",
+        data=json.dumps({
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": 0.9},
+        }).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=float(os.getenv("OLLAMA_TIMEOUT", "15"))) as response:
+            envelope = json.loads(response.read().decode("utf-8"))
+        return json.loads(envelope.get("response", "{}"))
+    except Exception as error:
+        logger.info("onboarding local AI unavailable; using randomized fallback: %s", error)
+        return None
+
+
+def generate_onboarding_questions(count: int = 3) -> list[str]:
+    prompt = f"""한국어 공포 협동 게임의 짧고 재미있는 온보딩 질문을 {count}개 만들어라.
+답변에서 다음 단어가 자연스럽게 나오기 쉬워야 한다: {', '.join(sorted(supported_prop_words()))}.
+개인정보를 묻지 말고 질문끼리 주제를 겹치지 마라. JSON만 반환: {{"questions":["...?"]}}"""
+    generated = _ollama_json(prompt)
+    questions = generated.get("questions", []) if isinstance(generated, dict) else []
+    valid = [str(question).strip() for question in questions if 8 <= len(str(question).strip()) <= 80]
+    if len(valid) >= count:
+        return valid[:count]
+    return random.sample(QUESTION_POOL, k=min(count, len(QUESTION_POOL)))
+
+
+def generate_forbidden_words(answers: list[str], count: int = 3) -> list[str]:
+    """AI가 답변 맥락과 지원 프롭 풀에서 매 판 다른 금기어를 고른다."""
+    supported = sorted(supported_prop_words())
+    prompt = f"""음성 협동 게임의 금기어를 정확히 {count}개 골라라.
+플레이어 답변: {json.dumps(answers, ensure_ascii=False)}
+선택 가능한 단어: {', '.join(supported)}
+답변에 등장했거나 답변과 자연스럽게 연상되고, 게임 중 다시 말할 가능성이 높은 서로 다른 단어를 선택하라.
+JSON만 반환: {{"words":["단어1","단어2","단어3"]}}"""
+    generated = _ollama_json(prompt)
+    raw_words = generated.get("words", []) if isinstance(generated, dict) else []
+    words: list[str] = []
+    for word in raw_words:
+        normalized = str(word).strip()
+        if normalized in supported and normalized not in words:
+            words.append(normalized)
+        if len(words) == count:
+            return words
+
+    # AI 장애나 불완전 JSON에서도 고정 앞부분 대신 매 판 다른 안전 조합을 사용한다.
+    remaining = [word for word in supported if word not in words]
+    random.shuffle(remaining)
+    return (words + remaining)[:count]
 
 
 def supported_prop_words() -> set[str]:
