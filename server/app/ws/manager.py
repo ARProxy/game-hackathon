@@ -28,7 +28,7 @@ from app.game.authority import (
     has_clear_catch_line,
     movement_is_plausible,
 )
-from app.game.session import RESERVED_ACTOR_ROLES, TRAP_CONTRACT, session_manager
+from app.game.session import DEFAULT_AI_PARTNER_IDS, RESERVED_ACTOR_ROLES, TRAP_CONTRACT, session_manager
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 
 logger = logging.getLogger(__name__)
@@ -215,7 +215,7 @@ class ConnectionManager:
                     ],
                     "utterance": transcript,
                 }
-                session.companion_candidate_memory = [
+                candidate_memory = [
                     {
                         "prop_id": candidate.prop.prop_id,
                         "zone": candidate.prop.zone,
@@ -225,6 +225,8 @@ class ConnectionManager:
                     }
                     for candidate in decision.ranked
                 ]
+                for runtime in session.companion_states.values():
+                    runtime.candidate_memory = [dict(item) for item in candidate_memory]
                 if decision.target:
                     payload.update({
                         "target_prop_id": decision.target.prop_id,
@@ -239,9 +241,11 @@ class ConnectionManager:
                     session.companion_goal_started = None
                     return
                 if decision.target:
-                    command_companion(
-                        session, decision.target.prop_id, decision.target.position, transcript,
-                    )
+                    for companion_id in DEFAULT_AI_PARTNER_IDS:
+                        command_companion(
+                            session, decision.target.prop_id, decision.target.position, transcript,
+                            companion_id,
+                        )
                     await self.broadcast(room_id, {
                         "type": "partner_command",
                         "target_prop_id": decision.target.prop_id,
@@ -301,7 +305,10 @@ class ConnectionManager:
             })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
-            await self.send_to(room_id, player_id, {"type": "companion_intent", **companion_snapshot(session)})
+            for companion_id in DEFAULT_AI_PARTNER_IDS:
+                await self.send_to(room_id, player_id, {
+                    "type": "companion_intent", **companion_snapshot(session, companion_id),
+                })
 
         elif action_type == "seeker_think":
             if (
@@ -313,7 +320,8 @@ class ConnectionManager:
             await self.send_to(room_id, player_id, {"type": "seeker_intent", **intent})
 
         elif action_type == "rescue_request" and player and player.is_frozen:
-            request_companion_rescue(session, player.player_id)
+            for companion_id in DEFAULT_AI_PARTNER_IDS:
+                request_companion_rescue(session, player.player_id, companion_id)
             await self.broadcast(room_id, {
                 "type": "companion_assignment", "state": "RESCUE_TEAMMATE",
                 "target_id": player.player_id, "reason": "player_requested",
@@ -619,6 +627,13 @@ class ConnectionManager:
         session.escaped_player_ids.add(player_id)
         self._cancel_room_freeze_timeouts(room_id)
         partner = session.state.get_player("partner")
+        companion_statuses = {
+            companion_id: (
+                session.state.get_player(companion_id).status.value
+                if session.state.get_player(companion_id) else "missing"
+            )
+            for companion_id in DEFAULT_AI_PARTNER_IDS
+        }
         await self.broadcast(room_id, {
             "type": "game_won",
             "player_id": player_id,
@@ -626,6 +641,7 @@ class ConnectionManager:
             "gate_id": session.active_gate_id,
             "escaped_player_ids": sorted(session.escaped_player_ids),
             "partner_status": partner.status.value if partner else "missing",
+            "companion_statuses": companion_statuses,
         })
 
     async def _handle_inspect_prop(
@@ -787,16 +803,6 @@ class ConnectionManager:
             await self.broadcast(room_id, {
                 "type": "game_over",
                 "reason": "human_eliminated",
-            })
-            return
-
-        if player.role == PlayerRole.AI_PARTNER and session.state.phase in {
-            GamePhase.PLAYING, GamePhase.FINAL_SPELL,
-        }:
-            session.state.phase = GamePhase.RESULT
-            self._cancel_room_freeze_timeouts(room_id)
-            await self.broadcast(room_id, {
-                "type": "game_over", "reason": "partner_eliminated",
             })
             return
 
@@ -978,34 +984,10 @@ class ConnectionManager:
                     return
                 try:
                     if not session.is_paused and session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
-                        intent, action = advance_companion(session)
-                        if action and action["type"] == "report":
-                            await self._broadcast_companion_speech(room_id, {
-                                "type": "companion_report", "prop_id": action["prop_id"],
-                                "zone": action["zone"], "appearance": action["appearance"],
-                                "message": (
-                                    f"{action['zone']} 구역에서 {action['appearance'].get('color', '알 수 없는 색')} "
-                                    f"{action['appearance'].get('mesh', '물체')} 후보를 발견했어. 이 특징과 맞는지 말해줘."
-                                ),
-                            })
-                        elif action and action["type"] == "seeker_report":
-                            await self._broadcast_companion_speech(room_id, {
-                                "type": "companion_seeker_report",
-                                "position": action["position"],
-                                "message": "술래를 봤어! 마지막 위치를 공유할게.",
-                            })
-                        elif action and action["type"] == "inspect":
-                            controller_id = next(iter(self.rooms[room_id].players), "")
-                            await self._handle_inspect_prop(
-                                room_id, controller_id, session.state.get_player("partner"),
-                                {"prop_id": action["prop_id"]},
-                            )
-                        elif action and action["type"] == "rescue":
-                            await self._complete_partner_rescue(room_id, action["target_id"])
-                        elif action and action["type"] == "trap":
-                            await self._freeze_companion_from_trap(room_id, action["trap_id"])
-                        elif action and action["type"] == "escape":
-                            await self._complete_companion_escape(room_id)
+                        for companion_id in DEFAULT_AI_PARTNER_IDS:
+                            intent, action = advance_companion(session, companion_id)
+                            if action:
+                                await self._handle_companion_action(room_id, companion_id, action)
                     consecutive_failures = 0
                 except Exception:
                     consecutive_failures += 1
@@ -1020,9 +1002,39 @@ class ConnectionManager:
         except asyncio.CancelledError:
             raise
 
-    async def _complete_partner_rescue(self, room_id: str, target_id: str) -> None:
+    async def _handle_companion_action(self, room_id: str, companion_id: str, action: dict) -> None:
+        if action["type"] == "report":
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report", "companion_id": companion_id,
+                "prop_id": action["prop_id"], "zone": action["zone"],
+                "appearance": action["appearance"],
+                "message": (
+                    f"{action['zone']} 구역에서 {action['appearance'].get('color', '알 수 없는 색')} "
+                    f"{action['appearance'].get('mesh', '물체')} 후보를 발견했어. 이 특징과 맞는지 말해줘."
+                ),
+            }, companion_id)
+        elif action["type"] == "seeker_report":
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_seeker_report", "companion_id": companion_id,
+                "position": action["position"], "message": "술래를 봤어! 마지막 위치를 공유할게.",
+            }, companion_id)
+        elif action["type"] == "inspect":
+            controller_id = next(iter(self.rooms[room_id].players), "")
+            session = session_manager.get_or_create(room_id)
+            await self._handle_inspect_prop(
+                room_id, controller_id, session.state.get_player(companion_id),
+                {"prop_id": action["prop_id"]},
+            )
+        elif action["type"] == "rescue":
+            await self._complete_partner_rescue(room_id, action["target_id"], companion_id)
+        elif action["type"] == "trap":
+            await self._freeze_companion_from_trap(room_id, action["trap_id"], companion_id)
+        elif action["type"] == "escape":
+            await self._complete_companion_escape(room_id, companion_id)
+
+    async def _complete_partner_rescue(self, room_id: str, target_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)
-        partner = session.state.get_player("partner")
+        partner = session.state.get_player(companion_id)
         target = session.state.get_player(target_id)
         if not partner or partner.status != PlayerStatus.ALIVE or not target or not target.is_frozen:
             return
@@ -1037,9 +1049,10 @@ class ConnectionManager:
         self._cancel_freeze_timeout(room_id, target_id)
         await self.broadcast(room_id, {"type": "rescued", "rescuer_id": partner.player_id, "target_id": target_id})
 
-    async def _freeze_companion_from_trap(self, room_id: str, trap_id: str) -> None:
+    async def _freeze_companion_from_trap(self, room_id: str, trap_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)
-        partner = session.state.get_player("partner")
+        partner = session.state.get_player(companion_id)
+        runtime = session.companion_states[companion_id]
         trap = next((item for item in TRAP_CONTRACT["traps"] if item["id"] == trap_id), None)
         if (
             session.state.phase not in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}
@@ -1060,15 +1073,16 @@ class ConnectionManager:
             "trap_id": trap_id,
             "position": {"x": partner.position.x, "z": partner.position.z},
             "remaining_seconds": session.state.freeze_timeout_sec,
-            "danger": {"seeker_last_seen": session.companion_last_seeker_seen},
+            "danger": {"seeker_last_seen": runtime.last_seeker_seen},
         })
         self._schedule_freeze_timeout(room_id, partner.player_id)
         await self._finish_if_team_frozen(room_id)
 
-    async def _broadcast_companion_speech(self, room_id: str, message: dict) -> bool:
+    async def _broadcast_companion_speech(self, room_id: str, message: dict, companion_id: str = "partner") -> bool:
         """AI의 월드 발화도 금기어를 거치며 안전할 때만 팀에 전달한다."""
         session = session_manager.get_or_create(room_id)
-        partner = session.state.get_player("partner")
+        partner = session.state.get_player(companion_id)
+        runtime = session.companion_states[companion_id]
         text = str(message.get("message") or message.get("reply") or "")
         result = session.engine.check(text)
         if result.is_forbidden and partner and partner.status == PlayerStatus.ALIVE:
@@ -1083,7 +1097,7 @@ class ConnectionManager:
                 "matched_stage": "ai_speech", "confidence": result.confidence,
                 "position": {"x": partner.position.x, "z": partner.position.z},
                 "remaining_seconds": session.state.freeze_timeout_sec,
-                "danger": {"seeker_last_seen": session.companion_last_seeker_seen},
+                "danger": {"seeker_last_seen": runtime.last_seeker_seen},
             })
             self._schedule_freeze_timeout(room_id, partner.player_id)
             await self._finish_if_team_frozen(room_id)
@@ -1100,9 +1114,9 @@ class ConnectionManager:
         await self.broadcast(room_id, {"type": "game_over", "reason": "all_frozen"})
         return True
 
-    async def _complete_companion_escape(self, room_id: str) -> None:
+    async def _complete_companion_escape(self, room_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)
-        partner = session.state.get_player("partner")
+        partner = session.state.get_player(companion_id)
         seeker = session.state.get_player("seeker")
         if (
             session.state.phase != GamePhase.ESCAPE or not partner

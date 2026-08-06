@@ -20,24 +20,27 @@ with TRAP_CONTRACT_PATH.open(encoding="utf-8") as trap_contract_file:
     TRAP_CONTRACT = json.load(trap_contract_file)
 
 
-def command_companion(session: Any, prop_id: str, position: dict, utterance: str) -> None:
-    session.companion_command = {
+def command_companion(session: Any, prop_id: str, position: dict, utterance: str, companion_id: str = "partner") -> None:
+    runtime = session.companion_states[companion_id]
+    runtime.command = {
         "prop_id": prop_id,
         "position": {"x": float(position["x"]), "z": float(position["z"])},
         "utterance": utterance,
         "timestamp": time.monotonic(),
     }
-    session.companion_goal_changed_at = 0.0
+    runtime.goal_changed_at = 0.0
 
 
-def request_companion_rescue(session: Any, target_id: str) -> None:
-    session.companion_rescue_request = target_id
-    session.companion_goal_changed_at = 0.0
+def request_companion_rescue(session: Any, target_id: str, companion_id: str = "partner") -> None:
+    runtime = session.companion_states[companion_id]
+    runtime.rescue_request = target_id
+    runtime.goal_changed_at = 0.0
 
 
-def decide_companion_intent(session: Any) -> dict:
+def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict:
     now = time.monotonic()
-    partner = session.state.get_player("partner")
+    runtime = session.companion_states[companion_id]
+    partner = session.state.get_player(companion_id)
     seeker = session.state.get_player("seeker")
     if not partner or partner.status != PlayerStatus.ALIVE:
         return _intent("INCAPACITATED", None, partner, "partner_unavailable")
@@ -45,8 +48,8 @@ def decide_companion_intent(session: Any) -> dict:
     if seeker and _distance(partner, seeker) <= CONTRACT["dangerDistance"] and has_clear_catch_line(
         (partner.position.x, partner.position.z), (seeker.position.x, seeker.position.z),
     ):
-        previous_sighting = session.companion_last_seeker_seen
-        session.companion_last_seeker_seen = {
+        previous_sighting = runtime.last_seeker_seen
+        runtime.last_seeker_seen = {
             "position": {"x": seeker.position.x, "z": seeker.position.z},
             "seen_at": now,
             "reported": bool(previous_sighting and previous_sighting.get("reported")),
@@ -59,7 +62,7 @@ def decide_companion_intent(session: Any) -> dict:
             "reason": "seeker_visible",
         }
 
-    sighting = session.companion_last_seeker_seen
+    sighting = runtime.last_seeker_seen
     if sighting and now - sighting["seen_at"] <= CONTRACT["seekerMemorySeconds"]:
         dx = partner.position.x - sighting["position"]["x"]
         dz = partner.position.z - sighting["position"]["z"]
@@ -78,7 +81,7 @@ def decide_companion_intent(session: Any) -> dict:
     if frozen:
         target = min(frozen, key=lambda player: _distance(partner, player))
         waited = max(0.0, time.time() - (target.frozen_at or time.time()))
-        if session.companion_rescue_request == target.player_id or waited >= CONTRACT["autoRescueDelaySeconds"]:
+        if runtime.rescue_request == target.player_id or waited >= CONTRACT["autoRescueDelaySeconds"]:
             return _intent("RESCUE_TEAMMATE", target.player_id, target, "assigned_rescue")
 
     if session.state.phase in {GamePhase.FINAL_SPELL, GamePhase.ESCAPE} and session.active_gate_id:
@@ -92,7 +95,7 @@ def decide_companion_intent(session: Any) -> dict:
             "reason": "team_objective",
         }
 
-    command = session.companion_command
+    command = runtime.command
     if command:
         return {
             "state": "INSPECT_CANDIDATE", "target_id": command["prop_id"],
@@ -102,7 +105,7 @@ def decide_companion_intent(session: Any) -> dict:
     mission = session.current_mission()
     if mission:
         candidates = [mission.real_prop, *mission.decoy_props]
-        unexplored = [prop for prop in candidates if prop.prop_id not in session.companion_memory]
+        unexplored = [prop for prop in candidates if prop.prop_id not in runtime.memory]
         if unexplored:
             target = min(
                 unexplored,
@@ -120,28 +123,29 @@ def decide_companion_intent(session: Any) -> dict:
     return _intent("REGROUP", None, partner, "no_active_mission")
 
 
-def advance_companion(session: Any) -> tuple[dict, dict | None]:
+def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict, dict | None]:
     now = time.monotonic()
-    partner = session.state.get_player("partner")
-    elapsed = now - session.companion_last_tick
-    proposed = decide_companion_intent(session)
-    previous = session.companion_last_intent
+    runtime = session.companion_states[companion_id]
+    partner = session.state.get_player(companion_id)
+    elapsed = now - runtime.last_tick
+    proposed = decide_companion_intent(session, companion_id)
+    previous = runtime.last_intent
     urgent = proposed["state"] in {"AVOID_SEEKER", "RESCUE_TEAMMATE", "MOVE_TO_GATE", "ESCAPE"}
     if (
-        previous and not urgent and session.companion_goal_changed_at
-        and now - session.companion_goal_changed_at < CONTRACT["goalHoldSeconds"]
+        previous and not urgent and runtime.goal_changed_at
+        and now - runtime.goal_changed_at < CONTRACT["goalHoldSeconds"]
     ):
         intent = previous
     else:
         intent = proposed
         if not previous or (previous["state"], previous["target_id"]) != (intent["state"], intent["target_id"]):
-            session.companion_goal_changed_at = now
+            runtime.goal_changed_at = now
     action = None
     if not partner:
         return intent, None
     if partner.status != PlayerStatus.ALIVE:
-        session.companion_last_tick = now
-        session.companion_last_intent = intent
+        runtime.last_tick = now
+        runtime.last_intent = intent
         return {
             **intent,
             "partner_position": {"x": partner.position.x, "z": partner.position.z},
@@ -164,7 +168,7 @@ def advance_companion(session: Any) -> tuple[dict, dict | None]:
         intent["target"]["x"] - partner.position.x,
         intent["target"]["z"] - partner.position.z,
     ) <= CONTRACT["arrivalDistance"] + 0.05
-    sighting = session.companion_last_seeker_seen
+    sighting = runtime.last_seeker_seen
     triggered_trap = next((
         trap for trap in TRAP_CONTRACT["traps"]
         if trap["id"] in session.active_trap_ids
@@ -180,7 +184,7 @@ def advance_companion(session: Any) -> tuple[dict, dict | None]:
     elif intent["state"] == "AVOID_SEEKER" and sighting and not sighting.get("reported"):
         sighting["reported"] = True
         action = {"type": "seeker_report", "position": sighting["position"]}
-    elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] not in session.companion_memory:
+    elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] not in runtime.memory:
         mission = session.current_mission()
         prop = next(
             (item for item in [mission.real_prop, *mission.decoy_props] if item.prop_id == intent["target_id"]),
@@ -191,32 +195,37 @@ def advance_companion(session: Any) -> tuple[dict, dict | None]:
             "zone": prop.zone if prop else "unknown",
             "appearance": {"color": prop.color, "mesh": prop.mesh} if prop else {},
         }
-        session.companion_memory[intent["target_id"]] = {
+        runtime.memory[intent["target_id"]] = {
             "discovered_at": now, "position": intent["target"],
             "zone": action["zone"], "appearance": action["appearance"],
         }
     elif intent["state"] == "INSPECT_CANDIDATE" and arrived:
-        if session.companion_goal_started is None:
-            session.companion_goal_started = now
-        elif now - session.companion_goal_started >= CONTRACT["inspectionDurationSeconds"]:
+        if runtime.goal_started is None:
+            runtime.goal_started = now
+        elif now - runtime.goal_started >= CONTRACT["inspectionDurationSeconds"]:
             action = {"type": "inspect", "prop_id": intent["target_id"]}
-            session.companion_command = None
-            session.companion_goal_started = None
+            runtime.command = None
+            runtime.goal_started = None
     elif intent["state"] == "RESCUE_TEAMMATE" and distance <= CONTRACT["rescueDistance"]:
         action = {"type": "rescue", "target_id": intent["target_id"]}
-        session.companion_rescue_request = None
+        runtime.rescue_request = None
     else:
-        session.companion_goal_started = None
+        runtime.goal_started = None
 
-    session.companion_last_tick = now
-    session.companion_last_intent = intent
+    runtime.last_tick = now
+    runtime.last_intent = intent
     return {**intent, "partner_position": {"x": partner.position.x, "z": partner.position.z}}, action
 
 
-def companion_snapshot(session: Any) -> dict:
-    partner = session.state.get_player("partner")
-    intent = session.companion_last_intent or decide_companion_intent(session)
-    return {**intent, "partner_position": {"x": partner.position.x, "z": partner.position.z}}
+def companion_snapshot(session: Any, companion_id: str = "partner") -> dict:
+    partner = session.state.get_player(companion_id)
+    runtime = session.companion_states[companion_id]
+    intent = runtime.last_intent or decide_companion_intent(session, companion_id)
+    return {
+        **intent,
+        "companion_id": companion_id,
+        "partner_position": {"x": partner.position.x, "z": partner.position.z},
+    }
 
 
 def _distance(first: Any, second: Any) -> float:

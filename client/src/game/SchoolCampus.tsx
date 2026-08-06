@@ -2250,6 +2250,7 @@ const INTERIOR_LIGHTS: { floor: FloorKey; p: V3; color: string; dynamic: boolean
 export const SPAWNS = {
   player: actorContract.spawns.human as V2,   // 본관 현관 앞
   ai: actorContract.spawns.partner as V2,     // 조회대 옆
+  ai2: actorContract.spawns.partner2 as V2,   // 조회대 반대편
   seeker: actorContract.spawns.seeker as V2,  // 체육관
 }
 

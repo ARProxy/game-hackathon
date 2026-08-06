@@ -152,7 +152,8 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
             "player_id": player_id,
             "reason": "escaped",
             "gate_id": active_gate["gate_id"],
-            "escaped_player_ids": [player_id],
-            "partner_status": "alive",
-        }
+                "escaped_player_ids": [player_id],
+                "partner_status": "alive",
+                "companion_statuses": {"partner": "alive", "partner-2": "alive"},
+            }
         assert session.state.phase.value == "result"

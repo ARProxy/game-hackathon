@@ -19,7 +19,7 @@ export default function MiniMap() {
   const playerId = useGameStore((state) => state.playerId)
   const player = useGameStore((state) => state.players[state.playerId])
   const floor = useGameStore((state) => state.currentFloor)
-  const partner = useGameStore((state) => state.companionIntent?.partnerPosition)
+  const companions = useGameStore((state) => state.companionIntents)
   const activeGate = useGameStore((state) => state.activeGate)
   const visible = phase === 'playing' || phase === 'final_spell' || phase === 'escape'
   if (!visible) return null
@@ -49,7 +49,15 @@ export default function MiniMap() {
         <text x="53" y="81" textAnchor="middle" fill="#9eb3c0" fontSize="8">놀이터</text>
         <text x="69" y="159" textAnchor="middle" fill="#9eb3c0" fontSize="8">후문 골목</text>
         {player && <Marker x={player.position.x} z={player.position.z} color="#52E5FF" label={playerId || '플레이어'} />}
-        {partner && <Marker x={partner.x} z={partner.z} color="#B6FF3D" label="AI 동료" />}
+        {Object.entries(companions).map(([companionId, intent], index) => (
+          <Marker
+            key={companionId}
+            x={intent.partnerPosition.x}
+            z={intent.partnerPosition.z}
+            color={index === 0 ? '#B6FF3D' : '#8FE8FF'}
+            label={companionId === 'partner' ? 'AI 동료 1' : 'AI 동료 2'}
+          />
+        ))}
         {activeGate && <Marker x={activeGate.position.x} z={activeGate.position.z} color="#FFD45C" label="탈출구" />}
       </svg>
       <div style={{ display: 'flex', gap: 9, marginTop: 5, fontSize: 9, color: 'rgba(255,255,255,.65)' }}>

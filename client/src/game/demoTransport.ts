@@ -72,6 +72,7 @@ export default class DemoTransport {
         players: {
           [this.playerId]: { role: 'human', status: 'alive', position: this.playerPosition },
           partner: { role: 'ai_partner', status: 'alive', position: { x: -16, z: -2 } },
+          'partner-2': { role: 'ai_partner', status: 'alive', position: { x: -12.5, z: -2 } },
           seeker: { role: 'seeker', status: 'alive', position: this.seekerPosition },
         },
       },
@@ -180,9 +181,14 @@ export default class DemoTransport {
       })
     } else if (action === 'companion_think') {
       this.send({
-        type: 'companion_intent', state: this.phase === 'escape' ? 'MOVE_TO_GATE' : 'EXPLORE_ZONE',
+        type: 'companion_intent', companion_id: 'partner', state: this.phase === 'escape' ? 'MOVE_TO_GATE' : 'EXPLORE_ZONE',
         target_id: null, target: this.phase === 'escape' ? GATE.position : { x: -9, z: -5 },
         partner_position: { x: -16, z: -2 }, reason: 'demo_script',
+      })
+      this.send({
+        type: 'companion_intent', companion_id: 'partner-2', state: this.phase === 'escape' ? 'MOVE_TO_GATE' : 'EXPLORE_ZONE',
+        target_id: null, target: this.phase === 'escape' ? GATE.position : { x: 13, z: 8 },
+        partner_position: { x: -12.5, z: -2 }, reason: 'demo_script',
       })
     } else if (action === 'gate_arrived' && this.phase === 'final_spell') {
       this.gateArrived = true
@@ -192,6 +198,7 @@ export default class DemoTransport {
       this.send({
         type: 'game_won', player_id: this.playerId, reason: 'escaped',
         gate_id: GATE.gate_id, escaped_player_ids: [this.playerId], partner_status: 'alive',
+        companion_statuses: { partner: 'alive', 'partner-2': 'alive' },
       })
     } else if (action === 'seeker_catch' && this.phase !== 'result') {
       const distance = Math.hypot(

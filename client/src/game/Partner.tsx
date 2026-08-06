@@ -9,8 +9,10 @@ import { sendGameMessage } from '../hooks/useWebSocket'
 
 interface PartnerProps {
   playerRef: React.RefObject<THREE.Group | null>
+  playerId?: string
   characterId?: string
   spawn: readonly [number, number]
+  requestsThink?: boolean
 }
 
 const SPEEDS: Partial<Record<CompanionState, number>> = {
@@ -22,18 +24,24 @@ const SPEEDS: Partial<Record<CompanionState, number>> = {
   ESCAPE: companion.gateSpeed,
 }
 
-export default function Partner({ playerRef, characterId = 'R05', spawn }: PartnerProps) {
+export default function Partner({
+  playerRef,
+  playerId = 'partner',
+  characterId = 'R05',
+  spawn,
+  requestsThink = false,
+}: PartnerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const lastAuthorityPosition = useRef<{ x: number; z: number } | null>(null)
   const lastThink = useRef(-Infinity)
   const lastRescueAttempt = useRef(0)
-  const partnerFrozen = useGameStore((state) => state.players.partner?.status === 'frozen')
+  const partnerFrozen = useGameStore((state) => state.players[playerId]?.status === 'frozen')
 
   useEffect(() => {
     const rescue = (event: KeyboardEvent) => {
       if (event.code !== 'KeyE' || event.repeat || !groupRef.current || !playerRef.current) return
       const store = useGameStore.getState()
-      const partner = store.players.partner
+      const partner = store.players[playerId]
       const human = store.players[store.playerId]
       if (partner?.status !== 'frozen' || human?.status !== 'alive') return
       if (groupRef.current.position.distanceTo(playerRef.current.position) > 2.0) return
@@ -47,7 +55,7 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
     }
     window.addEventListener('keydown', rescue)
     return () => window.removeEventListener('keydown', rescue)
-  }, [playerRef])
+  }, [playerId, playerRef])
 
   useFrame(({ clock }, delta) => {
     const group = groupRef.current
@@ -55,17 +63,17 @@ export default function Partner({ playerRef, characterId = 'R05', spawn }: Partn
     const store = useGameStore.getState()
     if (store.isPaused) return
     const gameActive = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
-    if (gameActive && clock.elapsedTime - lastThink.current >= companion.thinkIntervalSeconds) {
+    if (requestsThink && gameActive && clock.elapsedTime - lastThink.current >= companion.thinkIntervalSeconds) {
       sendGameMessage({ type: 'action', payload: { action_type: 'companion_think' } })
       lastThink.current = clock.elapsedTime
     }
-    const partnerState = Object.values(store.players).find((player) => player.role === 'ai_partner')
+    const partnerState = store.players[playerId]
     if (partnerState?.status === 'eliminated' || partnerState?.status === 'escaped') {
       group.visible = false
       return
     }
     group.visible = true
-    const intent = store.companionIntent
+    const intent = store.companionIntents[playerId] ?? (playerId === 'partner' ? store.companionIntent : null)
     if (!intent) return
 
     const authority = intent.partnerPosition

@@ -11,6 +11,7 @@ import json
 import math
 import random
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.ai.forbidden import ForbiddenWordEngine
@@ -23,9 +24,10 @@ logger = logging.getLogger(__name__)
 # MVP 기본 금기어 (온보딩 미구현 시 폴백)
 DEFAULT_FORBIDDEN_WORDS = ["열쇠", "커피", "빨간"]
 DEFAULT_AI_PARTNER_ID = "partner"
+DEFAULT_AI_PARTNER_IDS = ("partner", "partner-2")
 DEFAULT_SEEKER_ID = "seeker"
 RESERVED_ACTOR_ROLES: dict[str, PlayerRole] = {
-    DEFAULT_AI_PARTNER_ID: PlayerRole.AI_PARTNER,
+    **{actor_id: PlayerRole.AI_PARTNER for actor_id in DEFAULT_AI_PARTNER_IDS},
     DEFAULT_SEEKER_ID: PlayerRole.SEEKER,
 }
 GATE_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/gateContract.json"
@@ -40,9 +42,38 @@ ROLE_SPAWNS: dict[PlayerRole, tuple[float, float]] = {
     PlayerRole.AI_PARTNER: (-16.0, -2.0),
     PlayerRole.SEEKER: (26.0, -27.0),
 }
+ACTOR_SPAWNS: dict[str, tuple[float, float]] = {
+    "partner": (-16.0, -2.0),
+    "partner-2": (-12.5, -2.0),
+    "seeker": (26.0, -27.0),
+}
 TRAP_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/trapContract.json"
 with TRAP_CONTRACT_PATH.open(encoding="utf-8") as trap_contract_file:
     TRAP_CONTRACT = json.load(trap_contract_file)
+
+
+@dataclass
+class CompanionRuntime:
+    memory: dict[str, dict] = field(default_factory=dict)
+    command: dict | None = None
+    rescue_request: str | None = None
+    goal_started: float | None = None
+    last_tick: float = 0.0
+    last_intent: dict | None = None
+    goal_changed_at: float = 0.0
+    last_seeker_seen: dict | None = None
+    candidate_memory: list[dict] = field(default_factory=list)
+
+    def reset(self, now: float) -> None:
+        self.memory.clear()
+        self.command = None
+        self.rescue_request = None
+        self.goal_started = None
+        self.last_tick = now
+        self.last_intent = None
+        self.goal_changed_at = 0.0
+        self.last_seeker_seen = None
+        self.candidate_memory = []
 
 
 class GameSession:
@@ -61,15 +92,9 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = 0.0
         self.hunter_last_intent: dict | None = None
-        self.companion_memory: dict[str, dict] = {}
-        self.companion_command: dict | None = None
-        self.companion_rescue_request: str | None = None
-        self.companion_goal_started: float | None = None
-        self.companion_last_tick = 0.0
-        self.companion_last_intent: dict | None = None
-        self.companion_goal_changed_at = 0.0
-        self.companion_last_seeker_seen: dict | None = None
-        self.companion_candidate_memory: list[dict] = []
+        self.companion_states = {
+            actor_id: CompanionRuntime() for actor_id in DEFAULT_AI_PARTNER_IDS
+        }
         self.active_trap_ids: set[str] = set()
         self.triggered_trap_ids: set[str] = set()
         self.escaped_player_ids: set[str] = set()
@@ -97,7 +122,8 @@ class GameSession:
         self.paused_at = None
         now = time.monotonic()
         self.hunter_last_tick = now
-        self.companion_last_tick = now
+        for runtime in self.companion_states.values():
+            runtime.last_tick = now
         return True
 
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
@@ -114,15 +140,9 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = time.monotonic()
         self.hunter_last_intent = None
-        self.companion_memory.clear()
-        self.companion_command = None
-        self.companion_rescue_request = None
-        self.companion_goal_started = None
-        self.companion_last_tick = time.monotonic()
-        self.companion_last_intent = None
-        self.companion_goal_changed_at = 0.0
-        self.companion_last_seeker_seen = None
-        self.companion_candidate_memory = []
+        companion_now = time.monotonic()
+        for runtime in self.companion_states.values():
+            runtime.reset(companion_now)
         reachable_traps = [
             trap["id"] for trap in TRAP_CONTRACT["traps"]
             if trap["floor"] in {"OUT", "F1"}
@@ -145,7 +165,7 @@ class GameSession:
                 self.state.add_player(actor_id, required_role)
         now = time.monotonic()
         for player in self.state.players.values():
-            x, z = ROLE_SPAWNS[player.role]
+            x, z = ACTOR_SPAWNS.get(player.player_id, ROLE_SPAWNS[player.role])
             player.position.x = x
             player.position.z = z
             self.position_samples[player.player_id] = MovementSample(x, z, now)
@@ -156,6 +176,75 @@ class GameSession:
         logger.info(
             "game setup: room=%s words=%s", self.state.room_id, words
         )
+
+    # 기존 단일 동료 테스트와 호출부가 점진적으로 이행할 수 있는 호환 프로퍼티.
+    @property
+    def companion_memory(self) -> dict[str, dict]:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].memory
+
+    @property
+    def companion_command(self) -> dict | None:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].command
+
+    @companion_command.setter
+    def companion_command(self, value: dict | None) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].command = value
+
+    @property
+    def companion_rescue_request(self) -> str | None:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].rescue_request
+
+    @companion_rescue_request.setter
+    def companion_rescue_request(self, value: str | None) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].rescue_request = value
+
+    @property
+    def companion_goal_started(self) -> float | None:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].goal_started
+
+    @companion_goal_started.setter
+    def companion_goal_started(self, value: float | None) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].goal_started = value
+
+    @property
+    def companion_last_tick(self) -> float:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].last_tick
+
+    @companion_last_tick.setter
+    def companion_last_tick(self, value: float) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].last_tick = value
+
+    @property
+    def companion_last_intent(self) -> dict | None:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].last_intent
+
+    @companion_last_intent.setter
+    def companion_last_intent(self, value: dict | None) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].last_intent = value
+
+    @property
+    def companion_goal_changed_at(self) -> float:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].goal_changed_at
+
+    @companion_goal_changed_at.setter
+    def companion_goal_changed_at(self, value: float) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].goal_changed_at = value
+
+    @property
+    def companion_last_seeker_seen(self) -> dict | None:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].last_seeker_seen
+
+    @companion_last_seeker_seen.setter
+    def companion_last_seeker_seen(self, value: dict | None) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].last_seeker_seen = value
+
+    @property
+    def companion_candidate_memory(self) -> list[dict]:
+        return self.companion_states[DEFAULT_AI_PARTNER_ID].candidate_memory
+
+    @companion_candidate_memory.setter
+    def companion_candidate_memory(self, value: list[dict]) -> None:
+        self.companion_states[DEFAULT_AI_PARTNER_ID].candidate_memory = value
 
     def setup_round(self, round_data: RoundData) -> None:
         """한 라운드의 서버 권위 미션 진행 상태를 초기화한다."""

@@ -84,6 +84,7 @@ export interface HunterIntent {
 export type CompanionState = 'EXPLORE_ZONE' | 'INSPECT_CANDIDATE' | 'REPORT_FINDING'
   | 'AVOID_SEEKER' | 'RESCUE_TEAMMATE' | 'REGROUP' | 'MOVE_TO_GATE' | 'ESCAPE' | 'INCAPACITATED'
 export interface CompanionIntent {
+  companionId?: string
   state: CompanionState
   targetId: string | null
   target: { x: number; z: number }
@@ -134,6 +135,7 @@ interface GameStore {
   lastSoundEvent: SoundEvent | null
   hunterIntent: HunterIntent | null
   companionIntent: CompanionIntent | null
+  companionIntents: Record<string, CompanionIntent>
   rescueRequested: boolean
 
   // 음성 관련
@@ -216,6 +218,7 @@ const initialState = {
   lastSoundEvent: null,
   hunterIntent: null as HunterIntent | null,
   companionIntent: null as CompanionIntent | null,
+  companionIntents: {} as Record<string, CompanionIntent>,
   rescueRequested: false,
   isSpeaking: false,
   lastTranscript: '',
@@ -366,9 +369,15 @@ export const useGameStore = create<GameStore>((set) => ({
     sameHunterIntent(state.hunterIntent, hunterIntent) ? state : { hunterIntent }
   )),
 
-  setCompanionIntent: (companionIntent) => set((state) => (
-    sameCompanionIntent(state.companionIntent, companionIntent) ? state : { companionIntent }
-  )),
+  setCompanionIntent: (intent) => set((state) => {
+    const companionId = intent.companionId ?? 'partner'
+    const previous = state.companionIntents[companionId]
+    if (sameCompanionIntent(previous ?? null, intent)) return state
+    return {
+      companionIntent: companionId === 'partner' ? intent : state.companionIntent,
+      companionIntents: { ...state.companionIntents, [companionId]: intent },
+    }
+  }),
 
   requestRescue: () => set({ rescueRequested: true }),
 

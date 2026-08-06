@@ -21,7 +21,7 @@ async def _assert_companion_loop_recovers() -> None:
     session.setup_game()
     calls = 0
 
-    def flaky_advance(_session):
+    def flaky_advance(_session, _companion_id="partner"):
         nonlocal calls
         calls += 1
         if calls == 1:
@@ -35,7 +35,7 @@ async def _assert_companion_loop_recovers() -> None:
             patch("app.ws.manager.advance_companion", side_effect=flaky_advance),
         ):
             await asyncio.wait_for(manager._run_companion(room_id), timeout=0.1)
-        assert calls == 2
+        assert calls == 3
     finally:
         manager.rooms.pop(room_id, None)
         session_manager.remove(room_id)

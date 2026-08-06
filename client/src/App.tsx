@@ -153,8 +153,16 @@ function Scene({
         <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={playerCharacterId} />
         <Partner
           playerRef={playerGroupRef}
+          playerId="partner"
           characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
           spawn={SPAWNS.ai}
+          requestsThink
+        />
+        <Partner
+          playerRef={playerGroupRef}
+          playerId="partner-2"
+          characterId={runnerIds.filter((id) => id !== playerCharacterId)[1] ?? 'R06'}
+          spawn={SPAWNS.ai2}
         />
         <Seeker
           playerRef={playerGroupRef}

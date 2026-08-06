@@ -535,6 +535,7 @@ class TestEscapeFlow:
                 "gate_id": gate["gate_id"],
                 "escaped_player_ids": ["player1"],
                 "partner_status": "alive",
+                "companion_statuses": {"partner": "alive", "partner-2": "alive"},
             }
             assert session.state.phase.value == "result"
 

@@ -159,11 +159,14 @@ function FrozenCountdown() {
 
 function PartnerFrozenAlert() {
   const phase = useGameStore((s) => s.phase)
-  const partnerStatus = useGameStore((s) => s.players.partner?.status)
+  const players = useGameStore((s) => s.players)
   const freezeEvent = useGameStore((s) => s.lastFreezeEvent)
+  const frozenCompanionId = freezeEvent?.playerId?.startsWith('partner')
+    && players[freezeEvent.playerId]?.status === 'frozen'
+    ? freezeEvent.playerId
+    : null
   const [now, setNow] = useState(Date.now())
-  const visible = partnerStatus === 'frozen'
-    && freezeEvent?.playerId === 'partner'
+  const visible = frozenCompanionId !== null
     && (phase === 'playing' || phase === 'final_spell' || phase === 'escape')
 
   useEffect(() => {
@@ -184,7 +187,7 @@ function PartnerFrozenAlert() {
       border: '1px solid #B6FF3D', background: 'rgba(18,38,12,.9)',
       color: '#DFFF9A', fontSize: 12, fontWeight: 800,
     }}>
-      AI 동료 빙결 · {remaining}초 · 가까이 가서 E로 “땡”
+      {frozenCompanionId === 'partner-2' ? 'AI 동료 2' : 'AI 동료 1'} 빙결 · {remaining}초 · 가까이 가서 E로 “땡”
       {seekerKnown && <span style={{ color: '#FF8BAD', marginLeft: 8 }}>술래 마지막 위치 공유됨</span>}
     </div>
   )

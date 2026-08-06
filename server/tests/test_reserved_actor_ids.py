@@ -21,7 +21,7 @@ class FakeWebSocket:
         self.accepted = True
 
 
-@pytest.mark.parametrize("actor_id", ["partner", "seeker"])
+@pytest.mark.parametrize("actor_id", ["partner", "partner-2", "seeker"])
 def test_websocket_rejects_reserved_actor_id(actor_id: str) -> None:
     client = TestClient(app)
 
@@ -36,6 +36,7 @@ def test_websocket_rejects_reserved_actor_id(actor_id: str) -> None:
     ("actor_id", "required_role"),
     [
         ("partner", PlayerRole.AI_PARTNER),
+        ("partner-2", PlayerRole.AI_PARTNER),
         ("seeker", PlayerRole.SEEKER),
     ],
 )

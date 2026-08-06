@@ -101,17 +101,14 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         assert self.session.escaped_player_ids == {"partner"}
         assert self.websocket.messages[-1]["type"] == "runner_escaped"
 
-    async def test_ai_freeze_timeout_ends_solo_mission_that_requires_ai(self) -> None:
+    async def test_one_ai_freeze_timeout_does_not_end_three_runner_team(self) -> None:
         partner = self.session.state.get_player("partner")
         partner.freeze()
         self.session.state.freeze_timeout_sec = 0.01
         self.manager._schedule_freeze_timeout(self.room_id, partner.player_id)
         await asyncio.sleep(0.03)
         assert partner.status == PlayerStatus.ELIMINATED
-        assert self.session.state.phase == GamePhase.RESULT
-        assert self.websocket.messages[-1] == {
-            "type": "game_over", "reason": "partner_eliminated",
-        }
+        assert self.session.state.phase == GamePhase.PLAYING
 
     async def test_ai_rescue_cannot_reach_human_through_a_wall(self) -> None:
         human = self.session.state.get_player(self.player_id)
@@ -122,10 +119,12 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         await self.manager._complete_partner_rescue(self.room_id, human.player_id)
         assert human.status == PlayerStatus.FROZEN
 
-    async def test_ai_freeze_immediately_finishes_an_already_frozen_team(self) -> None:
+    async def test_ai_freeze_only_finishes_when_all_three_runners_are_frozen(self) -> None:
         human = self.session.state.get_player(self.player_id)
         partner = self.session.state.get_player("partner")
+        partner_two = self.session.state.get_player("partner-2")
         human.freeze()
+        partner_two.freeze()
         delivered = await self.manager._broadcast_companion_speech(self.room_id, {
             "type": "companion_report", "message": "빨간 물건을 찾았어",
         })

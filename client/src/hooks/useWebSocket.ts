@@ -226,6 +226,7 @@ export default function useWebSocket() {
 
       case 'companion_intent':
         useGameStore.getState().setCompanionIntent({
+          companionId: data.companion_id ?? 'partner',
           state: data.state,
           targetId: data.target_id,
           target: data.target,
@@ -235,15 +236,15 @@ export default function useWebSocket() {
         break
 
       case 'companion_report':
-        addSubtitle('partner', data.message)
+        addSubtitle(data.companion_id ?? 'partner', data.message)
         break
 
       case 'companion_seeker_report':
-        addSubtitle('partner', data.message)
+        addSubtitle(data.companion_id ?? 'partner', data.message)
         break
 
       case 'companion_assignment':
-        addSubtitle('partner', '내가 구조를 맡을게. 위치를 확인했어!')
+        addSubtitle('partner', '구조 요청을 확인했어. 각자 상황을 판단할게!')
         break
 
       case 'partner_command':
