@@ -5,6 +5,7 @@
 > 상태: 현재 공간 진행과 한 판 구조의 정본  
 > 연동 순서: `game-design.md` → `game-design-v2.md` → 본 문서  
 > 사고 근거: `design-thinking-journey.md`
+> 방·미션 상세: `room-mission-design.md`
 
 ---
 
@@ -474,4 +475,3 @@ ESCAPE_OPEN
 - 지하는 운동장과 다른 정보 공포를 제공하는가?
 - 최종 주문과 금기어가 파이널에서도 중요한가?
 - 한 판의 시간이 빈 이동이 아니라 사건으로 채워지는가?
-
