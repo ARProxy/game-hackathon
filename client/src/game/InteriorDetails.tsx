@@ -27,6 +27,16 @@ const DARK_WOOD = '#795c43'
 const METAL = '#52636f'
 const LIGHT_METAL = '#71838f'
 
+// 방별 바닥과 복도 띠 — 동일한 검은 바닥 덩어리를 학교 공간으로 분절한다.
+for (const [floor, y] of [['F1', 0], ['F2', 3.6], ['F3', 7.2]] as const) {
+  box(floor, [-13, y + 0.014, -27.2], [41.4, 0.028, 3.15], '#73818a')
+  box(floor, [-13, y + 0.03, -27.2], [0.12, 0.035, 3.0], '#d8c46f')
+  for (const cx of [-30.5, -23.5, -9.5]) {
+    box(floor, [cx, y + 0.014, -32.35], [6.5, 0.028, 6.25], '#8b765d')
+    box(floor, [cx, y + 0.075, -29.2], [6.45, 0.15, 0.08], '#d7d0bd')
+  }
+}
+
 function localPoint(x: number, z: number, dx: number, dz: number, rotation: number): [number, number] {
   return [
     x + dx * Math.cos(rotation) + dz * Math.sin(rotation),

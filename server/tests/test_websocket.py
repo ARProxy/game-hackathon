@@ -56,7 +56,7 @@ class TestSpeechJudgment:
             ping = ws.receive_json()
             data = ws.receive_json()
             assert ping["type"] == "sound_ping"
-            assert ping["position"] == {"x": -9.8, "z": -22.0}
+            assert ping["position"] == {"x": -9.5, "z": -27.2}
             assert data["type"] == "speech_safe"
             assert data["transcript"] == "반짝이는 물건 확인해줘"
 
@@ -65,7 +65,7 @@ class TestSpeechJudgment:
             self._start_game(ws)
             ws.send_json({
                 "type": "action",
-                "payload": {"action_type": "move", "x": -9.3, "z": -21.7},
+                "payload": {"action_type": "move", "x": -9.3, "z": -26.9},
             })
             ws.send_json({
                 "type": "speech",
@@ -77,7 +77,7 @@ class TestSpeechJudgment:
             assert ping == {
                 "type": "sound_ping",
                 "player_id": "player1",
-                "position": {"x": -9.3, "z": -21.7},
+                "position": {"x": -9.3, "z": -26.9},
             }
             assert judgment["type"] == "speech_safe"
 
@@ -166,7 +166,7 @@ class TestActions:
                 "action_type": "move",
                 "reason": "implausible_movement",
             }
-            assert (player.position.x, player.position.z) == (-9.8, -22.0)
+            assert (player.position.x, player.position.z) == (-9.5, -27.2)
 
     def test_ai_partner_can_rescue_human(self, client):
         from app.game.session import session_manager

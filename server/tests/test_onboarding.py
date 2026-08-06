@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from app.ai.mission import generate_round, load_prop_dict
+from app.ai.mission import MAP_SLOTS, generate_round, load_prop_dict
 from app.ai.onboarding import (
     FALLBACK_POOL,
     extract_forbidden_words,
@@ -76,3 +76,13 @@ def test_ai_failure_uses_three_unique_randomized_supported_words() -> None:
     assert len(words) == 3
     assert len(set(words)) == 3
     assert set(words) <= supported_prop_words()
+
+
+def test_initial_mission_slots_are_inside_the_locked_school() -> None:
+    def inside_school(slot: dict) -> bool:
+        x = slot["position"]["x"]
+        z = slot["position"]["z"]
+        return z <= -25.4 or (x <= -23.0 and -25.4 < z <= -8.0)
+
+    assert len(MAP_SLOTS) >= 9
+    assert all(inside_school(slot) for slot in MAP_SLOTS)

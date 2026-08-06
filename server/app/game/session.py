@@ -38,14 +38,14 @@ GATE_POSITIONS: dict[str, dict[str, float]] = {
     for gate in GATE_CONTRACT["gates"]
 }
 ROLE_SPAWNS: dict[PlayerRole, tuple[float, float]] = {
-    PlayerRole.HUMAN: (-9.8, -22.0),
-    PlayerRole.AI_PARTNER: (-16.0, -2.0),
-    PlayerRole.SEEKER: (26.0, -27.0),
+    PlayerRole.HUMAN: (-9.5, -27.2),
+    PlayerRole.AI_PARTNER: (-15.0, -27.2),
+    PlayerRole.SEEKER: (-30.5, -12.0),
 }
 ACTOR_SPAWNS: dict[str, tuple[float, float]] = {
-    "partner": (-16.0, -2.0),
-    "partner-2": (-12.5, -2.0),
-    "seeker": (26.0, -27.0),
+    "partner": (-15.0, -27.2),
+    "partner-2": (-20.0, -27.2),
+    "seeker": (-30.5, -12.0),
 }
 TRAP_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/trapContract.json"
 with TRAP_CONTRACT_PATH.open(encoding="utf-8") as trap_contract_file:

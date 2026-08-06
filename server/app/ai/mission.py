@@ -16,24 +16,21 @@ logger = logging.getLogger(__name__)
 
 PROP_DICT_PATH = Path(__file__).parent.parent / "data" / "prop_dict.json"
 
-# 맵 슬롯 — 프롭을 배치할 수 있는 위치 (구역별 분산)
+# 1층 학교 내부 슬롯. 탈출 게임의 초반 탐색이 운동장으로 새지 않도록
+# 현관 봉쇄 구간에서 실제로 접근 가능한 교실·복도·특별실에만 배치한다.
 MAP_SLOTS = [
-    # A구역 (놀이기구)
-    {"zone": "A", "position": {"x": -9, "z": -5}},
-    {"zone": "A", "position": {"x": -5, "z": -9}},
-    {"zone": "A", "position": {"x": -4, "z": -4}},
-    # B구역 (창고)
-    {"zone": "B", "position": {"x": 5, "z": -9}},
-    {"zone": "B", "position": {"x": 9, "z": -5}},
-    {"zone": "B", "position": {"x": 6, "z": -6}},
-    # C구역 (중앙)
-    {"zone": "C", "position": {"x": -9, "z": 5}},
-    {"zone": "C", "position": {"x": -5, "z": 9}},
-    {"zone": "C", "position": {"x": -6, "z": 6}},
-    # D구역 (골목출구)
-    {"zone": "D", "position": {"x": 5, "z": 9}},
-    {"zone": "D", "position": {"x": 9, "z": 5}},
-    {"zone": "D", "position": {"x": 6, "z": 6}},
+    {"zone": "1층 교실", "position": {"x": -30.5, "z": -33.6}},
+    {"zone": "행정실", "position": {"x": -23.5, "z": -33.6}},
+    {"zone": "현관 로비", "position": {"x": -12.2, "z": -31.0}},
+    {"zone": "보건실", "position": {"x": -4.0, "z": -29.9}},
+    {"zone": "서쪽 복도", "position": {"x": -28.0, "z": -27.2}},
+    {"zone": "중앙 복도", "position": {"x": -18.0, "z": -27.2}},
+    {"zone": "동쪽 복도", "position": {"x": -3.5, "z": -27.2}},
+    {"zone": "급식실", "position": {"x": -30.5, "z": -22.5}},
+    {"zone": "조리실", "position": {"x": -30.5, "z": -16.5}},
+    {"zone": "별관 복도", "position": {"x": -25.0, "z": -20.5}},
+    {"zone": "숙직실 앞", "position": {"x": -25.0, "z": -12.5}},
+    {"zone": "계단실 앞", "position": {"x": -16.5, "z": -30.2}},
 ]
 
 # 단서 단어 풀

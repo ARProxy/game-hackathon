@@ -148,7 +148,11 @@ function Scene({
             }
           }}
         />
-        <InteractiveDoors playerRef={playerGroupRef} visibleFloors={visibleFloors} />
+        <InteractiveDoors
+          playerRef={playerGroupRef}
+          visibleFloors={visibleFloors}
+          entranceUnlocked={phase === 'final_spell' || phase === 'escape'}
+        />
         <Props />
         <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={playerCharacterId} />
         <Partner

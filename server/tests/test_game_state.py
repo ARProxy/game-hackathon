@@ -132,6 +132,9 @@ class TestGameSessionTeamComposition:
         assert session.state.get_player("seeker").role == PlayerRole.SEEKER
         assert session.state.alive_non_seeker_count() == 3
         assert session.state.get_player("partner").position != session.state.get_player("partner-2").position
+        assert session.state.get_player("human1").position.z < -25.4
+        assert session.state.get_player("partner").position.z < -25.4
+        assert session.state.get_player("partner-2").position.z < -25.4
 
     def test_setup_game_is_idempotent_for_ai_roles(self):
         from app.game.session import GameSession

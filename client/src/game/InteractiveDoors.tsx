@@ -118,11 +118,64 @@ function Door({ slot, playerRef }: { slot: DoorSlot; playerRef: React.RefObject<
 export default function InteractiveDoors({
   playerRef,
   visibleFloors,
+  entranceUnlocked,
 }: {
   playerRef: React.RefObject<THREE.Group | null>
   visibleFloors?: FloorKey[]
+  entranceUnlocked: boolean
 }) {
-  return DOORS
-    .filter((slot) => !visibleFloors || visibleFloors.includes(slot.floor))
-    .map((slot) => <Door key={slot.id} slot={slot} playerRef={playerRef} />)
+  return (
+    <>
+      {DOORS
+        .filter((slot) => !visibleFloors || visibleFloors.includes(slot.floor))
+        .map((slot) => <Door key={slot.id} slot={slot} playerRef={playerRef} />)}
+      <MainEntrance unlocked={entranceUnlocked} />
+    </>
+  )
+}
+
+/** 미션 완료 전에는 학교 바깥으로 나갈 수 없는 현관 방화문. */
+function MainEntrance({ unlocked }: { unlocked: boolean }) {
+  const leftRef = useRef<RapierRigidBody>(null)
+  const rightRef = useRef<RapierRigidBody>(null)
+  const openingRef = useRef(0)
+  useFrame((_, delta) => {
+    openingRef.current = THREE.MathUtils.damp(openingRef.current, unlocked ? 1.55 : 0, 5, delta)
+    leftRef.current?.setNextKinematicTranslation({ x: -10.65 - openingRef.current, y: 0, z: -25.38 })
+    rightRef.current?.setNextKinematicTranslation({ x: -8.85 + openingRef.current, y: 0, z: -25.38 })
+  })
+  const panel = (ref: React.RefObject<RapierRigidBody | null>, x: number, side: 'left' | 'right') => (
+    <RigidBody ref={ref} type="kinematicPosition" colliders={false} position={[x, 0, -25.38]}>
+      <CuboidCollider args={[0.86, 1.1, 0.07]} position={[0, 1.1, 0]} />
+      <mesh position={[0, 1.1, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.72, 2.2, 0.14]} />
+        <meshStandardMaterial color="#667985" metalness={0.32} roughness={0.55} />
+      </mesh>
+      <mesh position={[side === 'left' ? 0.58 : -0.58, 1.08, 0.08]}>
+        <boxGeometry args={[0.08, 0.45, 0.035]} />
+        <meshStandardMaterial color="#d4dbe0" metalness={0.75} roughness={0.22} />
+      </mesh>
+      <mesh position={[0, 1.58, 0.076]}>
+        <boxGeometry args={[1.35, 0.72, 0.018]} />
+        <meshStandardMaterial color="#9fc1ca" transparent opacity={0.42} roughness={0.16} />
+      </mesh>
+    </RigidBody>
+  )
+  return (
+    <group>
+      {panel(leftRef, -10.65, 'left')}
+      {panel(rightRef, -8.85, 'right')}
+      <mesh position={[-9.75, 2.43, -25.36]}>
+        <boxGeometry args={[3.8, 0.36, 0.22]} />
+        <meshStandardMaterial color={unlocked ? '#3f6b62' : '#5d343a'} emissive={unlocked ? '#52E5FF' : '#FF2F6E'} emissiveIntensity={0.18} />
+      </mesh>
+      {!unlocked && (
+        <Html position={[-9.75, 2.75, -25.3]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
+          <div style={{ whiteSpace: 'nowrap', padding: '6px 10px', borderRadius: 7, color: '#FFB1C7', background: 'rgba(31,8,15,.9)', fontSize: 12, fontWeight: 800 }}>
+            출입 통제 · 학교 내부 미션을 완료하세요
+          </div>
+        </Html>
+      )}
+    </group>
+  )
 }
