@@ -13,8 +13,6 @@ import Partner from './game/Partner'
 import ThirdPersonCamera from './game/ThirdPersonCamera'
 import ThreatFeedback from './game/ThreatFeedback'
 import Fog from './game/Fog'
-import InteriorDetails from './game/InteriorDetails'
-import InteractiveDoors from './game/InteractiveDoors'
 import HUD from './components/HUD'
 import MiniMap from './components/MiniMap'
 import Onboarding from './components/Onboarding'
@@ -148,11 +146,6 @@ function Scene({
             }
           }}
         />
-        <InteractiveDoors
-          playerRef={playerGroupRef}
-          visibleFloors={visibleFloors}
-          entranceUnlocked={phase === 'final_spell' || phase === 'escape'}
-        />
         <Props />
         <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={playerCharacterId} />
         <Partner
@@ -179,12 +172,6 @@ function Scene({
           enabled={cameraMode === '3d' && !isPaused}
         />
       </Physics>
-
-      {/* ── 비주얼 오버레이 — 맵 네이티브 인스턴싱으로 핵심 실내 가구 복구 ── */}
-      <InteriorDetails visibleFloors={visibleFloors} />
-      {/* Kenney GLB 오버레이는 실제 GLB 인스턴싱 전까지 비활성화한다. */}
-      {/* <WallOverlay visibleFloors={visibleFloors} /> */}
-      {/* <Furnishings visibleFloors={visibleFloors} /> */}
 
       {/* ── 플레이어 시야 조명 ── */}
       {cameraMode === '3d' && <PlayerLight targetRef={playerGroupRef} />}

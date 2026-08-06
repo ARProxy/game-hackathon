@@ -69,6 +69,7 @@
  */
 import { useCallback, useEffect, useRef, useMemo } from 'react'
 import * as THREE from 'three'
+import SchoolCampusV4 from './SchoolCampusV4'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
 import {
@@ -2669,7 +2670,7 @@ function VisualBoxColorBatch({ items, color }: { items: typeof VISUALS; color: s
   )
 }
 
-export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape, elevatorY = 0 }: {
+export function LegacySchoolCampus({ visibleFloors, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape, elevatorY = 0 }: {
   visibleFloors?: FloorKey[]
   activeTraps?: string[]
   gateId?: string
@@ -2789,6 +2790,38 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateO
 
       <ElevatorCar y={elevatorY} />
 
+    </group>
+  )
+}
+
+/**
+ * v4 절차형 학교가 월드 지오메트리를 담당하고 기존 라운드 계약 컴포넌트는
+ * 서버 좌표 마이그레이션이 끝날 때까지 그대로 유지한다.
+ */
+export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape }: {
+  visibleFloors?: FloorKey[]
+  activeTraps?: string[]
+  gateId?: string
+  gateOpen?: boolean
+  onTrapEnter?: (id: string) => void
+  onGateArrive?: (id: string) => void
+  onGateEscape?: (id: string) => void
+  elevatorY?: number
+}) {
+  const show = (floor: FloorKey) => !visibleFloors || visibleFloors.includes(floor)
+  return (
+    <group>
+      <SchoolCampusV4 visibleFloors={visibleFloors} />
+      {TRAP_SLOTS.filter((trap) => show(trap.floor)).map((trap) => (
+        <TrapPlate key={trap.id} id={trap.id} position={trap.p} floor={trap.floor}
+          active={!activeTraps || activeTraps.includes(trap.id)} onTriggered={onTrapEnter} />
+      ))}
+      {GATE_SLOTS.map((gate) => (
+        <GateFrame key={gate.id} position={gate.p} rotationY={gate.ry} selected={gate.id === gateId}
+          open={gate.id === gateId && gateOpen}
+          onArrived={() => onGateArrive?.(gate.id)}
+          onEscaped={() => onGateEscape?.(gate.id)} />
+      ))}
     </group>
   )
 }
