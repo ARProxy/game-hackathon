@@ -20,7 +20,6 @@ export default function MiniMap() {
   const player = useGameStore((state) => state.players[state.playerId])
   const floor = useGameStore((state) => state.currentFloor)
   const partner = useGameStore((state) => state.companionIntent?.partnerPosition)
-  const seeker = useGameStore((state) => state.hunterIntent?.seekerPosition)
   const activeGate = useGameStore((state) => state.activeGate)
   const visible = phase === 'playing' || phase === 'final_spell' || phase === 'escape'
   if (!visible) return null
@@ -51,11 +50,10 @@ export default function MiniMap() {
         <text x="69" y="159" textAnchor="middle" fill="#9eb3c0" fontSize="8">후문 골목</text>
         {player && <Marker x={player.position.x} z={player.position.z} color="#52E5FF" label={playerId || '플레이어'} />}
         {partner && <Marker x={partner.x} z={partner.z} color="#B6FF3D" label="AI 동료" />}
-        {seeker && <Marker x={seeker.x} z={seeker.z} color="#FF2F6E" label="술래" />}
         {activeGate && <Marker x={activeGate.position.x} z={activeGate.position.z} color="#FFD45C" label="탈출구" />}
       </svg>
       <div style={{ display: 'flex', gap: 9, marginTop: 5, fontSize: 9, color: 'rgba(255,255,255,.65)' }}>
-        <span style={{ color: '#52E5FF' }}>● 나</span><span style={{ color: '#B6FF3D' }}>● 동료</span><span style={{ color: '#FF2F6E' }}>● 술래</span>
+        <span style={{ color: '#52E5FF' }}>● 나</span><span style={{ color: '#B6FF3D' }}>● 동료</span><span style={{ color: '#FFD45C' }}>● 탈출구</span>
       </div>
     </aside>
   )
