@@ -10,6 +10,7 @@ import {
   type CampusDoor,
   type CampusFloor,
   type CampusPlate,
+  type CampusRotation,
   type V3,
 } from './campusV4Data.js'
 
@@ -25,11 +26,18 @@ const rotation = new THREE.Euler()
 const quaternion = new THREE.Quaternion()
 const scale = new THREE.Vector3()
 
-function applyMatrix(ref: THREE.InstancedMesh, index: number, p: V3, s: V3, rot?: V3) {
+function rotationTuple(value?: CampusRotation | null): V3 | undefined {
+  if (Array.isArray(value)) return value
+  if (value && Array.isArray(value.rot)) return value.rot
+  return undefined
+}
+
+function applyMatrix(ref: THREE.InstancedMesh, index: number, p: V3, s: V3, rot?: CampusRotation | null) {
   position.set(...p)
   scale.set(...s)
-  if (rot) {
-    rotation.set(...rot)
+  const tuple = rotationTuple(rot)
+  if (tuple) {
+    rotation.set(...tuple)
     quaternion.setFromEuler(rotation)
   } else quaternion.identity()
   matrix.compose(position, quaternion, scale)
@@ -61,7 +69,7 @@ function PlateBatch({ items, color }: { items: CampusPlate[]; color: string }) {
   useEffect(() => {
     if (!ref.current) return
     items.forEach((item, index) => {
-      const rot: V3 = item.rot ?? [-Math.PI / 2, 0, 0]
+      const rot: CampusRotation = item.rot ?? [-Math.PI / 2, 0, 0]
       applyMatrix(ref.current!, index, item.p, [item.s[0], item.s[1], 1], rot)
     })
     ref.current.instanceMatrix.needsUpdate = true
@@ -144,7 +152,7 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
     <group>
       <RigidBody type="fixed" colliders={false}>
         {colliders.map((item, index) => (
-          <CuboidCollider key={index} args={[item.s[0] / 2, item.s[1] / 2, item.s[2] / 2]} position={item.p} rotation={item.rot} />
+          <CuboidCollider key={index} args={[item.s[0] / 2, item.s[1] / 2, item.s[2] / 2]} position={item.p} rotation={rotationTuple(item.rot)} />
         ))}
       </RigidBody>
       {[...boxGroups].map(([color, items]) => <BoxBatch key={color} color={color} items={items} />)}

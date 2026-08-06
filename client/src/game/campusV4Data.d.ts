@@ -1,13 +1,14 @@
 export type CampusFloor = 'OUT' | 'B1' | 'F1' | 'F2' | 'F3' | 'ROOF'
 export type V2 = [number, number]
 export type V3 = [number, number, number]
+export type CampusRotation = V3 | { rot: V3 }
 
 export interface CampusBox {
   f: CampusFloor
   p: V3
   s: V3
   c: string
-  rot?: V3
+  rot?: CampusRotation
   e?: number
   hide?: boolean
 }
@@ -27,7 +28,7 @@ export interface CampusCylinder {
   r: number
   h: number
   c: string
-  rot?: V3
+  rot?: CampusRotation
 }
 
 export interface CampusFixture {
