@@ -14,7 +14,9 @@ import ThirdPersonCamera from './game/ThirdPersonCamera'
 import ThreatFeedback from './game/ThreatFeedback'
 import Fog from './game/Fog'
 import InteriorDetails from './game/InteriorDetails'
+import InteractiveDoors from './game/InteractiveDoors'
 import HUD from './components/HUD'
+import MiniMap from './components/MiniMap'
 import Onboarding from './components/Onboarding'
 import ForbiddenReveal from './components/ForbiddenReveal'
 import ResultScreen from './components/ResultScreen'
@@ -146,6 +148,7 @@ function Scene({
             }
           }}
         />
+        <InteractiveDoors playerRef={playerGroupRef} visibleFloors={visibleFloors} />
         <Props />
         <Player ref={playerRef} position={[SPAWNS.player[0], 0, SPAWNS.player[1]]} characterId={playerCharacterId} />
         <Partner
@@ -382,6 +385,7 @@ function App() {
       </Canvas>
 
       <HUD />
+      <MiniMap />
       <div className="chase-feedback" aria-hidden="true">
         <i className="chase-feedback-left" />
         <i className="chase-feedback-right" />

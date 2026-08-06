@@ -104,6 +104,7 @@ interface GameStore {
   outcome: GameOutcome
   resultReason: string | null
   isPaused: boolean
+  currentFloor: 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF'
   forbiddenWords: string[]
   sourceAnswers: string[]
   freezeCount: number
@@ -147,6 +148,7 @@ interface GameStore {
   setSelectedCharacter: (characterId: string) => void
   setPhase: (phase: GamePhase) => void
   setPaused: (paused: boolean) => void
+  setCurrentFloor: (floor: 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF') => void
   startRound: () => void
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
@@ -190,6 +192,7 @@ const initialState = {
   outcome: null as GameOutcome,
   resultReason: null as string | null,
   isPaused: false,
+  currentFloor: 'OUT' as const,
   forbiddenWords: [],
   sourceAnswers: [] as string[],
   freezeCount: 0,
@@ -259,6 +262,7 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setPhase: (phase) => set({ phase }),
   setPaused: (isPaused) => set({ isPaused }),
+  setCurrentFloor: (currentFloor) => set({ currentFloor }),
 
   startRound: () => set({ roundStartedAt: Date.now(), elapsedSeconds: null }),
 

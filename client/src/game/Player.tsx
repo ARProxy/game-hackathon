@@ -141,6 +141,19 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     // 서버가 빙결 핑과 청각 이벤트에 실제 좌표를 사용하도록 10Hz로 동기화한다.
     const now = clock.elapsedTime
     if (now - lastPositionSync.current >= 0.1) {
+      const insideMain = pos.x >= -34.5 && pos.x <= 8.5 && pos.z >= -36.2 && pos.z <= -25
+      const insideWing = pos.x >= -34.5 && pos.x <= -22.5 && pos.z >= -25.5 && pos.z <= -7.5
+      const insideGym = pos.x >= 13.5 && pos.x <= 36.5 && pos.z >= -36.2 && pos.z <= -17.5
+      const insideBuilding = insideMain || insideWing || insideGym
+      const currentFloor = pos.y >= 10.2
+        ? 'ROOF'
+        : pos.y >= 6.6
+          ? 'F3'
+          : pos.y >= 3
+            ? 'F2'
+            : insideBuilding ? 'F1' : 'OUT'
+      store.updatePlayer(playerId, { position: { x: pos.x, z: pos.z } })
+      if (store.currentFloor !== currentFloor) store.setCurrentFloor(currentFloor)
       sendGameMessage({
         type: 'action',
         payload: { action_type: 'move', x: pos.x, z: pos.z },
