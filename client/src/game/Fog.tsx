@@ -11,11 +11,11 @@ import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-const FOG_COLOR = '#101923'
+const FOG_COLOR = '#17242d'
 const VISION_RADIUS = 18
 
-const FOG_NEAR = 10
-const FOG_FAR = 28
+const FOG_NEAR = 16
+const FOG_FAR = 42
 
 export default function Fog() {
   const { scene } = useThree()

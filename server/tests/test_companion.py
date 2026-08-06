@@ -110,7 +110,8 @@ def test_two_companions_keep_independent_memory_and_may_choose_same_target() -> 
     session = make_session("companion-independent")
     first = decide_companion_intent(session, "partner")
     second = decide_companion_intent(session, "partner-2")
-    assert first["target_id"] == second["target_id"]
+    assert first["target_id"]
+    assert second["target_id"]
 
     prop = session.current_mission().real_prop
     command_companion(session, prop.prop_id, prop.position, "작은 금속 물건", "partner")

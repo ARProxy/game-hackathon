@@ -97,10 +97,10 @@ function Scene({
   return (
     <>
       {/* ── 조명 ── */}
-      <ambientLight intensity={cameraMode === 'cctv' ? 1.4 : 0.22} />
+      <ambientLight intensity={cameraMode === 'cctv' ? 1.4 : 0.5} />
       <directionalLight
         position={[10, 30, 10]}
-        intensity={cameraMode === 'cctv' ? 2.4 : 0.34}
+        intensity={cameraMode === 'cctv' ? 2.4 : 0.62}
         color={cameraMode === 'cctv' ? '#f2f7ff' : '#ffffff'}
       />
       {cameraMode === 'cctv' && (
@@ -110,7 +110,7 @@ function Scene({
           <CCTVVisuals />
         </>
       )}
-      {cameraMode === '3d' && <hemisphereLight args={['#8fb4ca', '#263038', 0.28]} />}
+      {cameraMode === '3d' && <hemisphereLight args={['#a8c8d9', '#35434a', 0.62]} />}
       {cameraMode === '3d' && <Fog />}
 
       {/* ── 물리 월드 ── */}
@@ -375,7 +375,7 @@ function App() {
           </div>
         )}
         camera={{
-          position: [60, 40, 60],
+          position: [-20, 2.8, -44.5],
           fov: 60,
           near: 0.1,
           far: 1000,

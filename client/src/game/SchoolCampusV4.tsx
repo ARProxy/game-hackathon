@@ -161,7 +161,7 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
       {[...fixtureGroups].map(([color, items]) => <BoxBatch key={color} color={color} items={items} emissive />)}
       <DoorBatch doors={doors} />
       {dynamicFixtures.map((fixture, index) => (
-        <pointLight key={index} position={fixture.p} color={TONE[fixture.tone] ?? fixture.c} intensity={3.4} distance={10} decay={1.8} />
+        <pointLight key={index} position={fixture.p} color={TONE[fixture.tone] ?? fixture.c} intensity={42} distance={11} decay={1.8} />
       ))}
       <mesh position={[0, -0.55, 0]} receiveShadow>
         <boxGeometry args={[MAP_SIZE, 1, MAP_SIZE]} />

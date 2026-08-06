@@ -134,7 +134,7 @@ class TestGameSessionTeamComposition:
         assert session.state.get_player("partner").position != session.state.get_player("partner-2").position
         assert session.state.get_player("human1").position.z < -25.4
         assert session.state.get_player("partner").position.z < -25.4
-        assert session.state.get_player("partner-2").position.z < -25.4
+        assert session.state.get_player("partner-2").position.z == pytest.approx(-19.7)
 
     def test_setup_game_is_idempotent_for_ai_roles(self):
         from app.game.session import GameSession
