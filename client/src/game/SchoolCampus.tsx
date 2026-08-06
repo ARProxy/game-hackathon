@@ -2244,6 +2244,16 @@ const INTERIOR_LIGHTS: { floor: FloorKey; p: V3; color: string; dynamic: boolean
   { floor: 'F3', p: [-20, 10.25, -27.2], color: '#c9e3ff', dynamic: false },
   { floor: 'F3', p: [-11, 10.25, -27.2], color: '#c9e3ff', dynamic: true },
   { floor: 'F3', p: [-2, 10.25, -27.2], color: '#c9e3ff', dynamic: false },
+  // 교실·특별실 내부: 복도 조명만으로 책상 면이 검게 뭉개지지 않게 한다.
+  { floor: 'F1', p: [-30.5, 3.02, -32.25], color: '#fff0d2', dynamic: true },
+  { floor: 'F1', p: [-23.5, 3.02, -32.25], color: '#f4ead5', dynamic: true },
+  { floor: 'F1', p: [-9.5, 3.02, -32.25], color: '#e6f2ff', dynamic: true },
+  { floor: 'F2', p: [-30.5, 6.62, -32.25], color: '#fff0d2', dynamic: true },
+  { floor: 'F2', p: [-23.5, 6.62, -32.25], color: '#fff0d2', dynamic: false },
+  { floor: 'F2', p: [-9.5, 6.62, -32.25], color: '#e3f1ff', dynamic: true },
+  { floor: 'F3', p: [-30.5, 10.22, -32.25], color: '#f3e8d1', dynamic: true },
+  { floor: 'F3', p: [-23.5, 10.22, -32.25], color: '#d9e9ff', dynamic: false },
+  { floor: 'F3', p: [-9.5, 10.22, -32.25], color: '#f3e8d1', dynamic: true },
 ]
 
 /** 스폰 */
