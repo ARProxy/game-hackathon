@@ -1,5 +1,6 @@
 """기획 2 AI 동료 독립 목표와 서버 권위 계약 테스트."""
 
+import math
 import time
 
 from app.ai.companion import (
@@ -49,6 +50,51 @@ def test_exploration_reports_and_remembers_without_solving_mission() -> None:
     assert session.companion_memory[intent["target_id"]]["appearance"] == action["appearance"]
     assert intent["target_id"] in session.companion_memory
     assert session.current_mission_index == 0
+
+
+def test_partner_autonomously_inspects_after_exploring_every_candidate() -> None:
+    session = make_session("companion-autonomous-inspection")
+    mission = session.current_mission()
+    candidates = [mission.real_prop, *mission.decoy_props]
+    runtime = session.companion_states["partner"]
+    runtime.memory = {
+        prop.prop_id: {"position": prop.position, "discovered_at": time.monotonic()}
+        for prop in candidates
+    }
+
+    intent = decide_companion_intent(session)
+    assert intent["state"] == "INSPECT_CANDIDATE"
+    assert intent["reason"] == "autonomous_hypothesis"
+
+    partner = session.state.get_player("partner")
+    partner.position.x, partner.position.z = intent["target"]["x"], intent["target"]["z"]
+    advance_companion(session)
+    runtime.goal_started = time.monotonic() - 4.0
+    _, action = advance_companion(session)
+    assert action == {"type": "inspect", "prop_id": intent["target_id"]}
+
+
+def test_partner_skips_candidate_already_inspected_by_teammate() -> None:
+    session = make_session("companion-skip-inspected")
+    mission = session.current_mission()
+    candidates = [mission.real_prop, *mission.decoy_props]
+    runtime = session.companion_states["partner-2"]
+    runtime.memory = {
+        prop.prop_id: {"position": prop.position, "discovered_at": time.monotonic()}
+        for prop in candidates
+    }
+    nearest = min(
+        candidates,
+        key=lambda prop: math.hypot(
+            prop.position["x"] - session.state.get_player("partner-2").position.x,
+            prop.position["z"] - session.state.get_player("partner-2").position.z,
+        ),
+    )
+    session.inspected_prop_ids.add(nearest.prop_id)
+
+    intent = decide_companion_intent(session, "partner-2")
+    assert intent["state"] == "INSPECT_CANDIDATE"
+    assert intent["target_id"] != nearest.prop_id
 
 
 def test_player_description_interrupts_exploration_for_inspection() -> None:

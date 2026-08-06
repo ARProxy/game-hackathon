@@ -118,7 +118,27 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                 "state": "EXPLORE_ZONE", "target_id": target.prop_id,
                 "target": target.position, "reason": "unexplored_mission_zone",
             }
-        return _intent("REPORT_FINDING", None, partner, "awaiting_player_description")
+
+        # 발견 보고만 끝낸 채 영구 대기하지 않는다. 각 동료는 자신의 위치와
+        # 기억을 기준으로 아직 서버 판정이 끝나지 않은 후보를 직접 조사한다.
+        # 전역 목표 잠금이나 역할 배정은 두지 않아 같은 후보 선택도 허용한다.
+        inspectable = [
+            prop for prop in candidates
+            if prop.prop_id not in session.inspected_prop_ids
+        ]
+        if inspectable:
+            target = min(
+                inspectable,
+                key=lambda prop: math.hypot(
+                    prop.position["x"] - partner.position.x,
+                    prop.position["z"] - partner.position.z,
+                ),
+            )
+            return {
+                "state": "INSPECT_CANDIDATE", "target_id": target.prop_id,
+                "target": target.position, "reason": "autonomous_hypothesis",
+            }
+        return _intent("REPORT_FINDING", None, partner, "mission_candidates_exhausted")
 
     return _intent("REGROUP", None, partner, "no_active_mission")
 
