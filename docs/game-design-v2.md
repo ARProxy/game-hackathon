@@ -4,7 +4,7 @@
 > 작성일: 2026-08-05
 > 상태: 현재 목표 경험의 정본
 > 연동 문서: `docs/game-design.md`(기획 1)
-> 의사결정 근거: `docs/product-decision-log.md`
+> 의사결정 근거: `docs/design-thinking-journey.md`(통합 정본), `docs/product-decision-log.md`(질문별 상세)
 
 ---
 
