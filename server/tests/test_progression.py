@@ -4,6 +4,7 @@ import pytest
 
 from app.game.progression import (
     FinalRoute,
+    ForbiddenRageTier,
     InvalidProgression,
     SeekerThreat,
     VerticalRoundPhase,
@@ -102,6 +103,9 @@ def test_serialized_policy_contains_client_safe_values() -> None:
         "seeker_count": 0,
         "seeker_threat": "inactive",
         "time_escalation_enabled": True,
+        "forbidden_word_violations": 0,
+        "fw_rage_tier": "calm",
+        "fw_speed_multiplier": 1.0,
     }
 
 
@@ -114,3 +118,57 @@ def test_result_can_end_the_round_from_danger_state() -> None:
     assert state.policy.seeker_count == 0
     with pytest.raises(InvalidProgression, match="종료 상태"):
         state.advance()
+
+
+@pytest.mark.parametrize(
+    ("violations", "tier", "speed", "hearing", "vision", "recent_position"),
+    [
+        (0, ForbiddenRageTier.CALM, 1.0, False, False, False),
+        (3, ForbiddenRageTier.WARNING, 1.1, False, False, False),
+        (5, ForbiddenRageTier.ENRAGED, 1.25, True, False, False),
+        (7, ForbiddenRageTier.EXTREME, 1.35, True, True, True),
+    ],
+)
+def test_forbidden_violation_thresholds_are_monotonic(
+    violations: int,
+    tier: ForbiddenRageTier,
+    speed: float,
+    hearing: bool,
+    vision: bool,
+    recent_position: bool,
+) -> None:
+    state = VerticalRoundState(forbidden_word_violations=violations)
+    policy = state.forbidden_rage_policy
+
+    assert policy.tier == tier
+    assert policy.speed_multiplier == speed
+    assert policy.hearing_expanded is hearing
+    assert policy.vision_expanded is vision
+    assert policy.recent_position_sense is recent_position
+
+
+def test_forbidden_rage_never_decreases() -> None:
+    state = VerticalRoundState()
+    observed = []
+
+    for _ in range(8):
+        observed.append(state.forbidden_rage_policy.speed_multiplier)
+        state.record_human_forbidden_word_violation()
+
+    assert observed == sorted(observed)
+    assert state.forbidden_word_violations == 8
+
+
+def test_final_freezes_effective_rage_but_keeps_counting_result_data() -> None:
+    state = VerticalRoundState(forbidden_word_violations=5)
+    for _ in range(4):
+        complete_and_advance(state)
+    state.advance(final_route=FinalRoute.FIELD)
+
+    assert state.forbidden_rage_policy.tier == ForbiddenRageTier.ENRAGED
+    state.record_human_forbidden_word_violation()
+    state.record_human_forbidden_word_violation()
+
+    assert state.forbidden_word_violations == 7
+    assert state.forbidden_rage_policy.tier == ForbiddenRageTier.ENRAGED
+    assert state.to_dict()["fw_rage_tier"] == "enraged"

@@ -47,6 +47,40 @@ class SeekerThreat(str, Enum):
     ENRAGED = "enraged"
 
 
+class ForbiddenRageTier(str, Enum):
+    CALM = "calm"
+    WARNING = "warning"
+    ENRAGED = "enraged"
+    EXTREME = "extreme"
+
+
+@dataclass(frozen=True)
+class ForbiddenRagePolicy:
+    tier: ForbiddenRageTier
+    minimum_violations: int
+    speed_multiplier: float
+    hearing_expanded: bool = False
+    vision_expanded: bool = False
+    recent_position_sense: bool = False
+
+
+FORBIDDEN_RAGE_POLICIES: tuple[ForbiddenRagePolicy, ...] = (
+    ForbiddenRagePolicy(ForbiddenRageTier.CALM, 0, 1.0),
+    ForbiddenRagePolicy(ForbiddenRageTier.WARNING, 3, 1.1),
+    ForbiddenRagePolicy(
+        ForbiddenRageTier.ENRAGED, 5, 1.25, hearing_expanded=True,
+    ),
+    ForbiddenRagePolicy(
+        ForbiddenRageTier.EXTREME,
+        7,
+        1.35,
+        hearing_expanded=True,
+        vision_expanded=True,
+        recent_position_sense=True,
+    ),
+)
+
+
 @dataclass(frozen=True)
 class PhasePolicy:
     active_floor: WorldFloor | None
@@ -97,6 +131,8 @@ class VerticalRoundState:
     phase: VerticalRoundPhase = VerticalRoundPhase.ROOFTOP_INTRO
     mission_complete: bool = False
     final_route: FinalRoute | None = None
+    forbidden_word_violations: int = 0
+    final_rage_policy: ForbiddenRagePolicy | None = None
 
     @property
     def policy(self) -> PhasePolicy:
@@ -106,6 +142,21 @@ class VerticalRoundState:
         if not self.policy.mission_required_to_advance:
             raise InvalidProgression(f"{self.phase.value}에는 완료할 필수 미션이 없다")
         self.mission_complete = True
+
+    @property
+    def forbidden_rage_policy(self) -> ForbiddenRagePolicy:
+        if self.final_rage_policy is not None:
+            return self.final_rage_policy
+        return next(
+            policy
+            for policy in reversed(FORBIDDEN_RAGE_POLICIES)
+            if self.forbidden_word_violations >= policy.minimum_violations
+        )
+
+    def record_human_forbidden_word_violation(self) -> ForbiddenRagePolicy:
+        """인간의 금기어 위반만 누적한다. 파이널에서는 난도만 고정한다."""
+        self.forbidden_word_violations += 1
+        return self.forbidden_rage_policy
 
     def advance(self, *, final_route: FinalRoute | None = None) -> VerticalRoundPhase:
         if self.policy.mission_required_to_advance and not self.mission_complete:
@@ -123,6 +174,7 @@ class VerticalRoundState:
             if final_route is None:
                 raise InvalidProgression("파이널 경로를 선택해야 한다")
             self.final_route = final_route
+            self.final_rage_policy = self.forbidden_rage_policy
             next_phase = (
                 VerticalRoundPhase.FIELD_FINAL
                 if final_route == FinalRoute.FIELD
@@ -166,4 +218,7 @@ class VerticalRoundState:
             "seeker_count": policy.seeker_count,
             "seeker_threat": policy.seeker_threat.value,
             "time_escalation_enabled": policy.time_escalation_enabled,
+            "forbidden_word_violations": self.forbidden_word_violations,
+            "fw_rage_tier": self.forbidden_rage_policy.tier.value,
+            "fw_speed_multiplier": self.forbidden_rage_policy.speed_multiplier,
         }
