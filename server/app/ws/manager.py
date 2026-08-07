@@ -29,7 +29,9 @@ from app.game.authority import (
     movement_is_plausible,
 )
 from app.game.session import DEFAULT_AI_PARTNER_IDS, RESERVED_ACTOR_ROLES, TRAP_CONTRACT, session_manager
+from app.game.progression import InvalidProgression
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
+from app.game.vertical_flow import complete_current_stage
 
 logger = logging.getLogger(__name__)
 
@@ -310,6 +312,22 @@ class ConnectionManager:
             await self.send_to(room_id, player_id, {
                 "type": "action_rejected", "action_type": "actor_move",
                 "reason": "invalid_actor_position",
+            })
+
+        elif action_type == "interact_stage_mission":
+            try:
+                event = complete_current_stage(session, player_id)
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": "interact_stage_mission",
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {
+                "type": "vertical_stage_advanced",
+                "actor_id": player_id,
+                **event,
             })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:

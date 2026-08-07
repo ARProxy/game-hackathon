@@ -74,6 +74,55 @@ class TestSpeechJudgment:
             assert data["type"] == "speech_safe"
             assert data["transcript"] == "반짝이는 물건 확인해줘"
 
+
+class TestVerticalStageInteraction:
+    def _start_game(self, ws):
+        ws.send_json({
+            "type": "start_game",
+            "payload": {"forbidden_words": ["열쇠", "커피", "빨간"]},
+        })
+        ws.receive_json()
+
+    def test_disabled_game_rejects_vertical_stage_action(self, client):
+        with client.websocket_connect("/ws/vertical-disabled/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            ws.receive_json()
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+
+            rejected = ws.receive_json()
+            assert rejected["type"] == "action_rejected"
+            assert rejected["action_type"] == "interact_stage_mission"
+            assert "아직 활성화" in rejected["reason"]
+
+    def test_server_advances_rooftop_stage_from_authoritative_position(self, client):
+        from app.game.progression import WorldFloor
+        from app.game.session import session_manager
+        from app.game.vertical_flow import mission_interaction_position
+
+        with client.websocket_connect("/ws/vertical-enabled/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
+            ws.receive_json()
+            session = session_manager.get_or_create("vertical-enabled")
+            session.vertical_progression_enabled = True
+            player = session.state.get_player("player1")
+            x, y, z = mission_interaction_position(session.vertical_round.phase)
+            player.position.x, player.position.y, player.position.z = x, y, z
+            player.position.floor = WorldFloor.ROOF
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+            advanced = ws.receive_json()
+
+            assert advanced["type"] == "vertical_stage_advanced"
+            assert advanced["completed_phase"] == "rooftop_intro"
+            assert advanced["next_phase"] == "floor_3"
+            assert advanced["progression"]["active_floor"] == "F3"
+
     def test_sound_ping_precedes_judgment_at_latest_position(self, client):
         with client.websocket_connect("/ws/room11/player1") as ws:
             self._start_game(ws)

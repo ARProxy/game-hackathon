@@ -22,6 +22,7 @@
     "F3_MISSION_ROOM_POOL": {
       "kind": "room_pool",
       "floor": "F3",
+      "interactionPosition": [4.2, 7.2, -41.95],
       "roomIds": ["f3_broadcast", "f3_av", "f3_dance", "f3_c33"],
       "deviceIds": ["ip_f3_broadcast", "ip_f3_av", "ip_f3_dance", "ip_f3_c33"]
     },
@@ -32,6 +33,7 @@
     "F2_MISSION_ROOM_POOL": {
       "kind": "room_pool",
       "floor": "F2",
+      "interactionPosition": [-52.2, 3.6, -37.9],
       "roomIds": ["f2_library", "f2_science", "f2_music", "f2_c23"],
       "deviceIds": ["ip_f2_library", "ip_f2_science", "ip_f2_music", "ip_f2_c23"]
     },
@@ -43,6 +45,7 @@
     "F1_MISSION_ROOM_POOL": {
       "kind": "room_pool",
       "floor": "F1",
+      "interactionPosition": [4.2, 0, -12.25],
       "roomIds": ["f1_security", "f1_admin", "f1_kitchen", "f1_health"],
       "deviceIds": ["ip_f1_security", "ip_f1_admin", "ip_f1_kitchen", "ip_f1_health"]
     },
@@ -69,7 +72,7 @@
     "ELEVATOR_SHAFT_CARGO": { "kind": "elevator", "floor": "F1", "position": [-50.35, 0, -56], "zone": "cargo_elevator", "elevatorId": "evc", "servedFloors": ["B1", "F1", "F2", "F3"] },
 
     "BASEMENT_FINAL_ENTRY": { "kind": "final_entry", "floor": "B1", "position": [-52.8, -3.6, -47.25], "zone": "b1_stair", "anchorRoom": "b1_stair" },
-    "BASEMENT_FINAL_DEVICE_POOL": { "kind": "room_pool", "floor": "B1", "roomIds": ["b1_mach", "b1_elec", "b1_archive", "b1_shelter"], "deviceIds": ["ip_b1_mach", "ip_b1_elec", "ip_b1_archive", "ip_b1_shelter"] },
+    "BASEMENT_FINAL_DEVICE_POOL": { "kind": "room_pool", "floor": "B1", "interactionPosition": [-42.2, -3.6, -54.2], "roomIds": ["b1_mach", "b1_elec", "b1_archive", "b1_shelter"], "deviceIds": ["ip_b1_mach", "ip_b1_elec", "ip_b1_archive", "ip_b1_shelter"] },
     "BASEMENT_ESCAPE_GATE": { "kind": "escape_gate", "floor": "B1", "position": [-2, -3.6, -30.1], "zone": "b1_tunnel", "anchorRoom": "b1_tunnel" },
 
     "FIELD_FINAL_ENTRY": { "kind": "final_entry", "floor": "FIELD", "position": [4.2, 0, 2.2], "zone": "field_east_entry" },
