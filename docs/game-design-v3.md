@@ -6,6 +6,7 @@
 > 연동 순서: `game-design.md` → `game-design-v2.md` → 본 문서  
 > 사고 근거: `design-thinking-journey.md`
 > 방·미션 상세: `room-mission-design.md`
+> 로직·AI 음성 개정: `game-design-v4.md`
 
 ---
 
