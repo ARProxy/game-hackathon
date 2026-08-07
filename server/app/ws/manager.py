@@ -31,7 +31,7 @@ from app.game.authority import (
 from app.game.session import DEFAULT_AI_PARTNER_IDS, RESERVED_ACTOR_ROLES, TRAP_CONTRACT, session_manager
 from app.game.progression import InvalidProgression
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
-from app.game.vertical_flow import complete_current_stage
+from app.game.vertical_flow import complete_current_stage, use_open_floor_transition
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +329,20 @@ class ConnectionManager:
                 "actor_id": player_id,
                 **event,
             })
+
+        elif action_type == "use_floor_transition":
+            try:
+                event = use_open_floor_transition(
+                    session, player_id, str(payload.get("route", "west")),
+                )
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": "use_floor_transition",
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {"type": "actor_floor_changed", **event})
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
             for companion_id in DEFAULT_AI_PARTNER_IDS:

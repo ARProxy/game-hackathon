@@ -41,6 +41,8 @@
     "F2_INTERCOM_B": { "kind": "device", "floor": "F2", "position": [-48.78, 5.02, -35.3], "zone": "f2_library", "deviceId": "ip_f2_library", "anchorRoom": "f2_library" },
     "F2_TO_F1_STAIR_WEST": { "kind": "stair", "floor": "F2", "position": [-54.05, 3.6, -54.2], "zone": "f2_core_nw", "anchorRoom": "f2_core_nw" },
     "F2_TO_F1_STAIR_EAST": { "kind": "stair", "floor": "F2", "position": [6.05, 3.6, -54.2], "zone": "f2_core_ne", "anchorRoom": "f2_core_ne" },
+    "F1_STAIR_ARRIVAL_WEST": { "kind": "stair", "floor": "F1", "position": [-54.05, 0, -54.2], "zone": "f1_core_nw", "anchorRoom": "f1_core_nw" },
+    "F1_STAIR_ARRIVAL_EAST": { "kind": "stair", "floor": "F1", "position": [6.05, 0, -54.2], "zone": "f1_core_ne", "anchorRoom": "f1_core_ne" },
 
     "F1_MISSION_ROOM_POOL": {
       "kind": "room_pool",

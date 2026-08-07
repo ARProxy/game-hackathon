@@ -171,6 +171,19 @@ export default function useWebSocket() {
         if (data.active_traps) useGameStore.getState().setActiveTraps(data.active_traps)
         break
 
+      case 'vertical_stage_advanced':
+        useGameStore.getState().setVerticalProgression({
+          enabled: true,
+          ...data.progression,
+        })
+        addSubtitle('system', `${data.completed_phase} 완료 — 다음 구역이 열렸습니다.`)
+        break
+
+      case 'actor_floor_changed':
+        useGameStore.getState().updatePlayer(data.actor_id, { position: data.position })
+        addSubtitle('system', `${data.position.floor} 구역으로 이동했습니다.`)
+        break
+
       case 'game_paused':
         useGameStore.getState().setPaused(true)
         break

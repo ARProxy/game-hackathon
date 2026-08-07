@@ -5,7 +5,7 @@
  * - 회전 잠금, 중력 적용
  */
 
-import { useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
 import type { RapierRigidBody } from '@react-three/rapier'
@@ -48,12 +48,30 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   const lastFootstep = useRef(-Infinity)
   const rightFootstep = useRef(false)
   const lastPositionSync = useRef(0)
+  const lastAuthorityFloor = useRef<string | undefined>(undefined)
   const { camera } = useThree()
   const { playPlayerFootstep } = useSound()
 
   useImperativeHandle(ref, () => ({
     getGroup: () => visualRef.current,
   }))
+
+  const playerId = useGameStore((s) => s.playerId)
+  const authoritativePosition = useGameStore((s) => s.players[playerId]?.position)
+  useEffect(() => {
+    if (
+      !rigidBodyRef.current
+      || !authoritativePosition?.floor
+      || lastAuthorityFloor.current === authoritativePosition.floor
+    ) return
+    rigidBodyRef.current.setTranslation({
+      x: authoritativePosition.x,
+      y: (authoritativePosition.y ?? 0) - COLLIDER_BOTTOM_Y,
+      z: authoritativePosition.z,
+    }, true)
+    rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    lastAuthorityFloor.current = authoritativePosition.floor
+  }, [authoritativePosition])
 
   useFrame(({ clock }, delta) => {
     if (!rigidBodyRef.current || !visualRef.current) return
@@ -152,7 +170,14 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
           : pos.y >= 3
             ? 'F2'
             : insideBuilding ? 'F1' : 'OUT'
-      store.updatePlayer(playerId, { position: { x: pos.x, z: pos.z } })
+      store.updatePlayer(playerId, {
+        position: {
+          ...playerState?.position,
+          x: pos.x,
+          y: pos.y + COLLIDER_BOTTOM_Y,
+          z: pos.z,
+        },
+      })
       if (store.currentFloor !== currentFloor) store.setCurrentFloor(currentFloor)
       sendGameMessage({
         type: 'action',
@@ -174,7 +199,6 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
 
   })
 
-  const playerId = useGameStore((s) => s.playerId)
   const isFrozen = useGameStore((s) => s.players[playerId]?.status === 'frozen')
 
   return (

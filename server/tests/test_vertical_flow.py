@@ -5,7 +5,11 @@ import pytest
 from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.session import GameSession
 from app.game.state import PlayerRole
-from app.game.vertical_flow import complete_current_stage, mission_interaction_position
+from app.game.vertical_flow import (
+    complete_current_stage,
+    mission_interaction_position,
+    use_open_floor_transition,
+)
 
 
 def active_session() -> tuple[GameSession, object]:
@@ -78,3 +82,49 @@ def test_frozen_actor_cannot_complete_stage() -> None:
 
     with pytest.raises(InvalidProgression, match="살아 있는 도망자"):
         complete_current_stage(session, "human")
+
+
+def test_open_transition_moves_actor_from_rooftop_to_active_third_floor() -> None:
+    session, human = active_session()
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    human.position.x, human.position.y, human.position.z = -54.05, 10.8, -54.2
+    human.position.floor = WorldFloor.ROOF
+
+    event = use_open_floor_transition(session, "human", "west")
+
+    assert event["position"]["floor"] == "F3"
+    assert human.position.floor == WorldFloor.F3
+    assert human.position.y == pytest.approx(7.2)
+
+
+def test_transition_rejects_wrong_floor_and_remote_use() -> None:
+    session, human = active_session()
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+
+    human.position.floor = WorldFloor.F3
+    with pytest.raises(InvalidProgression, match="출발 층"):
+        use_open_floor_transition(session, "human", "west")
+
+    human.position.floor = WorldFloor.ROOF
+    with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
+        use_open_floor_transition(session, "human", "west")
+
+
+def test_east_and_west_routes_open_after_third_floor_completion() -> None:
+    session, human = active_session()
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    human.position.x, human.position.y, human.position.z = -54.05, 10.8, -54.2
+    human.position.floor = WorldFloor.ROOF
+    use_open_floor_transition(session, "human", "west")
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+
+    human.position.x, human.position.y, human.position.z = 6.05, 7.2, -54.2
+    human.position.floor = WorldFloor.F3
+    event = use_open_floor_transition(session, "human", "east")
+
+    assert event["position"]["floor"] == "F2"
+    assert event["position"]["zone"] == "f2_core_ne"
