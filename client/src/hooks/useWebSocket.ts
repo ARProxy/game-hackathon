@@ -156,6 +156,9 @@ export default function useWebSocket() {
         startRound()
         setForbiddenWords(data.state.forbidden_words)
         if (data.state.players) hydratePlayers(data.state.players)
+        if (data.state.vertical_progression) {
+          useGameStore.getState().setVerticalProgression(data.state.vertical_progression)
+        }
         if (data.round) {
           setRoundData(data.round.props, data.round.missions, data.round.total_clues)
         }

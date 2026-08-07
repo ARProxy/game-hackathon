@@ -59,6 +59,21 @@ export interface MissionData {
 
 export interface ClueFragment { word: string; order: number; total: number }
 
+export interface VerticalProgressionState {
+  enabled: boolean
+  phase: string
+  mission_complete: boolean
+  final_route: 'field' | 'basement' | null
+  active_floor: 'ROOF' | 'F3' | 'F2' | 'F1' | 'FIELD' | 'B1' | null
+  accessible_floors: string[]
+  seeker_count: number
+  seeker_threat: string
+  time_escalation_enabled: boolean
+  forbidden_word_violations: number
+  fw_rage_tier: string
+  fw_speed_multiplier: number
+}
+
 export interface FreezeEvent {
   playerId: string
   matchedWord: string
@@ -118,6 +133,7 @@ interface GameStore {
   freezeCount: number
   roundStartedAt: number | null
   elapsedSeconds: number | null
+  verticalProgression: VerticalProgressionState | null
   players: Record<string, PlayerState>
 
   // 라운드 데이터 (미션, 프롭)
@@ -164,6 +180,7 @@ interface GameStore {
   setSourceAnswers: (answers: string[]) => void
   setOnboardingQuestions: (questions: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
+  setVerticalProgression: (progression: VerticalProgressionState) => void
   hydratePlayers: (players: Record<string, Omit<PlayerState, 'playerId'>>) => void
   setActiveGate: (gate: ActiveGate) => void
   setActiveTraps: (trapIds: string[]) => void
@@ -209,6 +226,7 @@ const initialState = {
   freezeCount: 0,
   roundStartedAt: null as number | null,
   elapsedSeconds: null as number | null,
+  verticalProgression: null as VerticalProgressionState | null,
   props: [] as PropData[],
   missions: [] as MissionData[],
   totalClues: 0,
@@ -307,6 +325,8 @@ export const useGameStore = create<GameStore>((set) => ({
       inspectingPropId: null,
       gateArrived: false,
     }),
+
+  setVerticalProgression: (verticalProgression) => set({ verticalProgression }),
 
   hydratePlayers: (players) => set({
     players: Object.fromEntries(

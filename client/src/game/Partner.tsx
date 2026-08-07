@@ -11,7 +11,7 @@ interface PartnerProps {
   playerRef: React.RefObject<THREE.Group | null>
   playerId?: string
   characterId?: string
-  spawn: readonly [number, number]
+  spawn: readonly [number, number, number]
   requestsThink?: boolean
 }
 
@@ -32,6 +32,7 @@ export default function Partner({
   requestsThink = false,
 }: PartnerProps) {
   const groupRef = useRef<THREE.Group>(null)
+  const baseY = spawn[1]
   const lastAuthorityPosition = useRef<{ x: number; z: number } | null>(null)
   const lastThink = useRef(-Infinity)
   const lastRescueAttempt = useRef(0)
@@ -97,11 +98,11 @@ export default function Partner({
       group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, Math.atan2(dx, dz), 0.15)
     }
     const active = partnerState?.status === 'alive' && (speed > 0 || intent.state === 'INSPECT_CANDIDATE')
-    group.position.y = active ? Math.abs(Math.sin(clock.elapsedTime * 7)) * 0.08 : 0
+    group.position.y = baseY + (active ? Math.abs(Math.sin(clock.elapsedTime * 7)) * 0.08 : 0)
   })
 
   return (
-    <group ref={groupRef} position={[spawn[0], 0, spawn[1]]}>
+    <group ref={groupRef} position={spawn}>
       <CharacterModel id={characterId} frozen={partnerFrozen} />
     </group>
   )

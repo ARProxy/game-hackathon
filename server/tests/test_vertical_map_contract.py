@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from app.game.map_slots import VERTICAL_MAP_CONTRACT, get_map_slot
+from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots, get_map_slot
 
 
 REQUIRED_SLOT_IDS = {
@@ -58,6 +58,13 @@ def test_rooftop_spawns_are_separate_and_keep_actor_feet_on_roof() -> None:
     for index, first in enumerate(positions):
         for second in positions[index + 1:]:
             assert math.hypot(first[0] - second[0], first[2] - second[2]) >= 2.0
+
+
+def test_actor_spawn_mapping_has_exact_solo_team() -> None:
+    spawns = actor_spawn_slots()
+
+    assert set(spawns) == {"human", "partner", "partner-2"}
+    assert all(slot["floor"] == "ROOF" for slot in spawns.values())
 
 
 @pytest.mark.parametrize("pool_id", [

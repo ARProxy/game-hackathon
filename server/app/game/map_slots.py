@@ -24,3 +24,12 @@ def get_map_slot(slot_id: str) -> dict:
         return VERTICAL_MAP_CONTRACT["slots"][slot_id]
     except KeyError as error:
         raise KeyError(f"정의되지 않은 수직 맵 슬롯: {slot_id}") from error
+
+
+def actor_spawn_slots() -> dict[str, dict]:
+    """기획 4 솔로 팀의 결정적 옥상 스폰을 actor ID별로 반환한다."""
+    return {
+        "human": get_map_slot("ROOF_RUNNER_SPAWN_A"),
+        "partner": get_map_slot("ROOF_RUNNER_SPAWN_B"),
+        "partner-2": get_map_slot("ROOF_RUNNER_SPAWN_C"),
+    }

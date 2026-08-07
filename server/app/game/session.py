@@ -17,6 +17,7 @@ from pathlib import Path
 from app.ai.forbidden import ForbiddenWordEngine
 from app.ai.mission import Mission, RoundData
 from app.game.authority import MovementSample
+from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots
 from app.game.progression import VerticalRoundState, WorldFloor
 from app.game.state import GamePhase, GameState, PlayerRole
 
@@ -81,6 +82,7 @@ class GameSession:
     def __init__(self, room_id: str) -> None:
         self.state = GameState(room_id=room_id)
         self.vertical_round = VerticalRoundState()
+        self.vertical_progression_enabled = bool(VERTICAL_MAP_CONTRACT["enabled"])
         self.engine = ForbiddenWordEngine(DEFAULT_FORBIDDEN_WORDS)
         self.spell_words: list[str] = []
         self.round_data: RoundData | None = None
@@ -167,14 +169,23 @@ class GameSession:
                 # actor ID의 서버 권위 역할은 매 판 시작 시 복구한다.
                 self.state.add_player(actor_id, required_role)
         now = time.monotonic()
+        vertical_spawns = actor_spawn_slots() if self.vertical_progression_enabled else {}
         for player in self.state.players.values():
-            x, z = ACTOR_SPAWNS.get(player.player_id, ROLE_SPAWNS[player.role])
+            slot = vertical_spawns.get(
+                "human" if player.role == PlayerRole.HUMAN else player.player_id
+            )
+            if slot:
+                x, y, z = slot["position"]
+                floor = WorldFloor(slot["floor"])
+                zone = slot["zone"]
+            else:
+                x, z = ACTOR_SPAWNS.get(player.player_id, ROLE_SPAWNS[player.role])
+                y, floor, zone = 0.0, WorldFloor.F1, "legacy_f1"
             player.position.x = x
-            player.position.y = 0.0
+            player.position.y = y
             player.position.z = z
-            # 수직 진행이 활성화되기 전의 기존 게임은 모두 1층 계약을 쓴다.
-            player.position.floor = WorldFloor.F1
-            player.position.zone = "legacy_f1"
+            player.position.floor = floor
+            player.position.zone = zone
             self.position_samples[player.player_id] = MovementSample(x, z, now)
         self.state.forbidden_words = words
         self.engine.update_words(words)
@@ -191,7 +202,7 @@ class GameSession:
             "vertical_progression": {
                 # actor 층 좌표와 문 계약이 연결되기 전에는 클라이언트가 이
                 # 상태만 보고 옥상 스폰이나 층 잠금을 적용하지 않는다.
-                "enabled": False,
+                "enabled": self.vertical_progression_enabled,
                 **self.vertical_round.to_dict(),
             },
         }

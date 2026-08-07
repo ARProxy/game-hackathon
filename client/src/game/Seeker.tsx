@@ -15,7 +15,7 @@ const PROXIMITY_SOUND_RANGE = 18
 
 interface SeekerProps {
   playerRef: React.RefObject<THREE.Group | null>
-  spawn: readonly [number, number]
+  spawn: readonly [number, number, number]
 }
 
 const SPEEDS: Record<HunterState, number> = {
@@ -44,7 +44,8 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
   const lastProximitySound = useRef(-Infinity)
   const lastFootstepSound = useRef(-Infinity)
   const lastSirenSound = useRef(-Infinity)
-  const lastPos = useRef(new THREE.Vector3(spawn[0], 0, spawn[1]))
+  const baseY = spawn[1]
+  const lastPos = useRef(new THREE.Vector3(...spawn))
   const avoidanceSide = useRef(1)
   const fixedSolidFilters = rapier.QueryFilterFlags.EXCLUDE_SENSORS
     | rapier.QueryFilterFlags.ONLY_FIXED
@@ -67,7 +68,7 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
     const store = useGameStore.getState()
     if (store.isPaused) return
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
-    if (!active) { group.position.y = 0; return }
+    if (!active) { group.position.y = baseY; return }
 
     const pos = group.position
     if (clock.elapsedTime - lastThink.current >= hunter.thinkIntervalSeconds) {
@@ -159,14 +160,14 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
         lastFootstepSound.current = clock.elapsedTime
       }
     }
-    pos.y = moved ? Math.abs(Math.sin(clock.elapsedTime * (running ? 6 : 3))) * (running ? 0.08 : 0.04) : 0
+    pos.y = baseY + (moved ? Math.abs(Math.sin(clock.elapsedTime * (running ? 6 : 3))) * (running ? 0.08 : 0.04) : 0)
     if (redLightRef.current) {
       redLightRef.current.intensity = 32 + Math.sin(clock.elapsedTime * 12) * 22
     }
   })
 
   return (
-    <group ref={groupRef} position={[spawn[0], 0, spawn[1]]}>
+    <group ref={groupRef} position={spawn}>
       <CharacterModel id="R00" camo={false} />
       {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />

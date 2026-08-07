@@ -170,7 +170,7 @@ class TestGameSessionTeamComposition:
         session.setup_game(["열쇠"])
 
         progression = session.state_payload()["vertical_progression"]
-        assert progression["enabled"] is False
+        assert progression["enabled"] is session.vertical_progression_enabled
         assert progression["phase"] == "rooftop_intro"
         assert progression["active_floor"] == "ROOF"
         assert progression["forbidden_word_violations"] == 0
