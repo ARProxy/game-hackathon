@@ -1225,6 +1225,24 @@ class ConnectionManager:
             await self._freeze_companion_from_trap(room_id, action["trap_id"], companion_id)
         elif action["type"] == "escape":
             await self._complete_companion_escape(room_id, companion_id)
+        elif action["type"] == "vertical_objective":
+            phase = action["phase"]
+            if phase == VerticalRoundPhase.FLOOR_3.value:
+                message = "3층 방송 장치를 찾았어. 이 장치는 사람의 목소리로 뜻을 전달해야 작동해."
+            else:
+                message = {
+                    VerticalRoundPhase.ROOFTOP_INTRO.value: "옥상 신호 장치를 찾았어. 내가 가동해 볼게.",
+                    VerticalRoundPhase.FLOOR_2.value: "2층 연결 장치를 찾았어. 지금 조작할게.",
+                    VerticalRoundPhase.FLOOR_1.value: "1층 관제 장치를 찾았어. 출구 잠금을 해제할게.",
+                }.get(phase, "활성 장치를 찾았어. 주변을 확인할게.")
+            delivered = await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report", "companion_id": companion_id,
+                "message": message, "phase": phase,
+            }, companion_id)
+            if delivered and phase != VerticalRoundPhase.FLOOR_3.value:
+                await self._handle_action(
+                    room_id, companion_id, {"action_type": "interact_stage_mission"},
+                )
 
     async def _complete_partner_rescue(self, room_id: str, target_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)

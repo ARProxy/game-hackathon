@@ -11,8 +11,9 @@ from app.ai.companion import (
 )
 from app.ai.mission import generate_round
 from app.game.session import GameSession
-from app.game.progression import WorldFloor
+from app.game.progression import VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, PlayerRole
+from app.game.vertical_flow import mission_interaction_position
 
 
 def make_session(room_id: str) -> GameSession:
@@ -23,6 +24,7 @@ def make_session(room_id: str) -> GameSession:
     seeker = session.state.get_player("seeker")
     assert seeker
     seeker.position.x, seeker.position.z = 50.0, 50.0
+    seeker.position.floor = session.state.get_player("partner").position.floor
     return session
 
 
@@ -198,3 +200,21 @@ def test_non_urgent_goal_is_held_long_enough_to_avoid_frame_thrashing() -> None:
     held, _ = advance_companion(session)
     assert held["state"] == first["state"]
     assert held["target_id"] == first["target_id"]
+
+
+def test_vertical_companion_reports_when_it_reaches_active_objective() -> None:
+    session = make_session("companion-vertical-objective")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    partner = session.state.get_player("partner")
+    seeker = session.state.get_player("seeker")
+    x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_2)
+    partner.position.x, partner.position.y, partner.position.z = x, y, z
+    partner.position.floor = WorldFloor.F2
+    seeker.position.floor = WorldFloor.F1
+
+    intent, action = advance_companion(session)
+
+    assert intent["reason"] == "vertical_stage_objective"
+    assert action == {"type": "vertical_objective", "phase": "floor_2"}
+    assert "floor_2" in session.companion_states["partner"].memory

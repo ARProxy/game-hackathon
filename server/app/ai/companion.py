@@ -228,6 +228,10 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
                 "position": intent["target"],
                 "zone": session.vertical_round.phase.value,
             }
+            action = {
+                "type": "vertical_objective",
+                "phase": session.vertical_round.phase.value,
+            }
         else:
             mission = session.current_mission()
             prop = next(
