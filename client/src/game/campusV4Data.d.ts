@@ -53,6 +53,23 @@ export interface CampusDoor {
   c: string
 }
 
+export interface CampusDevice {
+  kind: string
+  id: string
+  room: string
+  floor: CampusFloor
+  p: V2
+  y: number
+  note: string
+}
+
+export interface CampusCell {
+  id: string
+  floor: CampusFloor
+  box: [number, number, number, number, number, number]
+  links: string[]
+}
+
 export interface CampusData {
   solids: CampusBox[]
   visuals: CampusBox[]
@@ -62,6 +79,9 @@ export interface CampusData {
   doors: CampusDoor[]
   lamps: Array<{ p: V2; h: number; tone: string }>
   rooms: unknown[]
+  devices: CampusDevice[]
+  cells: CampusCell[]
+  EVS: Array<{ id: string; name: string; x: V2; z: V2; roof: boolean }>
   seed: number
 }
 

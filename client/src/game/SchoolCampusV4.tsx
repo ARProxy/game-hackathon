@@ -130,6 +130,31 @@ function isStructural(item: CampusBox) {
   return isWalkableSlab || isWall
 }
 
+/** 전체 층을 볼 때도 한 층이 동적 광원 예산을 독점하지 않게 순환 선택한다. */
+function selectDynamicFixtures(show: (floor: FloorKey) => boolean, limit = 18) {
+  const byFloor = new Map<FloorKey, typeof CAMPUS.fixtures>()
+  for (const fixture of CAMPUS.fixtures) {
+    if (!fixture.dynamic || !show(fixture.f)) continue
+    const fixtures = byFloor.get(fixture.f)
+    if (fixtures) fixtures.push(fixture)
+    else byFloor.set(fixture.f, [fixture])
+  }
+  const selected: typeof CAMPUS.fixtures = []
+  const floors = [...byFloor.keys()]
+  for (let index = 0; selected.length < limit; index++) {
+    let added = false
+    for (const floor of floors) {
+      const fixture = byFloor.get(floor)?.[index]
+      if (!fixture) continue
+      selected.push(fixture)
+      added = true
+      if (selected.length === limit) break
+    }
+    if (!added) break
+  }
+  return selected
+}
+
 export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: FloorKey[] }) {
   const visible = useMemo(() => new Set(visibleFloors), [visibleFloors])
   const show = useCallback((floor: FloorKey) => !visibleFloors || visible.has(floor), [visibleFloors, visible])
@@ -146,7 +171,7 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
   const cylinderGroups = useMemo(() => groupByColor(cylinders), [cylinders])
   const fixtureGroups = useMemo(() => groupByColor(fixtures), [fixtures])
   const colliders = useMemo(() => solids.filter(isStructural), [solids])
-  const dynamicFixtures = useMemo(() => CAMPUS.fixtures.filter((item) => item.dynamic && show(item.f)).slice(0, 18), [show])
+  const dynamicFixtures = useMemo(() => selectDynamicFixtures(show), [show])
 
   return (
     <group>
