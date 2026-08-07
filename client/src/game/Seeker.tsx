@@ -96,7 +96,7 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
         const stopDistance = intent.state === 'RUSH_GATE' ? 1.4 : 0.5
         if (intent.state !== 'DETECTED' && distance > stopDistance) {
           moveToward(pos, dx, dz, Math.min(
-            SPEEDS[intent.state] * intent.speedMultiplier * delta,
+            SPEEDS[intent.state] * intent.speedMultiplier * intent.stageSpeedMultiplier * delta,
             distance - stopDistance,
           ))
         }

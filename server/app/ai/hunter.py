@@ -10,10 +10,39 @@ from typing import Any
 
 from app.game.authority import WALL_RECTS, has_clear_catch_line, segment_intersects_rect
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
+from app.game.progression import VerticalRoundPhase
 
 CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/hunterContract.json"
 with CONTRACT_PATH.open(encoding="utf-8") as contract_file:
     CONTRACT = json.load(contract_file)
+
+VERTICAL_PHASE_SPEED = {
+    VerticalRoundPhase.ROOFTOP_INTRO: 0.0,
+    VerticalRoundPhase.FLOOR_3: 0.9,
+    VerticalRoundPhase.FLOOR_2: 1.05,
+    VerticalRoundPhase.FLOOR_1: 1.2,
+    VerticalRoundPhase.FIELD_FINAL: 1.3,
+    VerticalRoundPhase.BASEMENT_FINAL: 1.3,
+}
+
+
+def vertical_threat_snapshot(session: Any, now: float | None = None) -> dict[str, float]:
+    """층 진행·경과 시간·금기어 누적을 실제 술래 감각과 속도에 합성한다."""
+    if not session.vertical_progression_enabled:
+        return {"stage_speed_multiplier": 1.0, "hearing_multiplier": 1.0, "vision_multiplier": 1.0}
+    checked_at = time.time() if now is None else now
+    started_at = session.state.started_at or checked_at
+    time_tier = session.vertical_round.time_escalation_tier(checked_at - started_at)
+    rage = session.vertical_round.forbidden_rage_policy
+    return {
+        "stage_speed_multiplier": round(
+            VERTICAL_PHASE_SPEED.get(session.vertical_round.phase, 1.0)
+            * (1.0 + time_tier * 0.08) * rage.speed_multiplier,
+            4,
+        ),
+        "hearing_multiplier": 1.25 if rage.hearing_expanded else 1.0,
+        "vision_multiplier": 1.2 if rage.vision_expanded else 1.0,
+    }
 
 
 def director_snapshot(session: Any, now: float | None = None) -> dict[str, float]:
@@ -64,7 +93,8 @@ def record_hunter_signal(session: Any, player_id: str, position: dict, strength:
             float(position["x"]) - seeker.position.x,
             float(position["z"]) - seeker.position.z,
         )
-        if distance > CONTRACT["hearingDistance"]:
+        hearing_distance = CONTRACT["hearingDistance"] * vertical_threat_snapshot(session)["hearing_multiplier"]
+        if distance > hearing_distance:
             return False
     session.hunter_signal = {
         "player_id": player_id,
@@ -96,6 +126,7 @@ def decide_hunter_intent(session: Any) -> dict:
         forward_x, forward_z = forward_x / forward_length, forward_z / forward_length
 
     now = time.monotonic()
+    vision_distance = CONTRACT["visionDistance"] * vertical_threat_snapshot(session)["vision_multiplier"]
     visible: list[tuple[float, Any]] = []
     for runner in session.state.players.values():
         if runner.role == PlayerRole.SEEKER or runner.status in {
@@ -107,7 +138,7 @@ def decide_hunter_intent(session: Any) -> dict:
         dx = runner.position.x - seeker.position.x
         dz = runner.position.z - seeker.position.z
         distance = math.hypot(dx, dz)
-        if distance > CONTRACT["visionDistance"] or distance <= 0:
+        if distance > vision_distance or distance <= 0:
             continue
         if not has_clear_catch_line(
             (seeker.position.x, seeker.position.z),
@@ -194,7 +225,11 @@ def advance_hunter(session: Any) -> dict:
     if elapsed < minimum_interval and session.hunter_last_intent:
         return {**session.hunter_last_intent, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
 
-    intent = {**decide_hunter_intent(session), **director_snapshot(session)}
+    intent = {
+        **decide_hunter_intent(session),
+        **director_snapshot(session),
+        **vertical_threat_snapshot(session),
+    }
     dx = intent["target"]["x"] - seeker.position.x
     dz = intent["target"]["z"] - seeker.position.z
     distance = math.hypot(dx, dz)
@@ -207,7 +242,8 @@ def advance_hunter(session: Any) -> dict:
         session.hunter_forward = {"x": dx / distance, "z": dz / distance}
         if speed_key:
             step = min(
-                float(CONTRACT[speed_key]) * intent["speed_multiplier"] * min(elapsed, 0.5),
+                float(CONTRACT[speed_key]) * intent["speed_multiplier"]
+                * intent["stage_speed_multiplier"] * min(elapsed, 0.5),
                 max(0.0, distance - 0.5),
             )
             next_x, next_z = _safe_hunter_step(
@@ -225,6 +261,7 @@ def hunter_snapshot(session: Any) -> dict:
     seeker = session.state.get_player("seeker")
     intent = session.hunter_last_intent or {
         **decide_hunter_intent(session), **director_snapshot(session),
+        **vertical_threat_snapshot(session),
     }
     return {**intent, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
 

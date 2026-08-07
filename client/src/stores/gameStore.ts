@@ -101,6 +101,7 @@ export interface HunterIntent {
   reason: string
   directorTension: number
   speedMultiplier: number
+  stageSpeedMultiplier: number
 }
 
 export type CompanionState = 'EXPLORE_ZONE' | 'INSPECT_CANDIDATE' | 'REPORT_FINDING'

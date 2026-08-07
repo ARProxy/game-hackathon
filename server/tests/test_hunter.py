@@ -8,9 +8,10 @@ from app.ai.hunter import (
     decide_hunter_intent,
     director_snapshot,
     record_hunter_signal,
+    vertical_threat_snapshot,
 )
 from app.game.session import GameSession
-from app.game.progression import WorldFloor
+from app.game.progression import VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole
 
 
@@ -211,3 +212,25 @@ def test_director_reduces_pressure_while_teammate_is_frozen() -> None:
 
     assert relief["director_tension"] < normal["director_tension"]
     assert relief["speed_multiplier"] < normal["speed_multiplier"]
+
+
+def test_vertical_threat_grows_as_runners_descend_and_time_passes() -> None:
+    session = make_session("hunter-vertical-pressure")
+    started_at = session.state.started_at
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    floor_3 = vertical_threat_snapshot(session, now=started_at)
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
+    floor_1 = vertical_threat_snapshot(session, now=started_at + 480)
+
+    assert floor_1["stage_speed_multiplier"] > floor_3["stage_speed_multiplier"]
+
+
+def test_forbidden_rage_expands_hearing_and_vision() -> None:
+    session = make_session("hunter-rage-senses")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    for _ in range(7):
+        session.vertical_round.record_human_forbidden_word_violation()
+    threat = vertical_threat_snapshot(session, now=session.state.started_at)
+
+    assert threat["hearing_multiplier"] == 1.25
+    assert threat["vision_multiplier"] == 1.2

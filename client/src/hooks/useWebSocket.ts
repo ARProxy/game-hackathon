@@ -249,6 +249,7 @@ export default function useWebSocket() {
           reason: data.reason,
           directorTension: data.director_tension ?? 0,
           speedMultiplier: data.speed_multiplier ?? 1,
+          stageSpeedMultiplier: data.stage_speed_multiplier ?? 1,
         })
         break
 
