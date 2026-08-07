@@ -10,6 +10,8 @@ import time
 from dataclasses import dataclass, field
 from enum import Enum
 
+from app.game.progression import WorldFloor
+
 
 class PlayerRole(str, Enum):
     HUMAN = "human"
@@ -37,6 +39,9 @@ class GamePhase(str, Enum):
 class Position:
     x: float = 0.0
     z: float = 0.0
+    y: float = 0.0
+    floor: WorldFloor = WorldFloor.F1
+    zone: str = "legacy_f1"
 
 
 @dataclass
@@ -66,6 +71,9 @@ class Player:
     def escape(self) -> None:
         self.status = PlayerStatus.ESCAPED
         self.frozen_at = None
+
+    def shares_floor_with(self, other: Player) -> bool:
+        return self.position.floor == other.position.floor
 
 
 @dataclass
@@ -130,7 +138,13 @@ class GameState:
                 pid: {
                     "role": p.role.value,
                     "status": p.status.value,
-                    "position": {"x": p.position.x, "z": p.position.z},
+                    "position": {
+                        "x": p.position.x,
+                        "y": p.position.y,
+                        "z": p.position.z,
+                        "floor": p.position.floor.value,
+                        "zone": p.position.zone,
+                    },
                 }
                 for pid, p in self.players.items()
             },

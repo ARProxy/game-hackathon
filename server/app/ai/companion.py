@@ -249,6 +249,8 @@ def companion_snapshot(session: Any, companion_id: str = "partner") -> dict:
 
 
 def _distance(first: Any, second: Any) -> float:
+    if not first.shares_floor_with(second):
+        return math.inf
     return math.hypot(first.position.x - second.position.x, first.position.z - second.position.z)
 
 

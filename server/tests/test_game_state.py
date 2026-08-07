@@ -113,6 +113,23 @@ class TestGameState:
         assert d["forbidden_words"] == ["열쇠", "커피"]
         assert "human1" in d["players"]
         assert d["players"]["human1"]["role"] == "human"
+        assert d["players"]["human1"]["position"] == {
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "floor": "F1",
+            "zone": "legacy_f1",
+        }
+
+    def test_players_on_different_floors_do_not_share_contact_space(self, state):
+        from app.game.progression import WorldFloor
+
+        human = state.get_player("human1")
+        ai = state.get_player("ai1")
+        human.position.floor = WorldFloor.F2
+        ai.position.floor = WorldFloor.F1
+
+        assert not human.shares_floor_with(ai)
 
     def test_initial_phase_is_lobby(self):
         s = GameState(room_id="new")

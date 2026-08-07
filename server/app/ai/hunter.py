@@ -51,6 +51,14 @@ def record_hunter_signal(session: Any, player_id: str, position: dict, strength:
         (player for player in session.state.players.values() if player.role == PlayerRole.SEEKER),
         None,
     )
+    source = session.state.get_player(player_id)
+    if (
+        strength in {"speech", "ai_action"}
+        and seeker is not None
+        and source is not None
+        and not source.shares_floor_with(seeker)
+    ):
+        return False
     if strength in {"speech", "ai_action"} and seeker is not None:
         distance = math.hypot(
             float(position["x"]) - seeker.position.x,
@@ -93,6 +101,8 @@ def decide_hunter_intent(session: Any) -> dict:
         if runner.role == PlayerRole.SEEKER or runner.status in {
             PlayerStatus.ELIMINATED, PlayerStatus.ESCAPED,
         }:
+            continue
+        if not runner.shares_floor_with(seeker):
             continue
         dx = runner.position.x - seeker.position.x
         dz = runner.position.z - seeker.position.z

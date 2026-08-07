@@ -17,7 +17,7 @@ from pathlib import Path
 from app.ai.forbidden import ForbiddenWordEngine
 from app.ai.mission import Mission, RoundData
 from app.game.authority import MovementSample
-from app.game.progression import VerticalRoundState
+from app.game.progression import VerticalRoundState, WorldFloor
 from app.game.state import GamePhase, GameState, PlayerRole
 
 logger = logging.getLogger(__name__)
@@ -170,7 +170,11 @@ class GameSession:
         for player in self.state.players.values():
             x, z = ACTOR_SPAWNS.get(player.player_id, ROLE_SPAWNS[player.role])
             player.position.x = x
+            player.position.y = 0.0
             player.position.z = z
+            # 수직 진행이 활성화되기 전의 기존 게임은 모두 1층 계약을 쓴다.
+            player.position.floor = WorldFloor.F1
+            player.position.zone = "legacy_f1"
             self.position_samples[player.player_id] = MovementSample(x, z, now)
         self.state.forbidden_words = words
         self.engine.update_words(words)

@@ -459,7 +459,7 @@ class ConnectionManager:
 
     @staticmethod
     def _players_within(first: Player, second: Player, radius: float) -> bool:
-        return (
+        return first.shares_floor_with(second) and (
             (first.position.x - second.position.x) ** 2
             + (first.position.z - second.position.z) ** 2
         ) <= radius ** 2

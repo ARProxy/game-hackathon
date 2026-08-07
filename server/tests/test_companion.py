@@ -11,6 +11,7 @@ from app.ai.companion import (
 )
 from app.ai.mission import generate_round
 from app.game.session import GameSession
+from app.game.progression import WorldFloor
 from app.game.state import GamePhase, PlayerRole
 
 
@@ -139,6 +140,18 @@ def test_visible_nearby_seeker_interrupts_exploration() -> None:
     assert intent["state"] == "AVOID_SEEKER"
     assert intent["target"]["x"] < partner.position.x
     assert session.companion_last_seeker_seen["position"] == {"x": 15.0, "z": 0.0}
+
+
+def test_companion_does_not_see_a_nearby_seeker_through_the_floor() -> None:
+    session = make_session("companion-floor-isolation")
+    partner = session.state.get_player("partner")
+    seeker = session.state.get_player("seeker")
+    partner.position.x, partner.position.z = 12.0, 0.0
+    seeker.position.x, seeker.position.z = 13.0, 0.0
+    partner.position.floor = WorldFloor.F2
+    seeker.position.floor = WorldFloor.F1
+
+    assert decide_companion_intent(session)["state"] != "AVOID_SEEKER"
 
 
 def test_partner_uses_and_reports_recent_seeker_memory_after_losing_sight() -> None:

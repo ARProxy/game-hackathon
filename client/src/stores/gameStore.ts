@@ -15,7 +15,13 @@ export interface PlayerState {
   playerId: string
   role: 'human' | 'ai_partner' | 'seeker'
   status: PlayerStatus
-  position: { x: number; z: number }
+  position: {
+    x: number
+    y?: number
+    z: number
+    floor?: 'ROOF' | 'F3' | 'F2' | 'F1' | 'FIELD' | 'B1'
+    zone?: string
+  }
 }
 
 export interface PropData {

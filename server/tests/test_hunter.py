@@ -10,6 +10,7 @@ from app.ai.hunter import (
     record_hunter_signal,
 )
 from app.game.session import GameSession
+from app.game.progression import WorldFloor
 from app.game.state import PlayerRole
 
 
@@ -110,6 +111,39 @@ def test_normal_speech_outside_hearing_radius_is_not_a_signal() -> None:
     heard = record_hunter_signal(session, "human", {"x": 18.0, "z": 0.0}, "speech")
     assert heard
     assert session.hunter_signal is not None
+
+
+def test_normal_speech_and_vision_do_not_cross_floors() -> None:
+    session = make_session("hunter-floor-isolation")
+    human = session.state.get_player("human")
+    seeker = session.state.get_player("seeker")
+    partner = session.state.get_player("partner")
+    assert human and seeker and partner
+    human.position.x, human.position.z = 1.0, 0.0
+    seeker.position.x, seeker.position.z = 0.0, 0.0
+    partner.position.x, partner.position.z = 30.0, 30.0
+    human.position.floor = WorldFloor.F2
+    seeker.position.floor = WorldFloor.F1
+
+    assert not record_hunter_signal(
+        session, "human", {"x": 1.0, "z": 0.0}, "speech",
+    )
+    session.hunter_forward = {"x": 1.0, "z": 0.0}
+    assert decide_hunter_intent(session)["state"] == "HUNT"
+
+
+def test_freeze_ping_can_lure_a_seeker_from_another_floor() -> None:
+    session = make_session("hunter-cross-floor-freeze")
+    human = session.state.get_player("human")
+    seeker = session.state.get_player("seeker")
+    assert human and seeker
+    human.position.floor = WorldFloor.F3
+    seeker.position.floor = WorldFloor.F2
+
+    assert record_hunter_signal(
+        session, "human", {"x": 4.0, "z": 9.0}, "freeze",
+    )
+    assert decide_hunter_intent(session)["state"] == "INVESTIGATE"
 
 
 def test_server_step_does_not_cross_a_wall_segment() -> None:
