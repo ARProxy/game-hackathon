@@ -17,6 +17,7 @@ from pathlib import Path
 from app.ai.forbidden import ForbiddenWordEngine
 from app.ai.mission import Mission, RoundData
 from app.game.authority import MovementSample
+from app.game.progression import VerticalRoundState
 from app.game.state import GamePhase, GameState, PlayerRole
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,7 @@ class CompanionRuntime:
 class GameSession:
     def __init__(self, room_id: str) -> None:
         self.state = GameState(room_id=room_id)
+        self.vertical_round = VerticalRoundState()
         self.engine = ForbiddenWordEngine(DEFAULT_FORBIDDEN_WORDS)
         self.spell_words: list[str] = []
         self.round_data: RoundData | None = None
@@ -129,6 +131,7 @@ class GameSession:
     def setup_game(self, forbidden_words: list[str] | None = None) -> None:
         """금기어를 설정하고 게임 준비."""
         words = forbidden_words or DEFAULT_FORBIDDEN_WORDS
+        self.vertical_round = VerticalRoundState()
         self.round_data = None
         self.spell_words = []
         self.current_mission_index = 0
@@ -176,6 +179,18 @@ class GameSession:
         logger.info(
             "game setup: room=%s words=%s", self.state.room_id, words
         )
+
+    def state_payload(self) -> dict:
+        """기존 상태와 기획 4 진행 계약을 함께 내보내는 호환 페이로드."""
+        return {
+            **self.state.to_dict(),
+            "vertical_progression": {
+                # actor 층 좌표와 문 계약이 연결되기 전에는 클라이언트가 이
+                # 상태만 보고 옥상 스폰이나 층 잠금을 적용하지 않는다.
+                "enabled": False,
+                **self.vertical_round.to_dict(),
+            },
+        }
 
     # 기존 단일 동료 테스트와 호출부가 점진적으로 이행할 수 있는 호환 프로퍼티.
     @property

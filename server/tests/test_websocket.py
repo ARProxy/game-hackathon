@@ -35,6 +35,20 @@ class TestWebSocketConnection:
             assert data["type"] == "game_started"
             assert data["state"]["phase"] == "playing"
             assert data["state"]["forbidden_words"] == ["열쇠", "커피", "빨간"]
+            assert data["state"]["vertical_progression"] == {
+                "enabled": False,
+                "phase": "rooftop_intro",
+                "mission_complete": False,
+                "final_route": None,
+                "active_floor": "ROOF",
+                "accessible_floors": ["ROOF"],
+                "seeker_count": 0,
+                "seeker_threat": "inactive",
+                "time_escalation_enabled": True,
+                "forbidden_word_violations": 0,
+                "fw_rage_tier": "calm",
+                "fw_speed_multiplier": 1.0,
+            }
             assert data["active_gate"]["gate_id"] in {"gate_back", "gate_main", "gate_gym"}
 
 
@@ -384,12 +398,16 @@ class TestGameOver:
             freeze_msg = ws.receive_json()
             assert freeze_msg["type"] == "freeze"
             assert freeze_msg["player_id"] == "player1"
+            assert freeze_msg["forbidden_word_violations"] == 1
+            assert freeze_msg["fw_rage_tier"] == "calm"
 
             # 서버 상태에 AI 동료와 술래가 등록됐는지 새 연결의 시작 응답으로 확인한다.
             # 추가 game_over 메시지가 없어야 하므로 블로킹 receive 대신 세션 상태를 검사한다.
             from app.game.session import session_manager
 
             state = session_manager.get_or_create("room7").state
+            vertical_round = session_manager.get_or_create("room7").vertical_round
+            assert vertical_round.forbidden_word_violations == 1
             assert state.get_player("partner").role.value == "ai_partner"
             assert state.get_player("partner").status.value == "alive"
             assert state.get_player("seeker").role.value == "seeker"

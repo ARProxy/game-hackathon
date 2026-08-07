@@ -159,7 +159,8 @@ class ConnectionManager:
         # 금기어 판정
         result = session.engine.check(transcript)
 
-        if result.is_forbidden and player:
+        if result.is_forbidden and player and player.role == PlayerRole.HUMAN:
+            rage_policy = session.vertical_round.record_human_forbidden_word_violation()
             player.freeze()
             record_hunter_signal(
                 session, player_id,
@@ -176,6 +177,8 @@ class ConnectionManager:
                     "x": player.position.x,
                     "z": player.position.z,
                 },
+                "forbidden_word_violations": session.vertical_round.forbidden_word_violations,
+                "fw_rage_tier": rage_policy.tier.value,
             })
             self._schedule_freeze_timeout(room_id, player_id)
             logger.info(
@@ -860,7 +863,7 @@ class ConnectionManager:
         self._ensure_companion_task(room_id)
         await self.broadcast(room_id, {
             "type": "game_started",
-            "state": session.state.to_dict(),
+            "state": session.state_payload(),
             "round": round_to_dict(round_data),
             "active_gate": session.active_gate_payload(),
             "active_traps": session.active_traps_payload(),
@@ -935,7 +938,7 @@ class ConnectionManager:
         self._ensure_companion_task(room_id)
         await self.broadcast(room_id, {
             "type": "game_started",
-            "state": session.state.to_dict(),
+            "state": session.state_payload(),
             "active_gate": session.active_gate_payload(),
             "active_traps": session.active_traps_payload(),
         })

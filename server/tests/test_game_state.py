@@ -144,3 +144,16 @@ class TestGameSessionTeamComposition:
         session.setup_game(["커피"])
 
         assert set(session.state.players) == {"partner", "partner-2", "seeker"}
+
+    def test_setup_game_resets_vertical_progression_and_exposes_compatibility_state(self):
+        from app.game.session import GameSession
+
+        session = GameSession("solo")
+        session.vertical_round.record_human_forbidden_word_violation()
+        session.setup_game(["열쇠"])
+
+        progression = session.state_payload()["vertical_progression"]
+        assert progression["enabled"] is False
+        assert progression["phase"] == "rooftop_intro"
+        assert progression["active_floor"] == "ROOF"
+        assert progression["forbidden_word_violations"] == 0
