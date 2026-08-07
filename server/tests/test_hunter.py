@@ -5,6 +5,7 @@ import time
 from app.ai.hunter import (
     CONTRACT,
     _safe_hunter_step,
+    advance_secondary_hunter,
     decide_hunter_intent,
     director_snapshot,
     record_hunter_signal,
@@ -234,3 +235,21 @@ def test_forbidden_rage_expands_hearing_and_vision() -> None:
 
     assert threat["hearing_multiplier"] == 1.25
     assert threat["vision_multiplier"] == 1.2
+
+
+def test_secondary_seeker_activates_only_from_first_floor() -> None:
+    session = make_session("hunter-pincer")
+    primary = {
+        "target": {"x": 10.0, "z": 8.0}, "target_id": "human",
+        "speed_multiplier": 1.0, "stage_speed_multiplier": 1.2,
+    }
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    assert advance_secondary_hunter(session, primary) is None
+
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
+    secondary = session.state.get_player("seeker-2")
+    secondary.position.floor = WorldFloor.F1
+    result = advance_secondary_hunter(session, primary)
+    assert result is not None
+    assert result["reason"] == "pincer_flank"
+    assert result["target"] != primary["target"]

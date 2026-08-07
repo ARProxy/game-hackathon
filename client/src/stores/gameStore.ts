@@ -159,6 +159,7 @@ interface GameStore {
   lastFreezeEvent: FreezeEvent | null
   lastSoundEvent: SoundEvent | null
   hunterIntent: HunterIntent | null
+  secondaryHunterIntent: HunterIntent | null
   companionIntent: CompanionIntent | null
   companionIntents: Record<string, CompanionIntent>
   rescueRequested: boolean
@@ -200,6 +201,7 @@ interface GameStore {
   requestRescue: () => void
   setLastSoundEvent: (event: SoundEvent) => void
   setHunterIntent: (intent: HunterIntent) => void
+  setSecondaryHunterIntent: (intent: HunterIntent | null) => void
   setCompanionIntent: (intent: CompanionIntent) => void
   unfreezePlayer: (playerId: string) => void
   eliminatePlayer: (playerId: string) => void
@@ -246,6 +248,7 @@ const initialState = {
   lastFreezeEvent: null,
   lastSoundEvent: null,
   hunterIntent: null as HunterIntent | null,
+  secondaryHunterIntent: null as HunterIntent | null,
   companionIntent: null as CompanionIntent | null,
   companionIntents: {} as Record<string, CompanionIntent>,
   rescueRequested: false,
@@ -401,6 +404,7 @@ export const useGameStore = create<GameStore>((set) => ({
   setHunterIntent: (hunterIntent) => set((state) => (
     sameHunterIntent(state.hunterIntent, hunterIntent) ? state : { hunterIntent }
   )),
+  setSecondaryHunterIntent: (secondaryHunterIntent) => set({ secondaryHunterIntent }),
 
   setCompanionIntent: (intent) => set((state) => {
     const companionId = intent.companionId ?? 'partner'

@@ -99,6 +99,8 @@ function Scene({
   const partnerSpawn = actorPosition('partner', SPAWNS.ai)
   const partnerTwoSpawn = actorPosition('partner-2', SPAWNS.ai2)
   const seekerSpawn = actorPosition('seeker', SPAWNS.seeker)
+  const secondarySeekerSpawn = actorPosition('seeker-2', SPAWNS.seeker)
+  const seekerCount = useGameStore((state) => state.verticalProgression?.seeker_count ?? 1)
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
   const playerGroupRef = {
@@ -175,10 +177,20 @@ function Scene({
           characterId={runnerIds.filter((id) => id !== playerCharacterId)[1] ?? 'R06'}
           spawn={partnerTwoSpawn}
         />
-        <Seeker
-          playerRef={playerGroupRef}
-          spawn={seekerSpawn}
-        />
+        {seekerCount >= 1 && (
+          <Seeker
+            playerRef={playerGroupRef}
+            spawn={seekerSpawn}
+          />
+        )}
+        {seekerCount >= 2 && (
+          <Seeker
+            playerRef={playerGroupRef}
+            spawn={secondarySeekerSpawn}
+            seekerId="seeker-2"
+            requestsThink={false}
+          />
+        )}
 
         {/* 카메라 충돌 ray cast는 Rapier 컨텍스트 안에서 실행해야 한다. */}
         <ThirdPersonCamera

@@ -19,7 +19,13 @@ from app.ai.companion import (
     companion_snapshot,
     request_companion_rescue,
 )
-from app.ai.hunter import CONTRACT as HUNTER_CONTRACT, advance_hunter, hunter_snapshot, record_hunter_signal
+from app.ai.hunter import (
+    CONTRACT as HUNTER_CONTRACT,
+    advance_hunter,
+    advance_secondary_hunter,
+    hunter_snapshot,
+    record_hunter_signal,
+)
 from app.ai.spell import check_spell
 from app.game.authority import (
     ACTOR_MAX_SPEED,
@@ -35,7 +41,7 @@ from app.game.session import (
     TRAP_CONTRACT,
     session_manager,
 )
-from app.game.map_slots import get_map_slot, seeker_reveal_slot
+from app.game.map_slots import get_map_slot, secondary_seeker_slot, seeker_reveal_slot
 from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import (
@@ -429,6 +435,19 @@ class ConnectionManager:
                             "floor": slot["floor"], "zone": slot["zone"],
                         },
                     })
+                if event["next_phase"] == "floor_1":
+                    secondary = session.state.get_player("seeker-2")
+                    secondary_slot = secondary_seeker_slot()
+                    if secondary:
+                        sx, sy, sz = secondary_slot["position"]
+                        secondary.position.x, secondary.position.y, secondary.position.z = sx, sy, sz
+                        secondary.position.floor = WorldFloor(secondary_slot["floor"])
+                        secondary.position.zone = secondary_slot["zone"]
+                        await self.broadcast(room_id, {
+                            "type": "actor_floor_changed", "actor_id": secondary.player_id,
+                            "route": "seeker_pincer_reveal",
+                            "position": {"x": sx, "y": sy, "z": sz, "floor": secondary_slot["floor"], "zone": secondary_slot["zone"]},
+                        })
 
         elif action_type == "use_floor_transition":
             try:
@@ -480,7 +499,10 @@ class ConnectionManager:
             ):
                 return
             intent = hunter_snapshot(session)
-            await self.send_to(room_id, player_id, {"type": "seeker_intent", **intent})
+            secondary = advance_secondary_hunter(session, intent)
+            await self.send_to(room_id, player_id, {
+                "type": "seeker_intent", **intent, "secondary": secondary,
+            })
 
         elif action_type == "rescue_request" and player and player.is_frozen:
             for companion_id in DEFAULT_AI_PARTNER_IDS:
@@ -581,7 +603,8 @@ class ConnectionManager:
             await self._handle_gate_arrived(room_id, player_id, player, payload)
 
         elif action_type == "seeker_catch":
-            seeker = session.state.get_player("seeker")
+            seeker_id = str(payload.get("seeker_id", "seeker"))
+            seeker = session.state.get_player(seeker_id) if seeker_id in {"seeker", "seeker-2"} else None
             target_id = payload.get("target_id", player_id)
             target = session.state.get_player(target_id)
             valid_catch = (

@@ -257,6 +257,45 @@ def advance_hunter(session: Any) -> dict:
     return {**intent, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
 
 
+def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
+    """1층부터 반대 각도로 목표를 압박하는 두 번째 서버 권위 술래."""
+    if session.vertical_round.policy.seeker_count < 2:
+        return None
+    from app.game.authority import MovementSample
+
+    seeker = session.state.get_player("seeker-2")
+    if seeker is None:
+        return None
+    now = time.monotonic()
+    elapsed = float(CONTRACT["thinkIntervalSeconds"])
+    target = primary_intent["target"]
+    # 같은 점으로 포개지지 않고 목표의 반대 측면을 조이는 협공 오프셋.
+    flank = {"x": target["x"] - 2.4, "z": target["z"] + 2.4}
+    dx, dz = flank["x"] - seeker.position.x, flank["z"] - seeker.position.z
+    distance = math.hypot(dx, dz)
+    if distance > 0.5:
+        step = min(
+            CONTRACT["chaseSpeed"] * primary_intent["speed_multiplier"]
+            * primary_intent["stage_speed_multiplier"] * elapsed,
+            distance - 0.5,
+        )
+        seeker.position.x, seeker.position.z = _safe_hunter_step(
+            seeker.position.x, seeker.position.z, flank["x"], flank["z"], step,
+        )
+        session.position_samples[seeker.player_id] = MovementSample(
+            seeker.position.x, seeker.position.z, now,
+        )
+    return {
+        "state": "CHASE" if primary_intent.get("target_id") else "HUNT",
+        "target_id": primary_intent.get("target_id"),
+        "target": flank,
+        "seeker_position": {"x": seeker.position.x, "z": seeker.position.z},
+        "reason": "pincer_flank",
+        "speed_multiplier": primary_intent["speed_multiplier"],
+        "stage_speed_multiplier": primary_intent["stage_speed_multiplier"],
+    }
+
+
 def hunter_snapshot(session: Any) -> dict:
     seeker = session.state.get_player("seeker")
     intent = session.hunter_last_intent or {

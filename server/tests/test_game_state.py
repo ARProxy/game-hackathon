@@ -151,7 +151,7 @@ class TestGameSessionTeamComposition:
         assert session.state.get_player("partner").position != session.state.get_player("partner-2").position
         assert session.state.get_player("human1").position.z < -25.4
         assert session.state.get_player("partner").position.z < -25.4
-        assert session.state.get_player("partner-2").position.z == pytest.approx(-19.7)
+        assert session.state.get_player("partner-2").position.z == pytest.approx(-52.0)
 
     def test_setup_game_is_idempotent_for_ai_roles(self):
         from app.game.session import GameSession
@@ -160,7 +160,7 @@ class TestGameSessionTeamComposition:
         session.setup_game(["열쇠"])
         session.setup_game(["커피"])
 
-        assert set(session.state.players) == {"partner", "partner-2", "seeker"}
+        assert set(session.state.players) == {"partner", "partner-2", "seeker", "seeker-2"}
 
     def test_setup_game_resets_vertical_progression_and_exposes_compatibility_state(self):
         from app.game.session import GameSession

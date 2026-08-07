@@ -251,6 +251,16 @@ export default function useWebSocket() {
           speedMultiplier: data.speed_multiplier ?? 1,
           stageSpeedMultiplier: data.stage_speed_multiplier ?? 1,
         })
+        useGameStore.getState().setSecondaryHunterIntent(data.secondary ? {
+          state: data.secondary.state,
+          targetId: data.secondary.target_id,
+          target: data.secondary.target,
+          seekerPosition: data.secondary.seeker_position,
+          reason: data.secondary.reason,
+          directorTension: data.director_tension ?? 0,
+          speedMultiplier: data.secondary.speed_multiplier ?? 1,
+          stageSpeedMultiplier: data.secondary.stage_speed_multiplier ?? 1,
+        } : null)
         break
 
       case 'companion_intent':

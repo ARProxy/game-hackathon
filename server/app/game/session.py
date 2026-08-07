@@ -28,9 +28,11 @@ DEFAULT_FORBIDDEN_WORDS = ["열쇠", "커피", "빨간"]
 DEFAULT_AI_PARTNER_ID = "partner"
 DEFAULT_AI_PARTNER_IDS = ("partner", "partner-2")
 DEFAULT_SEEKER_ID = "seeker"
+SECONDARY_SEEKER_ID = "seeker-2"
 RESERVED_ACTOR_ROLES: dict[str, PlayerRole] = {
     **{actor_id: PlayerRole.AI_PARTNER for actor_id in DEFAULT_AI_PARTNER_IDS},
     DEFAULT_SEEKER_ID: PlayerRole.SEEKER,
+    SECONDARY_SEEKER_ID: PlayerRole.SEEKER,
 }
 GATE_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/gateContract.json"
 with GATE_CONTRACT_PATH.open(encoding="utf-8") as gate_contract_file:

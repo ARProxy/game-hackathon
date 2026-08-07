@@ -16,6 +16,8 @@ const PROXIMITY_SOUND_RANGE = 18
 interface SeekerProps {
   playerRef: React.RefObject<THREE.Group | null>
   spawn: readonly [number, number, number]
+  seekerId?: 'seeker' | 'seeker-2'
+  requestsThink?: boolean
 }
 
 const SPEEDS: Record<HunterState, number> = {
@@ -27,7 +29,7 @@ const SPEEDS: Record<HunterState, number> = {
   RUSH_GATE: hunter.rushSpeed,
 }
 
-export default function Seeker({ playerRef, spawn }: SeekerProps) {
+export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requestsThink = true }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const { world, rapier } = useRapier()
   const navigationShape = useMemo(() => new rapier.Ball(0.36), [rapier])
@@ -71,12 +73,12 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
     if (!active) { group.position.y = baseY; return }
 
     const pos = group.position
-    if (clock.elapsedTime - lastThink.current >= hunter.thinkIntervalSeconds) {
+    if (requestsThink && clock.elapsedTime - lastThink.current >= hunter.thinkIntervalSeconds) {
       sendGameMessage({ type: 'action', payload: { action_type: 'seeker_think' } })
       lastThink.current = clock.elapsedTime
     }
 
-    const intent = store.hunterIntent
+    const intent = seekerId === 'seeker' ? store.hunterIntent : store.secondaryHunterIntent
     if (intent) {
       if ((intent.state === 'DETECTED' || intent.state === 'CHASE')
         && previousState.current !== 'DETECTED' && previousState.current !== 'CHASE') {
@@ -106,7 +108,7 @@ export default function Seeker({ playerRef, spawn }: SeekerProps) {
         intent.targetId && distance <= hunter.catchDistance
         && clock.elapsedTime - lastCatchAttempt.current >= CATCH_RETRY_SECONDS
       ) {
-        if (sendGameMessage({ type: 'action', payload: { action_type: 'seeker_catch', target_id: intent.targetId } })) {
+        if (sendGameMessage({ type: 'action', payload: { action_type: 'seeker_catch', seeker_id: seekerId, target_id: intent.targetId } })) {
           lastCatchAttempt.current = clock.elapsedTime
         }
       }
