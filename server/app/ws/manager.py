@@ -46,6 +46,7 @@ from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFl
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import (
     BROADCAST_MISSION_PROMPT,
+    activate_final_station,
     complete_current_stage,
     evaluate_broadcast_phrase,
     use_open_floor_transition,
@@ -366,6 +367,24 @@ class ConnectionManager:
             })
 
         elif action_type == "interact_stage_mission":
+            if session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL:
+                try:
+                    station = activate_final_station(session, player_id)
+                except InvalidProgression as error:
+                    await self.send_to(room_id, player_id, {
+                        "type": "action_rejected", "action_type": action_type,
+                        "reason": str(error),
+                    })
+                    return
+                await self.broadcast(room_id, {"type": "final_station_activated", **station})
+                if station["all_ready"]:
+                    session.spell_words = ["달빛", "교정", "탈출"]
+                    session.state.phase = GamePhase.FINAL_SPELL
+                    await self.broadcast(room_id, {
+                        "type": "vertical_final_ready", "spell_words": session.spell_words,
+                        "progression": session.vertical_round.to_dict(),
+                    })
+                return
             if session.vertical_round.phase == VerticalRoundPhase.FLOOR_3:
                 try:
                     validate_current_stage_interaction(session, player_id)
@@ -485,6 +504,38 @@ class ConnectionManager:
                             "zone": position["zone"],
                         },
                     })
+
+        elif action_type == "vertical_escape":
+            exit_slot = get_map_slot("FIELD_FINAL_ENTRY")
+            exit_x, _, exit_z = exit_slot["position"]
+            if (
+                session.vertical_round.phase != VerticalRoundPhase.ESCAPE_OPEN
+                or session.state.phase != GamePhase.ESCAPE
+                or not player or player.status != PlayerStatus.ALIVE
+                or player.position.floor != WorldFloor.FIELD
+                or math.hypot(player.position.x - exit_x, player.position.z - exit_z) > 2.25
+            ):
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type,
+                    "reason": "escape_not_available",
+                })
+                return
+            player.escape()
+            session.escaped_player_ids.add(player_id)
+            session.vertical_round.finish(VerticalRoundPhase.VICTORY)
+            session.state.phase = GamePhase.RESULT
+            self._cancel_room_freeze_timeouts(room_id)
+            await self.broadcast(room_id, {
+                "type": "game_won", "player_id": player_id,
+                "reason": "vertical_school_escape",
+                "escaped_player_ids": sorted(session.escaped_player_ids),
+                "companion_statuses": {
+                    actor_id: session.state.get_player(actor_id).status.value
+                    for actor_id in DEFAULT_AI_PARTNER_IDS
+                    if session.state.get_player(actor_id)
+                },
+                "progression": session.vertical_round.to_dict(),
+            })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
             for companion_id in DEFAULT_AI_PARTNER_IDS:
@@ -1060,12 +1111,19 @@ class ConnectionManager:
             return
         player = session.state.get_player(player_id)
 
+        vertical_final = (
+            session.vertical_progression_enabled
+            and session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL
+        )
+        valid_position = (
+            player_id in session.final_station_actor_ids
+            if vertical_final else (
+                player_id in session.gate_arrived_player_ids and session.is_near_active_gate(player_id)
+            )
+        )
         if (
             session.state.phase != GamePhase.FINAL_SPELL
-            or player_id not in session.gate_arrived_player_ids
-            or not player
-            or player.status != PlayerStatus.ALIVE
-            or not session.is_near_active_gate(player_id)
+            or not valid_position or not player or player.status != PlayerStatus.ALIVE
         ):
             await self.send_to(room_id, player_id, {
                 "type": "spell_rejected",
@@ -1077,12 +1135,16 @@ class ConnectionManager:
 
         if result["success"]:
             session.state.phase = GamePhase.ESCAPE
+            if vertical_final:
+                session.vertical_round.mark_mission_complete()
+                session.vertical_round.advance()
             await self.broadcast(room_id, {
                 "type": "spell_success",
                 "player_id": player_id,
                 "matched": result["matched"],
                 "order_valid": result["order_valid"],
                 "transcript": result["transcript"],
+                "progression": session.vertical_round.to_dict() if vertical_final else None,
             })
         else:
             # 틀린 주문도 큰 소리로 외친 행동이다. 무료 재시도가 되지 않도록

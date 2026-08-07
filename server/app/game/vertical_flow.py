@@ -6,7 +6,7 @@ import math
 from typing import Any
 
 from app.game.map_slots import get_map_slot
-from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase
+from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole, PlayerStatus
 
 
@@ -42,6 +42,10 @@ TRANSITION_SLOTS_BY_PHASE = {
         "field": ("F1_TO_FIELD_FIRE_DOOR", "FIELD_FINAL_ENTRY"),
     },
 }
+FINAL_STATION_SLOT_BY_ACTOR = {
+    "partner": "FIELD_FINAL_STATION_A",
+    "partner-2": "FIELD_FINAL_STATION_C",
+}
 
 
 def mission_interaction_position(phase: VerticalRoundPhase) -> tuple[float, float, float]:
@@ -53,6 +57,31 @@ def mission_interaction_position(phase: VerticalRoundPhase) -> tuple[float, floa
     if not position:
         raise InvalidProgression(f"{phase.value} 미션에 상호작용 좌표가 없다")
     return tuple(float(value) for value in position)
+
+
+def final_station_position(actor_id: str) -> tuple[float, float, float]:
+    slot_id = FINAL_STATION_SLOT_BY_ACTOR.get(actor_id, "FIELD_FINAL_STATION_B")
+    return tuple(float(value) for value in get_map_slot(slot_id)["position"])
+
+
+def activate_final_station(session: Any, actor_id: str) -> dict:
+    if session.vertical_round.phase != VerticalRoundPhase.FIELD_FINAL:
+        raise InvalidProgression("운동장 파이널 단계가 아니다")
+    actor = session.state.get_player(actor_id)
+    if not actor or actor.status != PlayerStatus.ALIVE or actor.role == PlayerRole.SEEKER:
+        raise InvalidProgression("살아 있는 도망자만 파이널 장치를 맡을 수 있다")
+    x, _, z = final_station_position(actor_id)
+    if actor.position.floor != WorldFloor.FIELD:
+        raise InvalidProgression("운동장에 도착해야 한다")
+    if math.hypot(actor.position.x - x, actor.position.z - z) > MISSION_INTERACTION_RADIUS:
+        raise InvalidProgression("자신의 파이널 장치와 거리가 너무 멀다")
+    session.final_station_actor_ids.add(actor_id)
+    alive_runners = {
+        player.player_id for player in session.state.players.values()
+        if player.role != PlayerRole.SEEKER and player.status == PlayerStatus.ALIVE
+    }
+    ready = alive_runners.issubset(session.final_station_actor_ids)
+    return {"actor_id": actor_id, "ready_count": len(session.final_station_actor_ids), "required_count": len(alive_runners), "all_ready": ready}
 
 
 def evaluate_broadcast_phrase(transcript: str) -> dict:

@@ -338,6 +338,15 @@ export default function useWebSocket() {
         addSubtitle('system', '게이트 도착 확인. 이제 주문을 외치세요!')
         break
 
+      case 'final_station_activated':
+        addSubtitle('system', `파이널 장치 활성화 ${data.ready_count}/${data.required_count}`)
+        break
+
+      case 'vertical_final_ready':
+        setPhase('final_spell')
+        addSubtitle('system', `전원 준비 완료. Q를 눌러 “${data.spell_words.join(' ')}”를 순서대로 외치세요!`)
+        break
+
       case 'action_rejected':
         if (data.action_type === 'inspect_prop') {
           clearPartnerTarget()
@@ -350,6 +359,9 @@ export default function useWebSocket() {
         break
 
       case 'spell_success':
+        if (data.progression) {
+          useGameStore.getState().setVerticalProgression({ enabled: true, ...data.progression })
+        }
         setPhase('escape')
         addSubtitle('system', '주문 성공! 탈출구가 열립니다!')
         break

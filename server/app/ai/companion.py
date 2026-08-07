@@ -92,8 +92,13 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         active_floor = session.vertical_round.policy.active_floor
         if partner.position.floor != active_floor:
             return _intent("REGROUP", None, partner, "waiting_for_floor_transition")
-        from app.game.vertical_flow import mission_interaction_position
-        x, _, z = mission_interaction_position(session.vertical_round.phase)
+        from app.game.progression import VerticalRoundPhase
+        from app.game.vertical_flow import final_station_position, mission_interaction_position
+        x, _, z = (
+            final_station_position(companion_id)
+            if session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL
+            else mission_interaction_position(session.vertical_round.phase)
+        )
         return {
             "state": "EXPLORE_ZONE",
             "target_id": session.vertical_round.phase.value,

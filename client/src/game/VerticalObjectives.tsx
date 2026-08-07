@@ -13,12 +13,16 @@ const MISSION_SLOT: Record<string, string> = {
   floor_3: 'F3_MISSION_ROOM_POOL',
   floor_2: 'F2_MISSION_ROOM_POOL',
   floor_1: 'F1_MISSION_ROOM_POOL',
+  field_final: 'FIELD_FINAL_STATION_B',
+  escape_open: 'FIELD_FINAL_ENTRY',
 }
 const MISSION_LABEL: Record<string, string> = {
   rooftop_intro: '옥상 신호 장치를 가동한다',
   floor_3: '3층 방송 장치를 조사한다',
   floor_2: '2층 인터폰 장치를 연결한다',
   floor_1: '1층 관제 장치를 해제한다',
+  field_final: '중앙 장치에서 팀과 합류한다',
+  escape_open: '빛기둥 아래로 탈출한다',
 }
 const TRANSITIONS: Record<string, { source: string; route: string }[]> = {
   'ROOF>F3': [{ source: 'ROOF_TO_F3_FIRE_DOOR', route: 'west' }],
@@ -57,7 +61,10 @@ export default function VerticalObjectives({ playerRef }: {
     const bestDistance = new THREE.Vector3(...positionOf(slots[best.source])).distanceTo(player.position)
     return distance < bestDistance ? choice : best
   }, null)
-  const missionSlotId = progression && playerFloor === progression.active_floor
+  const missionSlotId = progression && (
+    playerFloor === progression.active_floor
+    || (progression.phase === 'escape_open' && playerFloor === 'FIELD')
+  )
     ? MISSION_SLOT[progression.phase]
     : undefined
   const objectiveSlotId = nearestTransition?.source ?? missionSlotId
@@ -78,7 +85,9 @@ export default function VerticalObjectives({ playerRef }: {
     const interact = (event: KeyboardEvent) => {
       if (event.code !== 'KeyE' || event.repeat || !nearbyRef.current || !progression) return
       event.preventDefault()
-      sendGameMessage(nearestTransition
+      sendGameMessage(progression.phase === 'escape_open'
+        ? { type: 'action', payload: { action_type: 'vertical_escape' } }
+        : nearestTransition
         ? { type: 'action', payload: { action_type: 'use_floor_transition', route: nearestTransition.route } }
         : { type: 'action', payload: { action_type: 'interact_stage_mission' } })
     }
@@ -92,6 +101,12 @@ export default function VerticalObjectives({ playerRef }: {
     : MISSION_LABEL[progression.phase] ?? '현재 구역 목표를 수행한다'
   return (
     <group position={objectivePosition}>
+      {progression.phase === 'escape_open' && (
+        <mesh position={[0, 18, 0]}>
+          <cylinderGeometry args={[0.35, 1.4, 36, 18, 1, true]} />
+          <meshBasicMaterial color="#8DFFF2" transparent opacity={0.32} depthWrite={false} />
+        </mesh>
+      )}
       <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.55, 0.82, 32]} />
         <meshBasicMaterial color={nearby ? '#B6FF3D' : '#52E5FF'} transparent opacity={0.72} />

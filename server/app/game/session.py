@@ -78,6 +78,7 @@ class GameSession:
         self.vertical_round = VerticalRoundState()
         self.vertical_progression_enabled = bool(VERTICAL_MAP_CONTRACT["enabled"])
         self.broadcast_mission_actor_id: str | None = None
+        self.final_station_actor_ids: set[str] = set()
         self.engine = ForbiddenWordEngine(DEFAULT_FORBIDDEN_WORDS)
         self.spell_words: list[str] = []
         self.round_data: RoundData | None = None
@@ -130,6 +131,7 @@ class GameSession:
         words = forbidden_words or DEFAULT_FORBIDDEN_WORDS
         self.vertical_round = VerticalRoundState()
         self.broadcast_mission_actor_id = None
+        self.final_station_actor_ids.clear()
         self.round_data = None
         self.spell_words = []
         self.current_mission_index = 0

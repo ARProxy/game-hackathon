@@ -6,8 +6,10 @@ from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFl
 from app.game.session import GameSession
 from app.game.state import PlayerRole
 from app.game.vertical_flow import (
+    activate_final_station,
     complete_current_stage,
     evaluate_broadcast_phrase,
+    final_station_position,
     mission_interaction_position,
     use_open_floor_transition,
 )
@@ -150,3 +152,24 @@ def test_first_floor_completion_opens_field_transition() -> None:
     human.position.floor = WorldFloor.F1
     event = use_open_floor_transition(session, "human", "field")
     assert event["position"]["floor"] == "FIELD"
+
+
+def test_field_final_requires_every_alive_runner_at_their_station() -> None:
+    session, human = active_session()
+    session.vertical_round.phase = VerticalRoundPhase.FIELD_FINAL
+    actors = [human, session.state.get_player("partner"), session.state.get_player("partner-2")]
+    for actor in actors:
+        x, y, z = final_station_position(actor.player_id)
+        actor.position.x, actor.position.y, actor.position.z = x, y, z
+        actor.position.floor = WorldFloor.FIELD
+
+    first = activate_final_station(session, human.player_id)
+    second = activate_final_station(session, "partner")
+    final = activate_final_station(session, "partner-2")
+
+    assert not first["all_ready"]
+    assert not second["all_ready"]
+    assert final == {
+        "actor_id": "partner-2", "ready_count": 3,
+        "required_count": 3, "all_ready": True,
+    }
