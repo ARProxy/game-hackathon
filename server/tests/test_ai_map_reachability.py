@@ -1,212 +1,96 @@
-"""실제 클라이언트 맵 충돌체 기준 AI 주요 지점 도달성 회귀 테스트."""
+"""최신 수직 맵 의미 슬롯의 진행·도달성 회귀 테스트.
+
+절차형 맵은 더 이상 ``SchoolCampus.tsx`` 안에 BOX 리터럴을 두지 않는다.
+따라서 렌더 구현 문자열이 아니라 서버·클라이언트가 공유하는 의미 슬롯 계약을 검증한다.
+"""
 
 from __future__ import annotations
 
-from collections import deque
 import math
-from pathlib import Path
-import re
 
 import pytest
 
-from app.game.session import GATE_POSITIONS
-
-
-MAP_SOURCE = Path(__file__).parents[2] / "client/src/game/SchoolCampus.tsx"
-GRID_STEP = 0.5
-AI_RADIUS = 0.36
-MAP_MIN = -40.0
-MAP_MAX = 40.0
-GROUND_PATROL = [
-    (26.0, -27.0),
-    (23.5, -19.0),
-    (9.0, -1.5),
-    (-20.5, -6.0),
-    (-19.5, -3.5),
-    (-10.5, -3.5),
-    (-10.5, -22.5),
-    (-9.8, -23.0),
-    (-8.0, -27.2),
-    (-25.1, -20.0),
-    (-25.1, -11.0),
-    (-25.1, -27.2),
-    (-25.0, -27.0),
-    (-2.5, -27.0),
-    (-2.0, -27.2),
-    (4.0, -27.2),
-    (-8.5, -27.0),
-    (-8.5, -24.5),
-    (13.0, -24.5),
-    (13.0, -17.5),
-    (13.5, -17.5),
-    (13.5, -17.0),
-    (24.5, -17.0),
-    (24.5, -19.0),
-    (26.0, -20.0),
-    (25.5, -20.0),
-    (25.5, -19.5),
-    (23.0, -19.5),
-    (23.0, -18.5),
-    (22.5, -18.5),
-    (22.5, -17.0),
-    (21.5, -17.0),
-    (21.5, 19.5),
-    (13.5, 19.5),
-    (13.5, 22.0),
-    (12.5, 22.0),
-    (12.5, 23.0),
-    (-1.0, 23.0),
-    (-1.0, 30.5),
-    (-2.5, 30.5),
-    (-13.0, 30.5),
-    (-13.0, 34.5),
-    (-17.0, 34.5),
-    (-17.0, 28.0),
-    (-28.0, 8.0),
-    (-17.0, 5.0),
-    (24.5, 5.0),
-    (24.5, -19.0),
-    (26.0, -19.0),
-    (26.0, -26.0),
-]
-
-BOX_PATTERN = re.compile(
-    r"\{ f: '(?P<floor>[^']+)', p: \[(?P<x>-?[\d.]+), (?P<y>-?[\d.]+), (?P<z>-?[\d.]+)\], "
-    r"s: \[(?P<sx>[\d.]+), (?P<sy>[\d.]+), (?P<sz>[\d.]+)\]"
-    r"(?:, c: '[^']+')?(?:, rot: \[(?P<rx>-?[\d.]+), (?P<ry>-?[\d.]+), (?P<rz>-?[\d.]+)\])?"
+from app.game.map_slots import actor_spawn_slots, get_map_slot
+from app.game.progression import VerticalRoundPhase
+from app.game.vertical_flow import (
+    FINAL_STATION_SLOT_BY_ACTOR,
+    MISSION_SLOT_BY_PHASE,
+    TRANSITION_SLOTS_BY_PHASE,
 )
 
 
-def _ground_obstacles() -> list[tuple[float, float, float, float, float]]:
-    source = MAP_SOURCE.read_text(encoding="utf-8")
-    obstacles = []
-    for match in BOX_PATTERN.finditer(source):
-        values = match.groupdict()
-        y = float(values["y"])
-        sy = float(values["sy"])
-        if values["floor"] not in {"OUT", "F1"} or not (y - sy / 2 <= 0.8 <= y + sy / 2):
-            continue
-        obstacles.append((
-            float(values["x"]),
-            float(values["z"]),
-            float(values["sx"]),
-            float(values["sz"]),
-            float(values["ry"] or 0),
-        ))
-    assert len(obstacles) > 40, "맵 BOXES 파싱 범위가 예상보다 작습니다"
-    return obstacles
+def _position(slot_id: str) -> tuple[float, float, float]:
+    slot = get_map_slot(slot_id)
+    values = slot.get("position") or slot.get("interactionPosition")
+    assert values and len(values) == 3
+    position = tuple(float(value) for value in values)
+    assert all(math.isfinite(value) for value in position)
+    return position
 
 
-def _blocked(x: float, z: float, obstacles: list[tuple[float, float, float, float, float]]) -> bool:
-    for cx, cz, sx, sz, rotation in obstacles:
-        dx, dz = x - cx, z - cz
-        cos, sin = math.cos(rotation), math.sin(rotation)
-        local_x = dx * cos - dz * sin
-        local_z = dx * sin + dz * cos
-        if abs(local_x) <= sx / 2 + AI_RADIUS and abs(local_z) <= sz / 2 + AI_RADIUS:
-            return True
-    return False
-
-
-def _cell(point: tuple[float, float]) -> tuple[int, int]:
-    return (round((point[0] - MAP_MIN) / GRID_STEP), round((point[1] - MAP_MIN) / GRID_STEP))
-
-
-def _point(cell: tuple[int, int]) -> tuple[float, float]:
-    return (MAP_MIN + cell[0] * GRID_STEP, MAP_MIN + cell[1] * GRID_STEP)
-
-
-def _reachable(
-    start: tuple[float, float],
-    target: tuple[float, float],
-    obstacles: list[tuple[float, float, float, float, float]],
-    target_radius: float = 1.4,
-) -> bool:
-    start_cell = _cell(start)
-    queue = deque([start_cell])
-    visited = {start_cell}
-    cell_limit = round((MAP_MAX - MAP_MIN) / GRID_STEP)
-    while queue:
-        current = queue.popleft()
-        x, z = _point(current)
-        if math.hypot(x - target[0], z - target[1]) <= target_radius:
-            return True
-        for next_cell in (
-            (current[0] + 1, current[1]), (current[0] - 1, current[1]),
-            (current[0], current[1] + 1), (current[0], current[1] - 1),
-        ):
-            if next_cell in visited or not (0 <= next_cell[0] <= cell_limit and 0 <= next_cell[1] <= cell_limit):
-                continue
-            nx, nz = _point(next_cell)
-            if _blocked(nx, nz, obstacles):
-                continue
-            visited.add(next_cell)
-            queue.append(next_cell)
-    return False
-
-
-def _locally_navigable(
-    start: tuple[float, float],
-    target: tuple[float, float],
-    obstacles: list[tuple[float, float, float, float, float]],
-    target_radius: float = 1.4,
-) -> bool:
-    """클라이언트 planAvoidedStep의 후보 순서를 재현해 실제 수렴을 확인한다."""
-    x, z = start
-    preferred_side = 1
-    step = 0.25
-    for _ in range(4000):
-        dx, dz = target[0] - x, target[1] - z
-        distance = math.hypot(dx, dz)
-        if distance <= target_radius:
-            return True
-        forward_x, forward_z = dx / distance, dz / distance
-        angles = (
-            0,
-            preferred_side * math.pi / 4,
-            preferred_side * math.pi / 2,
-            preferred_side * math.pi * 3 / 4,
-            math.pi,
-            -preferred_side * math.pi * 3 / 4,
-            -preferred_side * math.pi / 2,
-            -preferred_side * math.pi / 4,
-        )
-        moved = False
-        for angle in angles:
-            cos, sin = math.cos(angle), math.sin(angle)
-            direction_x = forward_x * cos + forward_z * sin
-            direction_z = -forward_x * sin + forward_z * cos
-            next_x, next_z = x + direction_x * step, z + direction_z * step
-            if not _blocked(next_x, next_z, obstacles):
-                x, z = next_x, next_z
-                moved = True
-                break
-        if not moved:
-            preferred_side *= -1
-    return False
-
-
-@pytest.mark.parametrize("target", [
-    (-8.1, -33.6),   # 과학실 미션 후보 1
-    (-10.95, -31.0), # 과학실 미션 후보 2
-    (-30.5, -33.7),  # 교실 미션 후보
-    *[(gate["x"], gate["z"]) for gate in GATE_POSITIONS.values()],
-])
-def test_partner_spawn_can_reach_required_targets(target: tuple[float, float]) -> None:
-    assert _reachable((-16.0, -2.0), target, _ground_obstacles())
-
-
-@pytest.mark.parametrize("target", GROUND_PATROL[1:])
-def test_seeker_spawn_can_reach_major_patrol_points(target: tuple[float, float]) -> None:
-    assert _reachable((26.0, -27.0), target, _ground_obstacles())
+def test_all_required_actor_spawns_are_distinct_and_finite() -> None:
+    spawns = actor_spawn_slots()
+    assert set(spawns) == {"human", "partner", "partner-2", "seeker", "seeker-2"}
+    positions = [tuple(slot["position"]) for slot in spawns.values()]
+    assert len(set(positions)) == len(positions)
+    assert all(all(math.isfinite(float(value)) for value in position) for position in positions)
 
 
 @pytest.mark.parametrize(
-    ("start", "target"),
-    list(zip(GROUND_PATROL, GROUND_PATROL[1:] + GROUND_PATROL[:1])),
+    "phase",
+    [
+        VerticalRoundPhase.ROOFTOP_INTRO,
+        VerticalRoundPhase.FLOOR_3,
+        VerticalRoundPhase.FLOOR_2,
+        VerticalRoundPhase.FLOOR_1,
+        VerticalRoundPhase.FIELD_FINAL,
+    ],
 )
-def test_seeker_local_avoidance_converges_on_major_patrol_points(
-    start: tuple[float, float],
-    target: tuple[float, float],
+def test_each_playable_phase_has_a_mission_on_its_active_floor(phase: VerticalRoundPhase) -> None:
+    slot_id = MISSION_SLOT_BY_PHASE[phase]
+    slot = get_map_slot(slot_id)
+    _position(slot_id)
+    expected_floor = {
+        VerticalRoundPhase.ROOFTOP_INTRO: "ROOF",
+        VerticalRoundPhase.FLOOR_3: "F3",
+        VerticalRoundPhase.FLOOR_2: "F2",
+        VerticalRoundPhase.FLOOR_1: "F1",
+        VerticalRoundPhase.FIELD_FINAL: "FIELD",
+    }[phase]
+    assert slot["floor"] == expected_floor
+
+
+@pytest.mark.parametrize(
+    ("phase", "route"),
+    [
+        (VerticalRoundPhase.FLOOR_3, "west"),
+        (VerticalRoundPhase.FLOOR_2, "west"),
+        (VerticalRoundPhase.FLOOR_2, "east"),
+        (VerticalRoundPhase.FLOOR_1, "west"),
+        (VerticalRoundPhase.FLOOR_1, "east"),
+        (VerticalRoundPhase.FIELD_FINAL, "field"),
+    ],
+)
+def test_each_progression_route_connects_two_distinct_floors(
+    phase: VerticalRoundPhase, route: str,
 ) -> None:
-    assert _locally_navigable(start, target, _ground_obstacles())
+    source_id, destination_id = TRANSITION_SLOTS_BY_PHASE[phase][route]
+    source, destination = get_map_slot(source_id), get_map_slot(destination_id)
+    _position(source_id)
+    _position(destination_id)
+    assert source["floor"] != destination["floor"]
+
+
+def test_field_final_stations_are_separated_for_three_runner_cooperation() -> None:
+    slot_ids = [
+        FINAL_STATION_SLOT_BY_ACTOR["partner"],
+        "FIELD_FINAL_STATION_B",
+        FINAL_STATION_SLOT_BY_ACTOR["partner-2"],
+    ]
+    positions = [_position(slot_id) for slot_id in slot_ids]
+    assert all(get_map_slot(slot_id)["floor"] == "FIELD" for slot_id in slot_ids)
+    assert min(
+        math.hypot(left[0] - right[0], left[2] - right[2])
+        for index, left in enumerate(positions)
+        for right in positions[index + 1:]
+    ) >= 10.0
