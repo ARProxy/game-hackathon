@@ -466,7 +466,9 @@ export default function HUD() {
             <div style={{ color: '#52E5FF', fontWeight: 900, marginBottom: 3 }}>
               {verticalProgression.active_floor} · {verticalProgression.phase}
             </div>
-            현재 층의 청색 목표를 찾아 E로 상호작용하세요.
+              {verticalProgression.phase === 'floor_3'
+                ? '방송 장치에 E로 접속한 뒤 Q를 눌러 금기어 없이 문구의 뜻을 전달하세요.'
+                : '현재 층의 청색 목표를 찾아 E로 상호작용하세요.'}
           </div>
         )}
 

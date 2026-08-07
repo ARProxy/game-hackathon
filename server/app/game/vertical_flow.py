@@ -11,6 +11,12 @@ from app.game.state import PlayerRole, PlayerStatus
 
 
 MISSION_INTERACTION_RADIUS = 2.25
+BROADCAST_MISSION_PROMPT = (
+    "방송 문구의 뜻을 금기어 없이 말하세요: 작은 금속 도구로 잠긴 출입구를 개방한다."
+)
+BROADCAST_TOOL_CUES = ("금속", "도구", "쇠", "작은 물건")
+BROADCAST_EXIT_CUES = ("문", "출입구", "입구", "잠금")
+BROADCAST_ACTION_CUES = ("열", "개방", "통과")
 MISSION_SLOT_BY_PHASE = {
     VerticalRoundPhase.ROOFTOP_INTRO: "ROOF_INTRO_MISSION",
     VerticalRoundPhase.FLOOR_3: "F3_MISSION_ROOM_POOL",
@@ -49,7 +55,23 @@ def mission_interaction_position(phase: VerticalRoundPhase) -> tuple[float, floa
     return tuple(float(value) for value in position)
 
 
-def complete_current_stage(session: Any, actor_id: str) -> dict:
+def evaluate_broadcast_phrase(transcript: str) -> dict:
+    """3층 방송 문구가 핵심 의미 세 가지를 모두 전달했는지 판정한다."""
+    normalized = " ".join(transcript.strip().lower().split())
+    matched = {
+        "tool": any(cue in normalized for cue in BROADCAST_TOOL_CUES),
+        "exit": any(cue in normalized for cue in BROADCAST_EXIT_CUES),
+        "action": any(cue in normalized for cue in BROADCAST_ACTION_CUES),
+    }
+    return {
+        "success": all(matched.values()),
+        "matched": matched,
+        "missing": [name for name, present in matched.items() if not present],
+    }
+
+
+def validate_current_stage_interaction(session: Any, actor_id: str) -> None:
+    """진행 변경 없이 현재 미션 장치 상호작용 가능 여부만 검사한다."""
     if not session.vertical_progression_enabled:
         raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")
     actor = session.state.get_player(actor_id)
@@ -59,14 +81,17 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
         or actor.status != PlayerStatus.ALIVE
     ):
         raise InvalidProgression("살아 있는 도망자만 층 미션을 완료할 수 있다")
-
-    phase = session.vertical_round.phase
-    target_x, _, target_z = mission_interaction_position(phase)
+    target_x, _, target_z = mission_interaction_position(session.vertical_round.phase)
     if actor.position.floor != session.vertical_round.policy.active_floor:
         raise InvalidProgression("현재 활성 층의 actor만 미션을 완료할 수 있다")
     if math.hypot(actor.position.x - target_x, actor.position.z - target_z) > MISSION_INTERACTION_RADIUS:
         raise InvalidProgression("미션 장치와 거리가 너무 멀다")
 
+
+def complete_current_stage(session: Any, actor_id: str) -> dict:
+    validate_current_stage_interaction(session, actor_id)
+    actor = session.state.get_player(actor_id)
+    phase = session.vertical_round.phase
     session.vertical_round.mark_mission_complete()
     next_phase = session.vertical_round.advance()
     if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:

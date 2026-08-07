@@ -7,9 +7,17 @@ from app.game.session import GameSession
 from app.game.state import PlayerRole
 from app.game.vertical_flow import (
     complete_current_stage,
+    evaluate_broadcast_phrase,
     mission_interaction_position,
     use_open_floor_transition,
 )
+
+
+def test_broadcast_phrase_requires_tool_exit_and_action_meaning() -> None:
+    assert evaluate_broadcast_phrase("작은 금속 도구로 잠긴 출입구를 개방한다")["success"]
+    result = evaluate_broadcast_phrase("출입구 근처에 금속 도구가 있다")
+    assert not result["success"]
+    assert result["missing"] == ["action"]
 
 
 def active_session() -> tuple[GameSession, object]:

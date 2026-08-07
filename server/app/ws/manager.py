@@ -36,9 +36,15 @@ from app.game.session import (
     session_manager,
 )
 from app.game.map_slots import get_map_slot, seeker_reveal_slot
-from app.game.progression import InvalidProgression, WorldFloor
+from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
-from app.game.vertical_flow import complete_current_stage, use_open_floor_transition
+from app.game.vertical_flow import (
+    BROADCAST_MISSION_PROMPT,
+    complete_current_stage,
+    evaluate_broadcast_phrase,
+    use_open_floor_transition,
+    validate_current_stage_interaction,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +217,38 @@ class ConnectionManager:
                 "transcript": transcript,
                 "is_final": is_final,
             })
+            if (
+                is_final and transcript.strip()
+                and session.broadcast_mission_actor_id == player_id
+                and session.vertical_round.phase == VerticalRoundPhase.FLOOR_3
+            ):
+                verdict = evaluate_broadcast_phrase(transcript)
+                if not verdict["success"]:
+                    await self.send_to(room_id, player_id, {
+                        "type": "vertical_mission_feedback",
+                        "success": False,
+                        "missing": verdict["missing"],
+                        "prompt": BROADCAST_MISSION_PROMPT,
+                    })
+                    return
+                session.broadcast_mission_actor_id = None
+                event = complete_current_stage(session, player_id)
+                await self.broadcast(room_id, {
+                    "type": "vertical_stage_advanced", "actor_id": player_id, **event,
+                })
+                seeker = session.state.get_player("seeker")
+                slot = get_map_slot("F2_TO_F1_STAIR_EAST")
+                if seeker:
+                    x, y, z = slot["position"]
+                    seeker.position.x, seeker.position.y, seeker.position.z = x, y, z
+                    seeker.position.floor = WorldFloor(slot["floor"])
+                    seeker.position.zone = slot["zone"]
+                    await self.broadcast(room_id, {
+                        "type": "actor_floor_changed", "actor_id": seeker.player_id,
+                        "route": "seeker_descend",
+                        "position": {"x": x, "y": y, "z": z, "floor": slot["floor"], "zone": slot["zone"]},
+                    })
+                return
             mission = session.current_mission()
             if mission and is_final and transcript.strip():
                 decision = compare_partner_candidates(
@@ -322,6 +360,22 @@ class ConnectionManager:
             })
 
         elif action_type == "interact_stage_mission":
+            if session.vertical_round.phase == VerticalRoundPhase.FLOOR_3:
+                try:
+                    validate_current_stage_interaction(session, player_id)
+                except InvalidProgression as error:
+                    await self.send_to(room_id, player_id, {
+                        "type": "action_rejected", "action_type": action_type,
+                        "reason": str(error),
+                    })
+                    return
+                session.broadcast_mission_actor_id = player_id
+                await self.send_to(room_id, player_id, {
+                    "type": "vertical_mission_started",
+                    "mission": "floor_3_broadcast",
+                    "prompt": BROADCAST_MISSION_PROMPT,
+                })
+                return
             try:
                 event = complete_current_stage(session, player_id)
             except InvalidProgression as error:

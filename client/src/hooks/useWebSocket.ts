@@ -179,6 +179,14 @@ export default function useWebSocket() {
         addSubtitle('system', `${data.completed_phase} 완료 — 다음 구역이 열렸습니다.`)
         break
 
+      case 'vertical_mission_started':
+        addSubtitle('system', data.prompt)
+        break
+
+      case 'vertical_mission_feedback':
+        addSubtitle('system', '의미가 부족합니다. 도구·출입구·개방 행동을 모두 표현하세요.')
+        break
+
       case 'actor_floor_changed':
         useGameStore.getState().updatePlayer(data.actor_id, { position: data.position })
         addSubtitle('system', `${data.position.floor} 구역으로 이동했습니다.`)
