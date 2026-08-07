@@ -2,7 +2,7 @@
   "version": 1,
   "source": "campusV4Data.js",
   "sourceSeed": 0,
-  "enabled": false,
+  "enabled": true,
   "floorY": { "B1": -3.6, "F1": 0, "F2": 3.6, "F3": 7.2, "ROOF": 10.8, "FIELD": 0 },
   "slots": {
     "ROOF_RUNNER_SPAWN_A": { "kind": "spawn", "floor": "ROOF", "position": [-27, 10.8, -52], "zone": "roof_north" },

@@ -118,7 +118,7 @@ class TestGameState:
             "y": 0.0,
             "z": 0.0,
             "floor": "F1",
-            "zone": "legacy_f1",
+            "zone": "unknown",
         }
 
     def test_players_on_different_floors_do_not_share_contact_space(self, state):

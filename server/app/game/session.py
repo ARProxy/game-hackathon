@@ -39,16 +39,8 @@ GATE_POSITIONS: dict[str, dict[str, float]] = {
     gate["id"]: {"x": gate["position"][0], "z": gate["position"][1]}
     for gate in GATE_CONTRACT["gates"]
 }
-ROLE_SPAWNS: dict[PlayerRole, tuple[float, float]] = {
-    PlayerRole.HUMAN: (-20.0, -48.3),
-    PlayerRole.AI_PARTNER: (-28.0, -48.3),
-    PlayerRole.SEEKER: (-46.3, -34.0),
-}
-ACTOR_SPAWNS: dict[str, tuple[float, float]] = {
-    "partner": (-28.0, -48.3),
-    "partner-2": (-38.0, -19.7),
-    "seeker": (-46.3, -34.0),
-}
+# v3 레거시 스폰 좌표 제거됨 — 수직 맵 계약(actor_spawn_slots)을 사용.
+# 계약에 슬롯이 없을 경우 (0, 0, 0) 폴백.
 TRAP_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/trapContract.json"
 with TRAP_CONTRACT_PATH.open(encoding="utf-8") as trap_contract_file:
     TRAP_CONTRACT = json.load(trap_contract_file)
@@ -179,8 +171,12 @@ class GameSession:
                 floor = WorldFloor(slot["floor"])
                 zone = slot["zone"]
             else:
-                x, z = ACTOR_SPAWNS.get(player.player_id, ROLE_SPAWNS[player.role])
-                y, floor, zone = 0.0, WorldFloor.F1, "legacy_f1"
+                logger.warning(
+                    "no vertical map slot for actor=%s role=%s — using (0,0,0) fallback",
+                    player.player_id, player.role.value,
+                )
+                x, y, z = 0.0, 0.0, 0.0
+                floor, zone = WorldFloor.F1, "unknown"
             player.position.x = x
             player.position.y = y
             player.position.z = z

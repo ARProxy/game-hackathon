@@ -41,7 +41,7 @@ class Position:
     z: float = 0.0
     y: float = 0.0
     floor: WorldFloor = WorldFloor.F1
-    zone: str = "legacy_f1"
+    zone: str = "unknown"
 
 
 @dataclass

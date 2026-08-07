@@ -16,22 +16,38 @@ logger = logging.getLogger(__name__)
 
 PROP_DICT_PATH = Path(__file__).parent.parent / "data" / "prop_dict.json"
 
-# 1층 학교 내부 슬롯. 탈출 게임의 초반 탐색이 운동장으로 새지 않도록
-# 현관 봉쇄 구간에서 실제로 접근 가능한 교실·복도·특별실에만 배치한다.
-MAP_SLOTS = [
-    {"zone": "1층 교실", "position": {"x": -30.5, "z": -33.6}},
-    {"zone": "행정실", "position": {"x": -23.5, "z": -33.6}},
-    {"zone": "현관 로비", "position": {"x": -12.2, "z": -31.0}},
-    {"zone": "보건실", "position": {"x": -4.0, "z": -29.9}},
-    {"zone": "서쪽 복도", "position": {"x": -28.0, "z": -27.2}},
-    {"zone": "중앙 복도", "position": {"x": -18.0, "z": -27.2}},
-    {"zone": "동쪽 복도", "position": {"x": -3.5, "z": -27.2}},
-    {"zone": "급식실", "position": {"x": -30.5, "z": -22.5}},
-    {"zone": "조리실", "position": {"x": -30.5, "z": -16.5}},
-    {"zone": "별관 복도", "position": {"x": -25.0, "z": -20.5}},
-    {"zone": "숙직실 앞", "position": {"x": -25.0, "z": -12.5}},
-    {"zone": "계단실 앞", "position": {"x": -16.5, "z": -30.2}},
-]
+# ---------------------------------------------------------------------------
+# 층별 미션 슬롯 — 실제 좌표는 새 수직 맵 계약에서 주입된다.
+# 맵 계약이 연결되기 전까지는 (0, 0) 플레이스홀더를 사용한다.
+# ---------------------------------------------------------------------------
+
+_FLOOR_SLOT_DEFS: dict[str, list[str]] = {
+    "ROOF":  ["roof_helipad"],
+    "F3":    ["f3_broadcast", "f3_av", "f3_dance"],
+    "F2":    ["f2_library", "f2_science", "f2_music"],
+    "F1":    ["f1_security", "f1_admin", "f1_kitchen"],
+    "FIELD": ["field_podium", "field_center"],
+    "B1":    ["b1_mach", "b1_elec"],
+}
+
+
+def get_mission_slots(floor: str | None = None) -> list[dict]:
+    """층별 미션 배치 슬롯을 반환한다.
+
+    floor가 None이면 전 층 슬롯을 합쳐 반환한다.
+    실제 좌표는 수직 맵 계약 연결 시 교체될 예정이며,
+    현재는 (0, 0) 플레이스홀더를 사용한다.
+    """
+    if floor is not None:
+        zones = _FLOOR_SLOT_DEFS.get(floor, [])
+        return [{"zone": z, "position": {"x": 0, "z": 0}} for z in zones]
+
+    slots: list[dict] = []
+    for fl_zones in _FLOOR_SLOT_DEFS.values():
+        slots.extend(
+            {"zone": z, "position": {"x": 0, "z": 0}} for z in fl_zones
+        )
+    return slots
 
 # 단서 단어 풀
 CLUE_WORDS = ["파란", "하늘", "아래", "셋", "별", "달", "바람", "불꽃", "새벽", "숲"]
@@ -77,7 +93,7 @@ def load_prop_dict() -> dict:
 def generate_round(forbidden_words: list[str]) -> RoundData:
     """금기어 목록으로 라운드 데이터를 생성한다."""
     prop_dict = load_prop_dict()
-    available_slots = list(MAP_SLOTS)
+    available_slots = get_mission_slots()
     random.shuffle(available_slots)
 
     clues = random.sample(CLUE_WORDS, min(len(forbidden_words), len(CLUE_WORDS)))
