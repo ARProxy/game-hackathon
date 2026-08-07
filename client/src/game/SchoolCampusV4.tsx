@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import {
   buildCampus,
   MAP_SIZE,
+  PAL,
   TONE,
   type CampusBox,
   type CampusCylinder,
@@ -13,6 +14,7 @@ import {
   type CampusRotation,
   type V3,
 } from './campusV4Data.js'
+import { bakeFamilies, FAMILY_OF_PAL, worldUV, type BakedFamily } from './textures'
 
 export type FloorKey = CampusFloor
 
@@ -21,10 +23,27 @@ const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1)
 const UNIT_PLANE = new THREE.PlaneGeometry(1, 1)
 const UNIT_CYLINDER = new THREE.CylinderGeometry(1, 1, 1, 8)
 const matrix = new THREE.Matrix4()
-const position = new THREE.Vector3()
-const rotation = new THREE.Euler()
-const quaternion = new THREE.Quaternion()
-const scale = new THREE.Vector3()
+const _position = new THREE.Vector3()
+const _rotation = new THREE.Euler()
+const _quaternion = new THREE.Quaternion()
+const _scale = new THREE.Vector3()
+const _color = new THREE.Color()
+
+/** PAL HEX → PAL 이름 역매핑 (한 번만 생성) */
+const PAL_REVERSE = new Map<string, string>()
+for (const [name, hex] of Object.entries(PAL as Record<string, string>)) {
+  PAL_REVERSE.set(hex.toLowerCase(), name)
+}
+
+/** HEX 색상 → 재질군 이름 */
+function familyFor(hex: string): string {
+  const palName = PAL_REVERSE.get(hex.toLowerCase())
+  if (palName) {
+    const family = FAMILY_OF_PAL[palName]
+    if (family) return family
+  }
+  return 'paint'
+}
 
 function rotationTuple(value?: CampusRotation | null): V3 | undefined {
   if (Array.isArray(value)) return value
@@ -33,71 +52,121 @@ function rotationTuple(value?: CampusRotation | null): V3 | undefined {
 }
 
 function applyMatrix(ref: THREE.InstancedMesh, index: number, p: V3, s: V3, rot?: CampusRotation | null) {
-  position.set(...p)
-  scale.set(...s)
+  _position.set(...p)
+  _scale.set(...s)
   const tuple = rotationTuple(rot)
   if (tuple) {
-    rotation.set(...tuple)
-    quaternion.setFromEuler(rotation)
-  } else quaternion.identity()
-  matrix.compose(position, quaternion, scale)
+    _rotation.set(...tuple)
+    _quaternion.setFromEuler(_rotation)
+  } else _quaternion.identity()
+  matrix.compose(_position, _quaternion, _scale)
   ref.setMatrixAt(index, matrix)
 }
 
-function BoxBatch({ items, color, emissive = false }: { items: CampusBox[]; color: string; emissive?: boolean }) {
+/** PBR 재질 + 인스턴스별 색상을 사용하는 박스 배치 */
+function PBRBoxBatch({ items, family, emissive = false }: { items: CampusBox[]; family: BakedFamily; emissive?: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null)
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({
+      map: family.map,
+      normalMap: family.normalMap,
+      roughnessMap: family.roughnessMap,
+      metalness: family.metalness,
+      roughness: family.roughness,
+      envMapIntensity: family.env,
+      emissive: emissive ? '#ffffff' : '#000000',
+      emissiveIntensity: emissive ? 1.35 : 0,
+    })
+    worldUV(m, family.uvScale)
+    return m
+  }, [family, emissive])
+
   useEffect(() => {
     if (!ref.current) return
-    items.forEach((item, index) => applyMatrix(ref.current!, index, item.p, item.s, item.rot))
+    items.forEach((item, index) => {
+      applyMatrix(ref.current!, index, item.p, item.s, item.rot)
+      _color.set(item.c)
+      ref.current!.setColorAt(index, _color)
+    })
     ref.current.instanceMatrix.needsUpdate = true
+    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
     ref.current.computeBoundingSphere()
   }, [items])
+
   return (
-    <instancedMesh ref={ref} args={[UNIT_BOX, undefined, items.length]} castShadow={items.length < 180} receiveShadow>
-      <meshStandardMaterial
-        color={color}
-        emissive={emissive ? color : '#000000'}
-        emissiveIntensity={emissive ? 1.35 : 0}
-        roughness={emissive ? 0.42 : 0.82}
-      />
-    </instancedMesh>
+    <instancedMesh ref={ref} args={[UNIT_BOX, mat, items.length]} castShadow={items.length < 180} receiveShadow />
   )
 }
 
-function PlateBatch({ items, color }: { items: CampusPlate[]; color: string }) {
+/** PBR 재질 + 인스턴스별 색상 평면 배치 */
+function PBRPlateBatch({ items, family }: { items: CampusPlate[]; family: BakedFamily }) {
   const ref = useRef<THREE.InstancedMesh>(null)
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({
+      map: family.map,
+      normalMap: family.normalMap,
+      roughnessMap: family.roughnessMap,
+      metalness: family.metalness,
+      roughness: family.roughness,
+      envMapIntensity: family.env,
+      side: THREE.DoubleSide,
+    })
+    worldUV(m, family.uvScale)
+    return m
+  }, [family])
+
   useEffect(() => {
     if (!ref.current) return
     items.forEach((item, index) => {
       const rot: CampusRotation = item.rot ?? [-Math.PI / 2, 0, 0]
       applyMatrix(ref.current!, index, item.p, [item.s[0], item.s[1], 1], rot)
+      _color.set(item.c)
+      ref.current!.setColorAt(index, _color)
     })
     ref.current.instanceMatrix.needsUpdate = true
+    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
     ref.current.computeBoundingSphere()
   }, [items])
+
   return (
-    <instancedMesh ref={ref} args={[UNIT_PLANE, undefined, items.length]} receiveShadow>
-      <meshStandardMaterial color={color} roughness={0.9} side={THREE.DoubleSide} />
-    </instancedMesh>
+    <instancedMesh ref={ref} args={[UNIT_PLANE, mat, items.length]} receiveShadow />
   )
 }
 
-function CylinderBatch({ items, color }: { items: CampusCylinder[]; color: string }) {
+/** PBR 재질 + 인스턴스별 색상 실린더 배치 */
+function PBRCylinderBatch({ items, family }: { items: CampusCylinder[]; family: BakedFamily }) {
   const ref = useRef<THREE.InstancedMesh>(null)
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({
+      map: family.map,
+      normalMap: family.normalMap,
+      roughnessMap: family.roughnessMap,
+      metalness: family.metalness,
+      roughness: family.roughness,
+      envMapIntensity: family.env,
+    })
+    worldUV(m, family.uvScale)
+    return m
+  }, [family])
+
   useEffect(() => {
     if (!ref.current) return
-    items.forEach((item, index) => applyMatrix(ref.current!, index, item.p, [item.r, item.h, item.r], item.rot))
+    items.forEach((item, index) => {
+      applyMatrix(ref.current!, index, item.p, [item.r, item.h, item.r], item.rot)
+      _color.set(item.c)
+      ref.current!.setColorAt(index, _color)
+    })
     ref.current.instanceMatrix.needsUpdate = true
+    if (ref.current.instanceColor) ref.current.instanceColor.needsUpdate = true
     ref.current.computeBoundingSphere()
   }, [items])
+
   return (
-    <instancedMesh ref={ref} args={[UNIT_CYLINDER, undefined, items.length]} castShadow={items.length < 100} receiveShadow>
-      <meshStandardMaterial color={color} roughness={0.78} />
-    </instancedMesh>
+    <instancedMesh ref={ref} args={[UNIT_CYLINDER, mat, items.length]} castShadow={items.length < 100} receiveShadow />
   )
 }
 
-function DoorBatch({ doors }: { doors: CampusDoor[] }) {
+function DoorBatch({ doors, families }: { doors: CampusDoor[]; families: Record<string, BakedFamily> }) {
   const items = useMemo<CampusBox[]>(() => doors.map((door) => ({
     f: door.f,
     p: [
@@ -108,16 +177,20 @@ function DoorBatch({ doors }: { doors: CampusDoor[] }) {
     s: door.axis === 'x' ? [door.w, door.h, door.t] : [door.t, door.h, door.w],
     c: door.c,
   })), [doors])
-  const groups = useMemo(() => groupByColor(items), [items])
-  return <>{[...groups].map(([color, group]) => <BoxBatch key={color} color={color} items={group} />)}</>
+  const groups = useMemo(() => groupByFamily(items), [items])
+  return <>{[...groups].map(([familyName, group]) => (
+    <PBRBoxBatch key={familyName} family={families[familyName] ?? families.paint} items={group} />
+  ))}</>
 }
 
-function groupByColor<T extends { c: string }>(items: T[]) {
+/** 재질군별 그룹핑 — 같은 재질군은 같은 InstancedMesh로 배칭 */
+function groupByFamily<T extends { c: string }>(items: T[]) {
   const groups = new Map<string, T[]>()
   for (const item of items) {
-    const group = groups.get(item.c)
+    const family = familyFor(item.c)
+    const group = groups.get(family)
     if (group) group.push(item)
-    else groups.set(item.c, [item])
+    else groups.set(family, [item])
   }
   return groups
 }
@@ -157,6 +230,7 @@ function selectDynamicFixtures(show: (floor: FloorKey) => boolean, limit = 18) {
 }
 
 export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: FloorKey[] }) {
+  const families = useMemo(() => bakeFamilies(), [])
   const visible = useMemo(() => new Set(visibleFloors), [visibleFloors])
   const show = useCallback((floor: FloorKey) => !visibleFloors || visible.has(floor), [visibleFloors, visible])
   const physicsSolids = useMemo(() => CAMPUS.solids.filter((item) => show(item.f)), [show])
@@ -165,13 +239,15 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
   const plates = useMemo(() => CAMPUS.plates.filter((item) => show(item.f)), [show])
   const cylinders = useMemo(() => CAMPUS.cyls.filter((item) => show(item.f)), [show])
   const fixtures = useMemo<CampusBox[]>(() => CAMPUS.fixtures.filter((item) => show(item.f)).map((item) => ({
-    f: item.f, p: item.p, s: [1.8, 0.07, 0.22], c: item.c, e: 1,
+    f: item.f, p: item.p, s: [1.8, 0.07, 0.22] as V3, c: item.c, e: 1,
   })), [show])
   const doors = useMemo(() => CAMPUS.doors.filter((item) => show(item.f)), [show])
-  const boxGroups = useMemo(() => groupByColor([...solids, ...visuals]), [solids, visuals])
-  const plateGroups = useMemo(() => groupByColor(plates), [plates])
-  const cylinderGroups = useMemo(() => groupByColor(cylinders), [cylinders])
-  const fixtureGroups = useMemo(() => groupByColor(fixtures), [fixtures])
+
+  const boxGroups = useMemo(() => groupByFamily([...solids, ...visuals]), [solids, visuals])
+  const plateGroups = useMemo(() => groupByFamily(plates), [plates])
+  const cylinderGroups = useMemo(() => groupByFamily(cylinders), [cylinders])
+  const fixtureGroups = useMemo(() => groupByFamily(fixtures), [fixtures])
+
   const colliders = useMemo(() => physicsSolids.filter(isStructural), [physicsSolids])
   const walkablePlates = useMemo(() => plates.filter((item) => (
     !item.ceil && item.s[0] >= 1.5 && item.s[1] >= 1.5
@@ -192,11 +268,19 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
           />
         ))}
       </RigidBody>
-      {[...boxGroups].map(([color, items]) => <BoxBatch key={color} color={color} items={items} />)}
-      {[...plateGroups].map(([color, items]) => <PlateBatch key={color} color={color} items={items} />)}
-      {[...cylinderGroups].map(([color, items]) => <CylinderBatch key={color} color={color} items={items} />)}
-      {[...fixtureGroups].map(([color, items]) => <BoxBatch key={color} color={color} items={items} emissive />)}
-      <DoorBatch doors={doors} />
+      {[...boxGroups].map(([familyName, items]) => (
+        <PBRBoxBatch key={familyName} family={families[familyName] ?? families.paint} items={items} />
+      ))}
+      {[...plateGroups].map(([familyName, items]) => (
+        <PBRPlateBatch key={familyName} family={families[familyName] ?? families.paint} items={items} />
+      ))}
+      {[...cylinderGroups].map(([familyName, items]) => (
+        <PBRCylinderBatch key={familyName} family={families[familyName] ?? families.paint} items={items} />
+      ))}
+      {[...fixtureGroups].map(([familyName, items]) => (
+        <PBRBoxBatch key={`fx-${familyName}`} family={families[familyName] ?? families.paint} items={items} emissive />
+      ))}
+      <DoorBatch doors={doors} families={families} />
       {dynamicFixtures.map((fixture, index) => (
         <pointLight key={index} position={fixture.p} color={TONE[fixture.tone] ?? fixture.c} intensity={42} distance={11} decay={1.8} />
       ))}
