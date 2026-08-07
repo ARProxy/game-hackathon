@@ -14,7 +14,6 @@ import trapContract from './trapContract.json'
 export { GATE_SLOTS } from './gateContract'
 
 export type FloorKey = 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF'
-type V3 = [number, number, number]
 type V2 = [number, number]
 
 export const MAP_SIZE = 80

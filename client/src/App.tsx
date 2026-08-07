@@ -159,7 +159,7 @@ function Scene({
           }}
         />
         <Props />
-        <Player key={`player-${playerSpawn.join(':')}`} ref={playerRef} position={playerSpawn} characterId={playerCharacterId} />
+        <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={playerSpawn} characterId={playerCharacterId} />
         <Partner
           playerRef={playerGroupRef}
           playerId="partner"

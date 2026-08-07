@@ -3,6 +3,8 @@ export type V2 = [number, number]
 export type V3 = [number, number, number]
 export type CampusRotation = V3 | { rot: V3 }
 
+export const PAL: Record<string, string>
+
 export interface CampusBox {
   f: CampusFloor
   p: V3

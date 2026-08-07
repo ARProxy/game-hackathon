@@ -221,8 +221,8 @@ function grass(seed: number) {
   return c
 }
 
-function fabric(seed: number) {
-  const c = cv(), x = c.getContext('2d')!, R = rnd(seed)
+function fabric(_seed: number) {
+  const c = cv(), x = c.getContext('2d')!
   x.fillStyle = g(184); x.fillRect(0, 0, SIZE, SIZE)
   for (let i = 0; i < SIZE; i += 3) {
     x.strokeStyle = ga(166, 0.5); x.lineWidth = 1
