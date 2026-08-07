@@ -125,6 +125,7 @@ function groupByColor<T extends { c: string }>(items: T[]) {
 /** 큰 구조물만 물리 충돌체로 만들고 작은 장식은 시각 전용으로 유지한다. */
 function isStructural(item: CampusBox) {
   const [x, y, z] = item.s
+  if (item.hide && item.ramp) return true
   const isWalkableSlab = y <= 0.75 && x >= 2 && z >= 2
   const isWall = y >= 1.75 && (x >= 1.5 || z >= 1.5)
   return isWalkableSlab || isWall
@@ -158,7 +159,8 @@ function selectDynamicFixtures(show: (floor: FloorKey) => boolean, limit = 18) {
 export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: FloorKey[] }) {
   const visible = useMemo(() => new Set(visibleFloors), [visibleFloors])
   const show = useCallback((floor: FloorKey) => !visibleFloors || visible.has(floor), [visibleFloors, visible])
-  const solids = useMemo(() => CAMPUS.solids.filter((item) => !item.hide && show(item.f)), [show])
+  const physicsSolids = useMemo(() => CAMPUS.solids.filter((item) => show(item.f)), [show])
+  const solids = useMemo(() => physicsSolids.filter((item) => !item.hide), [physicsSolids])
   const visuals = useMemo(() => CAMPUS.visuals.filter((item) => show(item.f)), [show])
   const plates = useMemo(() => CAMPUS.plates.filter((item) => show(item.f)), [show])
   const cylinders = useMemo(() => CAMPUS.cyls.filter((item) => show(item.f)), [show])
@@ -170,7 +172,10 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
   const plateGroups = useMemo(() => groupByColor(plates), [plates])
   const cylinderGroups = useMemo(() => groupByColor(cylinders), [cylinders])
   const fixtureGroups = useMemo(() => groupByColor(fixtures), [fixtures])
-  const colliders = useMemo(() => solids.filter(isStructural), [solids])
+  const colliders = useMemo(() => physicsSolids.filter(isStructural), [physicsSolids])
+  const walkablePlates = useMemo(() => plates.filter((item) => (
+    !item.ceil && item.s[0] >= 1.5 && item.s[1] >= 1.5
+  )), [plates])
   const dynamicFixtures = useMemo(() => selectDynamicFixtures(show), [show])
 
   return (
@@ -178,6 +183,13 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
       <RigidBody type="fixed" colliders={false}>
         {colliders.map((item, index) => (
           <CuboidCollider key={index} args={[item.s[0] / 2, item.s[1] / 2, item.s[2] / 2]} position={item.p} rotation={rotationTuple(item.rot)} />
+        ))}
+        {walkablePlates.map((item, index) => (
+          <CuboidCollider
+            key={`plate-${index}`}
+            args={[item.s[0] / 2, 0.04, item.s[1] / 2]}
+            position={[item.p[0], item.p[1] - 0.04, item.p[2]]}
+          />
         ))}
       </RigidBody>
       {[...boxGroups].map(([color, items]) => <BoxBatch key={color} color={color} items={items} />)}

@@ -11,6 +11,7 @@ export interface CampusBox {
   rot?: CampusRotation
   e?: number
   hide?: boolean
+  ramp?: boolean
 }
 
 export interface CampusPlate {

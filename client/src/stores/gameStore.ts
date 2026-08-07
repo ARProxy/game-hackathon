@@ -10,6 +10,7 @@ import { create } from 'zustand'
 export type GamePhase = 'lobby' | 'onboarding' | 'reveal' | 'playing' | 'final_spell' | 'escape' | 'result'
 export type PlayerStatus = 'alive' | 'frozen' | 'eliminated' | 'escaped'
 export type GameOutcome = 'win' | 'lose' | null
+export type MapFloor = 'OUT' | 'ROOF' | 'F3' | 'F2' | 'F1' | 'FIELD' | 'B1'
 
 export interface PlayerState {
   playerId: string
@@ -126,7 +127,7 @@ interface GameStore {
   outcome: GameOutcome
   resultReason: string | null
   isPaused: boolean
-  currentFloor: 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF'
+  currentFloor: MapFloor
   forbiddenWords: string[]
   sourceAnswers: string[]
   onboardingQuestions: string[]
@@ -173,7 +174,7 @@ interface GameStore {
   setSelectedCharacter: (characterId: string) => void
   setPhase: (phase: GamePhase) => void
   setPaused: (paused: boolean) => void
-  setCurrentFloor: (floor: 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF') => void
+  setCurrentFloor: (floor: MapFloor) => void
   startRound: () => void
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void

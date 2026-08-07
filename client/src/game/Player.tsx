@@ -23,6 +23,7 @@ const MOVE_ACCELERATION = 18
 const MOVE_DECELERATION = 26
 const VISUAL_FOLLOW_SPEED = 30
 const ROTATION_SPEED = 14
+const FALL_RECOVERY_Y = -8
 // 캐릭터 모델의 원점은 발바닥이다. 물리 바디 원점과 캡슐 하단의 차이를 보정한다.
 const COLLIDER_BOTTOM_Y = COLLIDER.offsetY - COLLIDER.halfHeight - COLLIDER.radius
 
@@ -49,6 +50,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   const rightFootstep = useRef(false)
   const lastPositionSync = useRef(0)
   const lastAuthorityFloor = useRef<string | undefined>(undefined)
+  const lastSafePosition = useRef(new THREE.Vector3(position[0], position[1] - COLLIDER_BOTTOM_Y, position[2]))
   const { camera } = useThree()
   const { playPlayerFootstep } = useSound()
 
@@ -135,6 +137,11 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     rigidBodyRef.current.setLinvel({ x: nextVelX, y: velY, z: nextVelZ }, true)
     // visual을 rigid body 위치에 동기화
     const pos = rigidBodyRef.current.translation()
+    if (pos.y < FALL_RECOVERY_Y) {
+      rigidBodyRef.current.setTranslation(lastSafePosition.current, true)
+      rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      return
+    }
     const movedDistance = Math.hypot(
       pos.x - lastMotionPosition.current.x,
       pos.z - lastMotionPosition.current.z,
@@ -144,6 +151,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     lastMotionPosition.current.set(pos.x, pos.y, pos.z)
 
     const grounded = Math.abs(velY) < GROUND_THRESHOLD
+    if (grounded) lastSafePosition.current.set(pos.x, pos.y, pos.z)
     const footstepInterval = THREE.MathUtils.lerp(0.5, 0.34, movementRef.current)
     if (grounded && movementRef.current > 0.18 && clock.elapsedTime - lastFootstep.current >= footstepInterval) {
       rightFootstep.current = !rightFootstep.current
@@ -159,17 +167,10 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     // 서버가 빙결 핑과 청각 이벤트에 실제 좌표를 사용하도록 10Hz로 동기화한다.
     const now = clock.elapsedTime
     if (now - lastPositionSync.current >= 0.1) {
-      const insideMain = pos.x >= -34.5 && pos.x <= 8.5 && pos.z >= -36.2 && pos.z <= -25
-      const insideWing = pos.x >= -34.5 && pos.x <= -22.5 && pos.z >= -25.5 && pos.z <= -7.5
-      const insideGym = pos.x >= 13.5 && pos.x <= 36.5 && pos.z >= -36.2 && pos.z <= -17.5
-      const insideBuilding = insideMain || insideWing || insideGym
-      const currentFloor = pos.y >= 10.2
-        ? 'ROOF'
-        : pos.y >= 6.6
-          ? 'F3'
-          : pos.y >= 3
-            ? 'F2'
-            : insideBuilding ? 'F1' : 'OUT'
+      const authorityFloor = playerState?.position.floor
+      const currentFloor = authorityFloor === 'B1' || authorityFloor === 'FIELD'
+        ? authorityFloor
+        : authorityFloor ?? (pos.y >= 10.2 ? 'ROOF' : pos.y >= 6.6 ? 'F3' : pos.y >= 3 ? 'F2' : 'F1')
       store.updatePlayer(playerId, {
         position: {
           ...playerState?.position,
