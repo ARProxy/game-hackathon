@@ -17,15 +17,21 @@ import { sendGameMessage } from '../hooks/useWebSocket'
 import useSound from '../hooks/useSound'
 
 const MOVE_SPEED = 5
-const JUMP_FORCE = 5
-const GROUND_THRESHOLD = 0.1
-const MOVE_ACCELERATION = 18
-const MOVE_DECELERATION = 26
-const VISUAL_FOLLOW_SPEED = 30
+const JUMP_FORCE = 6
+const GROUND_THRESHOLD = 0.3
+const MOVE_ACCELERATION = 12
+const MOVE_DECELERATION = 20
+const VISUAL_FOLLOW_SPEED = 24
 const ROTATION_SPEED = 14
 const FALL_RECOVERY_Y = -8
 // 캐릭터 모델의 원점은 발바닥이다. 물리 바디 원점과 캡슐 하단의 차이를 보정한다.
 const COLLIDER_BOTTOM_Y = COLLIDER.offsetY - COLLIDER.halfHeight - COLLIDER.radius
+// useFrame 내에서 매 프레임 할당하지 않도록 재사용 벡터
+const _forward = new THREE.Vector3()
+const _right = new THREE.Vector3()
+const _move = new THREE.Vector3()
+const _up = new THREE.Vector3(0, 1, 0)
+const _visualTarget = new THREE.Vector3()
 
 interface PlayerProps {
   position?: [number, number, number]
@@ -93,35 +99,30 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       const pos = rigidBodyRef.current.translation()
       lastMotionPosition.current.set(pos.x, pos.y, pos.z)
       const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
-      visualRef.current.position.lerp(
-        new THREE.Vector3(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z),
-        follow,
-      )
+      _visualTarget.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
+      visualRef.current.position.lerp(_visualTarget, follow)
       return
     }
 
     // 카메라 기준 forward/right 벡터 계산
-    const forward = new THREE.Vector3()
-    camera.getWorldDirection(forward)
-    forward.y = 0
-    forward.normalize()
-
-    const right = new THREE.Vector3()
-    right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize()
+    camera.getWorldDirection(_forward)
+    _forward.y = 0
+    _forward.normalize()
+    _right.crossVectors(_forward, _up).normalize()
 
     // WASD 입력
     const pressed = keys.current
-    const move = new THREE.Vector3(0, 0, 0)
-    if (pressed.has('KeyW') || pressed.has('ArrowUp')) move.add(forward)
-    if (pressed.has('KeyS') || pressed.has('ArrowDown')) move.sub(forward)
-    if (pressed.has('KeyD') || pressed.has('ArrowRight')) move.add(right)
-    if (pressed.has('KeyA') || pressed.has('ArrowLeft')) move.sub(right)
+    _move.set(0, 0, 0)
+    if (pressed.has('KeyW') || pressed.has('ArrowUp')) _move.add(_forward)
+    if (pressed.has('KeyS') || pressed.has('ArrowDown')) _move.sub(_forward)
+    if (pressed.has('KeyD') || pressed.has('ArrowRight')) _move.add(_right)
+    if (pressed.has('KeyA') || pressed.has('ArrowLeft')) _move.sub(_right)
 
-    if (move.lengthSq() > 0) move.normalize()
-    isMoving.current = move.lengthSq() > 0
+    if (_move.lengthSq() > 0) _move.normalize()
+    isMoving.current = _move.lengthSq() > 0
 
-    const moveX = move.x
-    const moveZ = move.z
+    const moveX = _move.x
+    const moveZ = _move.z
 
     // 점프
     const currentVel = rigidBodyRef.current.linvel()
@@ -159,10 +160,8 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       lastFootstep.current = clock.elapsedTime
     }
     const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
-    visualRef.current.position.lerp(
-      new THREE.Vector3(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z),
-      follow,
-    )
+    _visualTarget.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
+    visualRef.current.position.lerp(_visualTarget, follow)
 
     // 서버가 빙결 핑과 청각 이벤트에 실제 좌표를 사용하도록 10Hz로 동기화한다.
     const now = clock.elapsedTime
@@ -212,7 +211,8 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
         lockRotations
         colliders={false}
         mass={1}
-        linearDamping={5}
+        linearDamping={0.5}
+        gravityScale={2.2}
       >
         <CapsuleCollider args={[COLLIDER.halfHeight, COLLIDER.radius]} position={[0, COLLIDER.offsetY, 0]} />
       </RigidBody>
