@@ -3,17 +3,41 @@
 from __future__ import annotations
 
 import math
+import json
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 
 HUMAN_MAX_SPEED = 7.0
 ACTOR_MAX_SPEED = 7.0
 POSITION_JITTER_ALLOWANCE = 0.65
 
-# 벽 사각형 — 새 수직 맵의 LOS 데이터가 연결되기 전까지 빈 튜플.
-# 빈 상태에서는 has_clear_catch_line()이 항상 True를 반환한다.
-WALL_RECTS: tuple[tuple[float, float, float, float], ...] = ()
+COLLISION_CONTRACT_PATH = (
+    Path(__file__).parents[3] / "client/src/game/serverCollisionContract.json"
+)
+with COLLISION_CONTRACT_PATH.open(encoding="utf-8") as collision_file:
+    COLLISION_CONTRACT = json.load(collision_file)
+
+
+def _wall_aabb(wall: dict) -> tuple[float, float, float, float]:
+    """회전된 박스도 서버 2D 판정에서 빠지지 않도록 보수적 AABB로 변환한다."""
+    x, z = wall["center"]
+    sx, sz = wall["size"]
+    angle = float(wall.get("rotationY", 0))
+    return (
+        float(x), float(z),
+        abs(math.cos(angle)) * float(sx) + abs(math.sin(angle)) * float(sz),
+        abs(math.sin(angle)) * float(sx) + abs(math.cos(angle)) * float(sz),
+    )
+
+
+WALL_RECTS_BY_FLOOR: dict[str, tuple[tuple[float, float, float, float], ...]] = {
+    floor: tuple(_wall_aabb(wall) for wall in COLLISION_CONTRACT["walls"] if wall["floor"] == floor)
+    for floor in {wall["floor"] for wall in COLLISION_CONTRACT["walls"]}
+}
+# 기존 순수 함수·테스트 호환용 F1 벽 집합.
+WALL_RECTS = WALL_RECTS_BY_FLOOR.get("F1", ())
 
 
 @dataclass(frozen=True)
@@ -67,6 +91,7 @@ def segment_intersects_rect(
 
 
 def has_clear_catch_line(
-    start: tuple[float, float], end: tuple[float, float]
+    start: tuple[float, float], end: tuple[float, float], floor: str = "F1",
 ) -> bool:
-    return not any(segment_intersects_rect(start, end, wall) for wall in WALL_RECTS)
+    walls = WALL_RECTS_BY_FLOOR.get(floor, ())
+    return not any(segment_intersects_rect(start, end, wall) for wall in walls)

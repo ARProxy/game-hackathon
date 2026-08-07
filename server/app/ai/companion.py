@@ -47,6 +47,7 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
 
     if seeker and _distance(partner, seeker) <= CONTRACT["dangerDistance"] and has_clear_catch_line(
         (partner.position.x, partner.position.z), (seeker.position.x, seeker.position.z),
+        partner.position.floor.value,
     ):
         previous_sighting = runtime.last_seeker_seen
         runtime.last_seeker_seen = {
@@ -203,6 +204,7 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         step = min(float(CONTRACT[speed_key]) * min(elapsed, 0.5), distance - CONTRACT["arrivalDistance"])
         partner.position.x, partner.position.z = _safe_hunter_step(
             partner.position.x, partner.position.z, intent["target"]["x"], intent["target"]["z"], step,
+            partner.position.floor.value,
         )
         session.position_samples[partner.player_id] = MovementSample(partner.position.x, partner.position.z, now)
 

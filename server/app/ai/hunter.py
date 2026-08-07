@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from app.game.authority import WALL_RECTS, has_clear_catch_line, segment_intersects_rect
+from app.game.authority import WALL_RECTS_BY_FLOOR, has_clear_catch_line, segment_intersects_rect
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
 from app.game.progression import VerticalRoundPhase
 
@@ -143,6 +143,7 @@ def decide_hunter_intent(session: Any) -> dict:
         if not has_clear_catch_line(
             (seeker.position.x, seeker.position.z),
             (runner.position.x, runner.position.z),
+            seeker.position.floor.value,
         ):
             continue
         dot = (dx / distance) * forward_x + (dz / distance) * forward_z
@@ -249,6 +250,7 @@ def advance_hunter(session: Any) -> dict:
             next_x, next_z = _safe_hunter_step(
                 seeker.position.x, seeker.position.z,
                 intent["target"]["x"], intent["target"]["z"], step,
+                seeker.position.floor.value,
             )
             seeker.position.x, seeker.position.z = next_x, next_z
             session.position_samples[seeker.player_id] = MovementSample(seeker.position.x, seeker.position.z, now)
@@ -281,6 +283,7 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
         )
         seeker.position.x, seeker.position.z = _safe_hunter_step(
             seeker.position.x, seeker.position.z, flank["x"], flank["z"], step,
+            seeker.position.floor.value,
         )
         session.position_samples[seeker.player_id] = MovementSample(
             seeker.position.x, seeker.position.z, now,
@@ -306,7 +309,7 @@ def hunter_snapshot(session: Any) -> dict:
 
 
 def _safe_hunter_step(
-    x: float, z: float, target_x: float, target_z: float, step: float,
+    x: float, z: float, target_x: float, target_z: float, step: float, floor: str = "F1",
 ) -> tuple[float, float]:
     """서버 벽 계약을 넘지 않으며 목표 쪽 또는 벽의 측면으로 한 걸음 이동한다."""
     distance = math.hypot(target_x - x, target_z - z)
@@ -314,13 +317,13 @@ def _safe_hunter_step(
         return x, z
     nx, nz = (target_x - x) / distance, (target_z - z) / distance
     direct = (x + nx * step, z + nz * step)
-    if has_clear_catch_line((x, z), direct):
+    if has_clear_catch_line((x, z), direct, floor):
         return direct
 
     # 목표 벡터의 단순 수직 방향은 목표 주위를 원으로 돌 수 있다. 충돌한 벽의
     # 긴 축을 따라 가까운 끝점으로 이동해야 여러 틱 뒤 실제로 우회할 수 있다.
     blocking_wall = next(
-        (wall for wall in WALL_RECTS if segment_intersects_rect((x, z), direct, wall)),
+        (wall for wall in WALL_RECTS_BY_FLOOR.get(floor, ()) if segment_intersects_rect((x, z), direct, wall)),
         None,
     )
     if blocking_wall is None:
@@ -335,7 +338,7 @@ def _safe_hunter_step(
     valid = [
         candidate for candidate in candidates
         if math.hypot(candidate[0] - x, candidate[1] - z) > 1e-6
-        and has_clear_catch_line((x, z), candidate)
+        and has_clear_catch_line((x, z), candidate, floor)
     ]
     if not valid:
         return x, z

@@ -582,6 +582,7 @@ class ConnectionManager:
                 and has_clear_catch_line(
                     (player.position.x, player.position.z),
                     (target.position.x, target.position.z),
+                    player.position.floor.value,
                 )
             )
             if not valid:
@@ -672,6 +673,7 @@ class ConnectionManager:
                 and has_clear_catch_line(
                     (seeker.position.x, seeker.position.z),
                     (target.position.x, target.position.z),
+                    seeker.position.floor.value,
                 )
             )
             if not valid_catch:
@@ -854,6 +856,7 @@ class ConnectionManager:
             and has_clear_catch_line(
                 (seeker.position.x, seeker.position.z),
                 (player.position.x, player.position.z),
+                seeker.position.floor.value,
             )
         ):
             await self._finish_seeker_catch(room_id, player_id, player)
@@ -1317,6 +1320,7 @@ class ConnectionManager:
         if not has_clear_catch_line(
             (partner.position.x, partner.position.z),
             (target.position.x, target.position.z),
+            partner.position.floor.value,
         ):
             return
         target.unfreeze()
@@ -1409,6 +1413,7 @@ class ConnectionManager:
             and has_clear_catch_line(
                 (seeker.position.x, seeker.position.z),
                 (partner.position.x, partner.position.z),
+                seeker.position.floor.value,
             )
         ):
             await self._finish_seeker_catch(room_id, partner.player_id, partner)
