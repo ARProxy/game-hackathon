@@ -211,11 +211,12 @@ function Scene({
  * - 서버 연결, 온보딩, PTT, 게임 흐름 제어
  * - UI 렌더링 (온보딩, 금기어 발표)
  * ───────────────────────────────────────────── */
-function GameController() {
+function GameController({ quickStart }: { quickStart: boolean }) {
   const { connect, send, disconnect } = useWebSocket()
   const phase = useGameStore((state) => state.phase)
   const connected = useGameStore((state) => state.connected)
   const forbiddenWords = useGameStore((state) => state.forbiddenWords)
+  const roundStartedAt = useGameStore((state) => state.roundStartedAt)
   const isPaused = useGameStore((state) => state.isPaused)
   const setRoom = useGameStore((state) => state.setRoom)
   const setPhase = useGameStore((state) => state.setPhase)
@@ -241,13 +242,23 @@ function GameController() {
     }
   }, [connect, disconnect, setRoom])
 
-  /* 연결 → 온보딩 */
+  /* 연결 → 일반 온보딩 또는 테스트 빠른 시작 */
   useEffect(() => {
     if (connected && phase === 'lobby') {
-      send({ type: 'request_onboarding_questions' })
-      setPhase('onboarding')
+      if (quickStart) {
+        send({ type: 'start_game', payload: {} })
+      } else {
+        send({ type: 'request_onboarding_questions' })
+        setPhase('onboarding')
+      }
     }
-  }, [connected, phase, send, setPhase])
+  }, [connected, phase, quickStart, send, setPhase])
+
+  useEffect(() => {
+    if (quickStart && phase === 'lobby' && roundStartedAt !== null) {
+      setPhase('playing')
+    }
+  }, [phase, quickStart, roundStartedAt, setPhase])
 
   /* 온보딩 완료 → 서버에 답변 전송 */
   const handleOnboardingComplete = useCallback((answers: string[]) => {
@@ -312,11 +323,21 @@ function App() {
   const [entryScreen, setEntryScreen] = useState<EntryScreen>('title')
   const [playerCharacterId, setPlayerCharacterId] = useState(runnerIds[0] ?? 'R01')
   const [isGameRunning, setGameRunning] = useState(false)
+  const [quickStart, setQuickStart] = useState(false)
   const [cameraMode, setCameraMode] = useState<CameraMode>('3d')
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
   const [sceneKey, setSceneKey] = useState(0)
   const startSolo = useCallback((characterId: string) => {
+    setQuickStart(false)
+    setPlayerCharacterId(characterId)
+    useGameStore.getState().reset()
+    useGameStore.getState().setSelectedCharacter(characterId)
+    setGameRunning(true)
+  }, [])
+  const startQuickGame = useCallback(() => {
+    const characterId = runnerIds[0] ?? 'R01'
+    setQuickStart(true)
     setPlayerCharacterId(characterId)
     useGameStore.getState().reset()
     useGameStore.getState().setSelectedCharacter(characterId)
@@ -325,6 +346,7 @@ function App() {
   const returnToMainMenu = useCallback(() => {
     useGameStore.getState().reset()
     setEntryScreen('title')
+    setQuickStart(false)
     setGameRunning(false)
     setSceneKey((key) => key + 1)
   }, [])
@@ -361,7 +383,7 @@ function App() {
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#07090D' }}>
       {!isGameRunning && (
-        <StartFlow screen={entryScreen} onScreenChange={setEntryScreen} onStartSolo={startSolo} />
+        <StartFlow screen={entryScreen} onScreenChange={setEntryScreen} onStartSolo={startSolo} onQuickStart={startQuickGame} />
       )}
 
       {isGameRunning && <GameErrorBoundary
@@ -369,7 +391,7 @@ function App() {
         onMainMenu={returnToMainMenu}
       >
       <SoundController />
-      <GameController />
+      <GameController quickStart={quickStart} />
 
       <Canvas
         key={sceneKey}

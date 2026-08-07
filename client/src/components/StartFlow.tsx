@@ -8,6 +8,7 @@ interface StartFlowProps {
   screen: EntryScreen
   onScreenChange: (screen: EntryScreen) => void
   onStartSolo: (characterId: string) => void
+  onQuickStart: () => void
 }
 
 const runners = CHARACTERS.filter((character) => character.role === 'runner')
@@ -37,7 +38,7 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function StartFlow({ screen, onScreenChange, onStartSolo }: StartFlowProps) {
+export default function StartFlow({ screen, onScreenChange, onStartSolo, onQuickStart }: StartFlowProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedCharacter, setSelectedCharacter] = useState(runners[0]?.id ?? 'R01')
   const [nickname, setNickname] = useState('도망자')
@@ -55,7 +56,12 @@ export default function StartFlow({ screen, onScreenChange, onStartSolo }: Start
       {screen === 'title' && (
         <section className="title-panel">
           <p className="start-kicker">말하면 위험하다</p>
-          <h1><span>얼음,</span> 땡!</h1>
+          <h1>
+            <button type="button" className="quick-start-title" onClick={onQuickStart} title="테스트 게임 바로 시작">
+              <span>얼음,</span> 땡!
+            </button>
+          </h1>
+          <p className="quick-start-hint">타이틀 클릭 · 테스트 바로 시작</p>
           <p className="title-copy">금지된 말을 피해 단서를 모으고<br />술래가 닿기 전에 학교를 탈출하라.</p>
           <nav className="start-actions" aria-label="메인 메뉴">
             <button className="start-button primary" onClick={() => onScreenChange('mode')}>게임 시작</button>

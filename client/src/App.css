@@ -44,6 +44,10 @@ button { color: inherit; }
 .start-kicker { margin-bottom: 12px; color: #8fd3e8; font-size: 12px; font-weight: 800; letter-spacing: .28em; }
 .title-panel h1 { margin: 0 0 18px; font-size: clamp(64px, 9vw, 112px); line-height: .84; letter-spacing: -.08em; text-shadow: 0 0 30px rgba(143,211,232,.22); }
 .title-panel h1 span { display: block; color: #c9edf5; }
+.quick-start-title { all: unset; display: block; cursor: pointer; transition: transform .18s ease, filter .18s ease; }
+.quick-start-title:hover { transform: translateY(-2px); filter: drop-shadow(0 0 18px rgba(143,211,232,.35)); }
+.quick-start-title:focus-visible { outline: 2px solid #8fd3e8; outline-offset: 8px; }
+.quick-start-hint { margin: -8px 0 18px; color: #6f8d99; font-size: 11px; letter-spacing: .12em; }
 .title-copy { color: #a8b3bb; line-height: 1.75; }
 .start-actions { display: grid; gap: 10px; margin-top: 42px; }
 .start-button { min-height: 48px; padding: 0 20px; border: 1px solid #334852; background: #111b22; cursor: pointer; transition: .18s ease; }

@@ -25,6 +25,16 @@ def client():
 
 
 class TestWebSocketConnection:
+    def test_quick_start_uses_default_words_and_creates_round(self, client):
+        with client.websocket_connect("/ws/quick-start/player1") as ws:
+            ws.send_json({"type": "start_game", "payload": {}})
+            data = ws.receive_json()
+
+            assert data["type"] == "game_started"
+            assert data["state"]["forbidden_words"] == ["열쇠", "커피", "빨간"]
+            assert len(data["round"]["missions"]) == 3
+            assert data["round"]["total_clues"] == 3
+
     def test_connect_and_receive(self, client):
         with client.websocket_connect("/ws/room1/player1") as ws:
             ws.send_json({

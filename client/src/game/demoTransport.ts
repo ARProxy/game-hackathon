@@ -50,7 +50,8 @@ export default class DemoTransport {
 
   handle(message: any): boolean {
     const payload = message?.payload ?? {}
-    if (message?.type === 'onboarding_complete') this.start()
+    if (message?.type === 'onboarding_complete') this.start(false)
+    if (message?.type === 'start_game') this.start(true)
     if (message?.type === 'request_onboarding_questions') {
       this.send({ type: 'onboarding_questions', questions: QUESTIONS })
     }
@@ -76,10 +77,10 @@ export default class DemoTransport {
     this.timers.add(timer)
   }
 
-  private start() {
+  private start(skipReveal: boolean) {
     this.phase = 'playing'
     const words = this.selected.map((item) => item.word)
-    this.send({ type: 'forbidden_words_ready', forbidden_words: words })
+    if (!skipReveal) this.send({ type: 'forbidden_words_ready', forbidden_words: words })
     this.send({
       type: 'game_started',
       state: {

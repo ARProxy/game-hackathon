@@ -51,6 +51,23 @@ export default function ForbiddenReveal({ words, onComplete }: ForbiddenRevealPr
       opacity: fadeOut ? 0 : 1,
       transition: 'opacity 0.5s',
     }}>
+      <button
+        type="button"
+        onClick={onComplete}
+        style={{
+          position: 'absolute',
+          top: 24,
+          right: 24,
+          padding: '10px 16px',
+          border: '1px solid rgba(255,255,255,.25)',
+          borderRadius: 8,
+          color: 'rgba(255,255,255,.75)',
+          background: 'rgba(255,255,255,.06)',
+          cursor: 'pointer',
+        }}
+      >
+        금기어 공개 건너뛰기
+      </button>
       <div style={{
         fontSize: 14,
         opacity: 0.5,

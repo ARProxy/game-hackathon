@@ -28,7 +28,13 @@ from app.game.authority import (
     has_clear_catch_line,
     movement_is_plausible,
 )
-from app.game.session import DEFAULT_AI_PARTNER_IDS, RESERVED_ACTOR_ROLES, TRAP_CONTRACT, session_manager
+from app.game.session import (
+    DEFAULT_AI_PARTNER_IDS,
+    DEFAULT_FORBIDDEN_WORDS,
+    RESERVED_ACTOR_ROLES,
+    TRAP_CONTRACT,
+    session_manager,
+)
 from app.game.progression import InvalidProgression
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import complete_current_stage, use_open_floor_transition
@@ -964,13 +970,19 @@ class ConnectionManager:
         self, room_id: str, player_id: str, payload: dict
     ) -> None:
         session = session_manager.get_or_create(room_id)
-        forbidden_words = payload.get("forbidden_words")
+        requested_words = payload.get("forbidden_words")
+        forbidden_words = requested_words or DEFAULT_FORBIDDEN_WORDS
         session.setup_game(forbidden_words)
+        round_data = None
+        if not requested_words:
+            round_data = generate_round(forbidden_words)
+            session.setup_round(round_data)
         self._ensure_hunter_task(room_id)
         self._ensure_companion_task(room_id)
         await self.broadcast(room_id, {
             "type": "game_started",
             "state": session.state_payload(),
+            **({"round": round_to_dict(round_data)} if round_data else {}),
             "active_gate": session.active_gate_payload(),
             "active_traps": session.active_traps_payload(),
         })
