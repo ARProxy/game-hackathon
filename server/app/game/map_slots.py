@@ -33,3 +33,7 @@ def actor_spawn_slots() -> dict[str, dict]:
         "partner": get_map_slot("ROOF_RUNNER_SPAWN_B"),
         "partner-2": get_map_slot("ROOF_RUNNER_SPAWN_C"),
     }
+
+
+def seeker_reveal_slot() -> dict:
+    return get_map_slot("F3_SEEKER_REVEAL_ENTRY")

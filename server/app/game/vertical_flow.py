@@ -6,7 +6,7 @@ import math
 from typing import Any
 
 from app.game.map_slots import get_map_slot
-from app.game.progression import InvalidProgression, VerticalRoundPhase
+from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase
 from app.game.state import PlayerRole, PlayerStatus
 
 
@@ -31,6 +31,9 @@ TRANSITION_SLOTS_BY_PHASE = {
     VerticalRoundPhase.FLOOR_1: {
         "west": ("F2_TO_F1_STAIR_WEST", "F1_STAIR_ARRIVAL_WEST"),
         "east": ("F2_TO_F1_STAIR_EAST", "F1_STAIR_ARRIVAL_EAST"),
+    },
+    VerticalRoundPhase.FIELD_FINAL: {
+        "field": ("F1_TO_FIELD_FIRE_DOOR", "FIELD_FINAL_ENTRY"),
     },
 }
 
@@ -66,6 +69,8 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
 
     session.vertical_round.mark_mission_complete()
     next_phase = session.vertical_round.advance()
+    if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
+        next_phase = session.vertical_round.advance(final_route=FinalRoute.FIELD)
     return {
         "completed_phase": phase.value,
         "next_phase": next_phase.value,

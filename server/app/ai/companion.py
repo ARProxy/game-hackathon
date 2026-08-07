@@ -84,6 +84,23 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         if runtime.rescue_request == target.player_id or waited >= CONTRACT["autoRescueDelaySeconds"]:
             return _intent("RESCUE_TEAMMATE", target.player_id, target, "assigned_rescue")
 
+    if (
+        session.vertical_progression_enabled
+        and session.round_data is None
+        and session.state.phase == GamePhase.PLAYING
+    ):
+        active_floor = session.vertical_round.policy.active_floor
+        if partner.position.floor != active_floor:
+            return _intent("REGROUP", None, partner, "waiting_for_floor_transition")
+        from app.game.vertical_flow import mission_interaction_position
+        x, _, z = mission_interaction_position(session.vertical_round.phase)
+        return {
+            "state": "EXPLORE_ZONE",
+            "target_id": session.vertical_round.phase.value,
+            "target": {"x": x, "z": z},
+            "reason": "vertical_stage_objective",
+        }
+
     if session.state.phase in {GamePhase.FINAL_SPELL, GamePhase.ESCAPE} and session.active_gate_id:
         state = "ESCAPE" if session.state.phase == GamePhase.ESCAPE else "MOVE_TO_GATE"
         return {
@@ -205,20 +222,27 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         sighting["reported"] = True
         action = {"type": "seeker_report", "position": sighting["position"]}
     elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] not in runtime.memory:
-        mission = session.current_mission()
-        prop = next(
-            (item for item in [mission.real_prop, *mission.decoy_props] if item.prop_id == intent["target_id"]),
-            None,
-        )
-        action = {
-            "type": "report", "prop_id": intent["target_id"],
-            "zone": prop.zone if prop else "unknown",
-            "appearance": {"color": prop.color, "mesh": prop.mesh} if prop else {},
-        }
-        runtime.memory[intent["target_id"]] = {
-            "discovered_at": now, "position": intent["target"],
-            "zone": action["zone"], "appearance": action["appearance"],
-        }
+        if session.vertical_progression_enabled and session.round_data is None:
+            runtime.memory[intent["target_id"]] = {
+                "discovered_at": now,
+                "position": intent["target"],
+                "zone": session.vertical_round.phase.value,
+            }
+        else:
+            mission = session.current_mission()
+            prop = next(
+                (item for item in [mission.real_prop, *mission.decoy_props] if item.prop_id == intent["target_id"]),
+                None,
+            )
+            action = {
+                "type": "report", "prop_id": intent["target_id"],
+                "zone": prop.zone if prop else "unknown",
+                "appearance": {"color": prop.color, "mesh": prop.mesh} if prop else {},
+            }
+            runtime.memory[intent["target_id"]] = {
+                "discovered_at": now, "position": intent["target"],
+                "zone": action["zone"], "appearance": action["appearance"],
+            }
     elif intent["state"] == "INSPECT_CANDIDATE" and arrived:
         if runtime.goal_started is None:
             runtime.goal_started = now

@@ -12,6 +12,7 @@ import Props from './game/Props'
 import Partner from './game/Partner'
 import ThirdPersonCamera from './game/ThirdPersonCamera'
 import ThreatFeedback from './game/ThreatFeedback'
+import VerticalObjectives from './game/VerticalObjectives'
 import Fog from './game/Fog'
 import HUD from './components/HUD'
 import MiniMap from './components/MiniMap'
@@ -159,6 +160,7 @@ function Scene({
           }}
         />
         <Props />
+        <VerticalObjectives playerRef={playerGroupRef} />
         <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={playerSpawn} characterId={playerCharacterId} />
         <Partner
           playerRef={playerGroupRef}

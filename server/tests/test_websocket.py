@@ -94,9 +94,11 @@ class TestVerticalStageInteraction:
         ws.receive_json()
 
     def test_disabled_game_rejects_vertical_stage_action(self, client):
+        from app.game.session import session_manager
         with client.websocket_connect("/ws/vertical-disabled/player1") as ws:
             ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
             ws.receive_json()
+            session_manager.get_or_create("vertical-disabled").vertical_progression_enabled = False
             ws.send_json({
                 "type": "action",
                 "payload": {"action_type": "interact_stage_mission"},

@@ -28,6 +28,7 @@ def place_at_current_mission(session: GameSession, actor) -> None:
 
 def test_disabled_compatibility_game_cannot_advance_vertical_stage() -> None:
     session = GameSession("disabled-vertical-flow")
+    session.vertical_progression_enabled = False
     session.state.add_player("human", PlayerRole.HUMAN)
     session.setup_game(["열쇠"])
 
@@ -67,7 +68,7 @@ def test_each_floor_uses_its_own_semantic_mission_position() -> None:
         VerticalRoundPhase.FLOOR_3,
         VerticalRoundPhase.FLOOR_2,
         VerticalRoundPhase.FLOOR_1,
-        VerticalRoundPhase.FINAL_ROUTE_REVEAL,
+        VerticalRoundPhase.FIELD_FINAL,
     ]
     for next_phase in expected:
         place_at_current_mission(session, human)
@@ -128,3 +129,16 @@ def test_east_and_west_routes_open_after_third_floor_completion() -> None:
 
     assert event["position"]["floor"] == "F2"
     assert event["position"]["zone"] == "f2_core_ne"
+
+
+def test_first_floor_completion_opens_field_transition() -> None:
+    session, human = active_session()
+    for _ in range(4):
+        place_at_current_mission(session, human)
+        result = complete_current_stage(session, "human")
+    assert result["next_phase"] == "field_final"
+    assert session.vertical_round.final_route.value == "field"
+    human.position.x, human.position.y, human.position.z = 2.35, 0, -1.8
+    human.position.floor = WorldFloor.F1
+    event = use_open_floor_transition(session, "human", "field")
+    assert event["position"]["floor"] == "FIELD"

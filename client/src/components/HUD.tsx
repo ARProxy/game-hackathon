@@ -342,6 +342,7 @@ export default function HUD() {
   // 좌표 snapshot은 3D 프레임 루프가 직접 읽고 HUD는 상태 전환만 구독한다.
   const hunterState = useGameStore((s) => s.hunterIntent?.state ?? null)
   const companionState = useGameStore((s) => s.companionIntent?.state ?? null)
+  const verticalProgression = useGameStore((s) => s.verticalProgression)
 
   return (
     <div style={{
@@ -412,7 +413,7 @@ export default function HUD() {
         )}
 
         {/* 미션 진행 */}
-        {phase === 'playing' && missions.length > 0 && (
+        {phase === 'playing' && missions.length > 0 && !verticalProgression?.enabled && (
           <div style={{
             background: 'rgba(82, 229, 255, 0.1)',
             border: '1px solid rgba(82, 229, 255, 0.3)',
@@ -454,6 +455,18 @@ export default function HUD() {
                 주문 조각: {acquiredClues.map((clue) => `[${clue.order}] ${clue.word}`).join(' · ')}
               </div>
             )}
+          </div>
+        )}
+        {phase === 'playing' && verticalProgression?.enabled && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8,
+            border: '1px solid rgba(82,229,255,.38)',
+            background: 'rgba(8,28,36,.86)', fontSize: 12,
+          }}>
+            <div style={{ color: '#52E5FF', fontWeight: 900, marginBottom: 3 }}>
+              {verticalProgression.active_floor} · {verticalProgression.phase}
+            </div>
+            현재 층의 청색 목표를 찾아 E로 상호작용하세요.
           </div>
         )}
 

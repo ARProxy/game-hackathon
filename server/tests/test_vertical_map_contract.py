@@ -24,10 +24,10 @@ REQUIRED_SLOT_IDS = {
 }
 
 
-def test_contract_is_seeded_but_not_yet_active() -> None:
+def test_contract_is_seeded_and_active() -> None:
     assert VERTICAL_MAP_CONTRACT["source"] == "campusV4Data.js"
     assert VERTICAL_MAP_CONTRACT["sourceSeed"] == 0
-    assert VERTICAL_MAP_CONTRACT["enabled"] is False
+    assert VERTICAL_MAP_CONTRACT["enabled"] is True
 
 
 def test_all_design_v4_semantic_slots_exist() -> None:

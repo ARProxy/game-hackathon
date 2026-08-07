@@ -35,7 +35,8 @@ from app.game.session import (
     TRAP_CONTRACT,
     session_manager,
 )
-from app.game.progression import InvalidProgression
+from app.game.map_slots import get_map_slot, seeker_reveal_slot
+from app.game.progression import InvalidProgression, WorldFloor
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import complete_current_stage, use_open_floor_transition
 
@@ -335,6 +336,45 @@ class ConnectionManager:
                 "actor_id": player_id,
                 **event,
             })
+            if event["completed_phase"] == "rooftop_intro":
+                seeker = session.state.get_player("seeker")
+                slot = seeker_reveal_slot()
+                if seeker:
+                    x, y, z = slot["position"]
+                    seeker.position.x, seeker.position.y, seeker.position.z = x, y, z
+                    seeker.position.floor = WorldFloor(slot["floor"])
+                    seeker.position.zone = slot["zone"]
+                    await self.broadcast(room_id, {
+                        "type": "actor_floor_changed",
+                        "actor_id": seeker.player_id,
+                        "route": "seeker_reveal",
+                        "position": {
+                            "x": x, "y": y, "z": z,
+                            "floor": slot["floor"], "zone": slot["zone"],
+                        },
+                    })
+            elif event["next_phase"] in {"floor_2", "floor_1", "field_final"}:
+                seeker = session.state.get_player("seeker")
+                slot_id = {
+                    "floor_2": "F2_TO_F1_STAIR_EAST",
+                    "floor_1": "F1_STAIR_ARRIVAL_EAST",
+                    "field_final": "FIELD_FINAL_ENTRY",
+                }[event["next_phase"]]
+                slot = get_map_slot(slot_id)
+                if seeker:
+                    x, y, z = slot["position"]
+                    seeker.position.x, seeker.position.y, seeker.position.z = x, y, z
+                    seeker.position.floor = WorldFloor(slot["floor"])
+                    seeker.position.zone = slot["zone"]
+                    await self.broadcast(room_id, {
+                        "type": "actor_floor_changed",
+                        "actor_id": seeker.player_id,
+                        "route": "seeker_descend",
+                        "position": {
+                            "x": x, "y": y, "z": z,
+                            "floor": slot["floor"], "zone": slot["zone"],
+                        },
+                    })
 
         elif action_type == "use_floor_transition":
             try:
@@ -349,6 +389,29 @@ class ConnectionManager:
                 })
                 return
             await self.broadcast(room_id, {"type": "actor_floor_changed", **event})
+            if player and player.role == PlayerRole.HUMAN:
+                for index, companion_id in enumerate(DEFAULT_AI_PARTNER_IDS):
+                    companion = session.state.get_player(companion_id)
+                    if not companion or companion.status != PlayerStatus.ALIVE:
+                        continue
+                    position = event["position"]
+                    companion.position.x = position["x"] + (index + 1) * 1.1
+                    companion.position.y = position["y"]
+                    companion.position.z = position["z"] + 0.7
+                    companion.position.floor = WorldFloor(position["floor"])
+                    companion.position.zone = position["zone"]
+                    await self.broadcast(room_id, {
+                        "type": "actor_floor_changed",
+                        "actor_id": companion_id,
+                        "route": event["route"],
+                        "position": {
+                            "x": companion.position.x,
+                            "y": companion.position.y,
+                            "z": companion.position.z,
+                            "floor": position["floor"],
+                            "zone": position["zone"],
+                        },
+                    })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
             for companion_id in DEFAULT_AI_PARTNER_IDS:
@@ -896,7 +959,8 @@ class ConnectionManager:
         # 게임 시작
         session = session_manager.get_or_create(room_id)
         session.setup_game(forbidden_words)
-        session.setup_round(round_data)
+        if not session.vertical_progression_enabled:
+            session.setup_round(round_data)
         self._ensure_hunter_task(room_id)
         self._ensure_companion_task(room_id)
         await self.broadcast(room_id, {
@@ -976,7 +1040,8 @@ class ConnectionManager:
         round_data = None
         if not requested_words:
             round_data = generate_round(forbidden_words)
-            session.setup_round(round_data)
+            if not session.vertical_progression_enabled:
+                session.setup_round(round_data)
         self._ensure_hunter_task(room_id)
         self._ensure_companion_task(room_id)
         await self.broadcast(room_id, {

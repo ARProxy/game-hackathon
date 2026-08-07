@@ -38,8 +38,9 @@ export default function Props() {
   const props = useGameStore((s) => s.props)
   const phase = useGameStore((s) => s.phase)
   const removedPropIds = useGameStore((s) => s.removedPropIds)
+  const verticalEnabled = useGameStore((s) => s.verticalProgression?.enabled ?? false)
 
-  if (phase !== 'playing' || props.length === 0) return null
+  if (verticalEnabled || phase !== 'playing' || props.length === 0) return null
 
   const visibleProps = props.filter((p) => !removedPropIds.includes(p.prop_id))
 
