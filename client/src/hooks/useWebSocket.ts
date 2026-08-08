@@ -189,7 +189,13 @@ export default function useWebSocket() {
 
       case 'actor_floor_changed':
         useGameStore.getState().updatePlayer(data.actor_id, { position: data.position })
-        addSubtitle('system', `${data.position.floor} 구역으로 이동했습니다.`)
+        if (data.actor_id === useGameStore.getState().playerId) {
+          addSubtitle('system', `${data.position.floor} 구역으로 이동했습니다.`)
+        } else if (data.actor_id?.startsWith('seeker')) {
+          addSubtitle('system', `술래가 ${data.position.floor} 구역에 나타났습니다.`)
+        } else {
+          addSubtitle(data.actor_id, `동료가 ${data.position.floor} 구역으로 이동했습니다.`)
+        }
         break
 
       case 'game_paused':
