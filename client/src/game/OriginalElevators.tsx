@@ -11,6 +11,7 @@ import { useGameStore } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 
 const ORDER = ['B1', 'F1', 'F2', 'F3']
+const DEFAULT_ACCESSIBLE_FLOORS = ['F1']
 const LABEL: Record<string, string> = { B1: 'B1', F1: '1', F2: '2', F3: '3' }
 type ElevatorMode = 'idle' | 'closing' | 'moving' | 'opening'
 type Runtime = {
@@ -53,7 +54,11 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
   })))
   const physicsBodies = useRef(new Map<string, RapierRigidBody>())
   const playerFloor = useGameStore((state) => state.players[state.playerId]?.position.floor)
-  const accessibleFloors = useGameStore((state) => state.verticalProgression?.accessible_floors ?? ['F1'])
+  // useSyncExternalStore 기반 Zustand selector는 같은 상태에 같은 참조를 반환해야 한다.
+  // 인라인 배열 폴백은 매 snapshot마다 새 참조를 만들어 React 19 무한 갱신을 유발한다.
+  const accessibleFloors = useGameStore((state) => (
+    state.verticalProgression?.accessible_floors ?? DEFAULT_ACCESSIBLE_FLOORS
+  ))
   const [nearElevator, setNearElevator] = useState<number | null>(null)
   const [insideElevator, setInsideElevator] = useState<number | null>(null)
   const proximityRef = useRef({ near: null as number | null, inside: null as number | null })
