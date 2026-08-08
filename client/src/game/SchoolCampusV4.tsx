@@ -17,6 +17,7 @@ import {
 import { bakeFamilies, FAMILY_OF_PAL, worldUV, type BakedFamily } from './textures'
 import OriginalElevators from './OriginalElevators'
 import type { PlayerHandle } from './Player'
+import OriginalDoors from './OriginalDoors'
 
 export type FloorKey = CampusFloor
 
@@ -262,6 +263,7 @@ export default function SchoolCampusV4({ visibleFloors, playerRef }: {
   return (
     <group>
       <OriginalElevators visibleFloors={visibleFloors} playerRef={playerRef} />
+      <OriginalDoors visibleFloors={visibleFloors} playerRef={playerRef} />
       <RigidBody type="fixed" colliders={false}>
         {colliders.map((item, index) => (
           <CuboidCollider key={index} args={[item.s[0] / 2, item.s[1] / 2, item.s[2] / 2]} position={item.p} rotation={rotationTuple(item.rot)} />

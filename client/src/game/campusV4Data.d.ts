@@ -54,6 +54,8 @@ export interface CampusDoor {
   swing: number
   kind: string
   c: string
+  back?: boolean
+  flip?: boolean
 }
 
 export interface CampusDevice {
