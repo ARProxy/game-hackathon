@@ -16,6 +16,7 @@ import {
 } from './campusV4Data.js'
 import { bakeFamilies, FAMILY_OF_PAL, worldUV, type BakedFamily } from './textures'
 import OriginalElevators from './OriginalElevators'
+import type { PlayerHandle } from './Player'
 
 export type FloorKey = CampusFloor
 
@@ -230,7 +231,10 @@ function selectDynamicFixtures(show: (floor: FloorKey) => boolean, limit = 18) {
   return selected
 }
 
-export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: FloorKey[] }) {
+export default function SchoolCampusV4({ visibleFloors, playerRef }: {
+  visibleFloors?: FloorKey[]
+  playerRef: React.RefObject<PlayerHandle | null>
+}) {
   const families = useMemo(() => bakeFamilies(), [])
   const visible = useMemo(() => new Set(visibleFloors), [visibleFloors])
   const show = useCallback((floor: FloorKey) => !visibleFloors || visible.has(floor), [visibleFloors, visible])
@@ -257,7 +261,7 @@ export default function SchoolCampusV4({ visibleFloors }: { visibleFloors?: Floo
 
   return (
     <group>
-      <OriginalElevators visibleFloors={visibleFloors} />
+      <OriginalElevators visibleFloors={visibleFloors} playerRef={playerRef} />
       <RigidBody type="fixed" colliders={false}>
         {colliders.map((item, index) => (
           <CuboidCollider key={index} args={[item.s[0] / 2, item.s[1] / 2, item.s[2] / 2]} position={item.p} rotation={rotationTuple(item.rot)} />

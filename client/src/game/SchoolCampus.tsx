@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import SchoolCampusV4 from './SchoolCampusV4'
+import type { PlayerHandle } from './Player'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
 import {
@@ -273,7 +274,8 @@ export function Lamp({ position, h, color, dynamicLight = true }: {
  * v4 절차형 학교가 월드 지오메트리를 담당하고 기존 라운드 계약 컴포넌트는
  * 서버 좌표 마이그레이션이 끝날 때까지 그대로 유지한다.
  */
-export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape }: {
+export default function SchoolCampus({ playerRef, visibleFloors, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape }: {
+  playerRef: React.RefObject<PlayerHandle | null>
   visibleFloors?: FloorKey[]
   activeTraps?: string[]
   gateId?: string
@@ -286,7 +288,7 @@ export default function SchoolCampus({ visibleFloors, activeTraps, gateId, gateO
   const show = (floor: FloorKey) => !visibleFloors || visibleFloors.includes(floor)
   return (
     <group>
-      <SchoolCampusV4 visibleFloors={visibleFloors} />
+      <SchoolCampusV4 visibleFloors={visibleFloors} playerRef={playerRef} />
       {TRAP_SLOTS.filter((trap) => show(trap.floor)).map((trap) => (
         <TrapPlate key={trap.id} id={trap.id} position={trap.p} floor={trap.floor}
           active={!activeTraps || activeTraps.includes(trap.id)} onTriggered={onTrapEnter} />

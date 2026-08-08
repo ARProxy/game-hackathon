@@ -12,6 +12,7 @@ from app.game.vertical_flow import (
     final_station_position,
     mission_interaction_position,
     use_open_floor_transition,
+    use_elevator,
 )
 
 
@@ -173,3 +174,17 @@ def test_field_final_requires_every_alive_runner_at_their_station() -> None:
         "actor_id": "partner-2", "ready_count": 3,
         "required_count": 3, "all_ready": True,
     }
+
+
+def test_elevator_only_serves_accessible_floors_from_inside_car() -> None:
+    session, human = active_session()
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    human.position.x, human.position.z = 2.35, -56.0
+    human.position.floor = WorldFloor.F3
+
+    event = use_elevator(session, human.player_id, "evp", "F2")
+    assert event["position"]["floor"] == "F2"
+    assert human.position.y == pytest.approx(3.6)
+
+    with pytest.raises(InvalidProgression, match="열리지 않은"):
+        use_elevator(session, human.player_id, "evp", "F1")

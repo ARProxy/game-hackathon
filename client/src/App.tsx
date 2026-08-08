@@ -131,6 +131,7 @@ function Scene({
       {/* ── 물리 월드 ── */}
       <Physics gravity={[0, -9.81, 0]} paused={isPaused}>
         <SchoolCampus
+          playerRef={playerRef}
           visibleFloors={visibleFloors}
           activeTraps={activeTrapIds}
           gateId={phase === 'final_spell' || phase === 'escape' ? activeGate?.gateId : undefined}

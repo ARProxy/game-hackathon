@@ -46,6 +46,10 @@ FINAL_STATION_SLOT_BY_ACTOR = {
     "partner": "FIELD_FINAL_STATION_A",
     "partner-2": "FIELD_FINAL_STATION_C",
 }
+ELEVATOR_POSITION_BY_ID = {
+    "evp": (2.35, -56.0),
+    "evc": (-50.35, -56.0),
+}
 
 
 def mission_interaction_position(phase: VerticalRoundPhase) -> tuple[float, float, float]:
@@ -169,4 +173,30 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
             "floor": destination_floor.value,
             "zone": destination["zone"],
         },
+    }
+
+
+def use_elevator(session: Any, actor_id: str, elevator_id: str, target_floor: str) -> dict:
+    """열린 층 사이의 엘리베이터 이동을 서버가 최종 승인한다."""
+    actor = session.state.get_player(actor_id)
+    if not session.vertical_progression_enabled or not actor or actor.status != PlayerStatus.ALIVE:
+        raise InvalidProgression("엘리베이터를 사용할 수 없는 actor다")
+    try:
+        destination = WorldFloor(target_floor)
+        elevator_x, elevator_z = ELEVATOR_POSITION_BY_ID[elevator_id]
+    except (ValueError, KeyError) as error:
+        raise InvalidProgression("정의되지 않은 엘리베이터 또는 목적 층이다") from error
+    if destination not in session.vertical_round.policy.accessible_floors:
+        raise InvalidProgression("아직 열리지 않은 층으로는 이동할 수 없다")
+    if destination not in {WorldFloor.B1, WorldFloor.F1, WorldFloor.F2, WorldFloor.F3}:
+        raise InvalidProgression("이 엘리베이터가 운행하지 않는 층이다")
+    if math.hypot(actor.position.x - elevator_x, actor.position.z - elevator_z) > 2.1:
+        raise InvalidProgression("엘리베이터 카 안에서만 층을 선택할 수 있다")
+    actor.position.x, actor.position.z = elevator_x, elevator_z
+    actor.position.y = {WorldFloor.B1: -3.6, WorldFloor.F1: 0.0, WorldFloor.F2: 3.6, WorldFloor.F3: 7.2}[destination]
+    actor.position.floor = destination
+    actor.position.zone = f"{elevator_id}_{destination.value.lower()}"
+    return {
+        "actor_id": actor_id, "elevator_id": elevator_id,
+        "position": {"x": elevator_x, "y": actor.position.y, "z": elevator_z, "floor": destination.value, "zone": actor.position.zone},
     }

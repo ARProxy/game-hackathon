@@ -50,6 +50,7 @@ from app.game.vertical_flow import (
     complete_current_stage,
     evaluate_broadcast_phrase,
     use_open_floor_transition,
+    use_elevator,
     validate_current_stage_interaction,
 )
 
@@ -535,6 +536,22 @@ class ConnectionManager:
                     if session.state.get_player(actor_id)
                 },
                 "progression": session.vertical_round.to_dict(),
+            })
+
+        elif action_type == "use_elevator":
+            try:
+                event = use_elevator(
+                    session, player_id, str(payload.get("elevator_id", "")),
+                    str(payload.get("target_floor", "")),
+                )
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type,
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {
+                "type": "actor_floor_changed", "route": "elevator", **event,
             })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:

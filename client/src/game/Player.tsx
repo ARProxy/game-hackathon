@@ -40,6 +40,7 @@ interface PlayerProps {
 
 export interface PlayerHandle {
   getGroup: () => THREE.Group | null
+  moveBy: (x: number, y: number, z: number) => void
 }
 
 const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
@@ -62,6 +63,13 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
 
   useImperativeHandle(ref, () => ({
     getGroup: () => visualRef.current,
+    moveBy: (x, y, z) => {
+      const body = rigidBodyRef.current
+      if (!body) return
+      const position = body.translation()
+      body.setTranslation({ x: position.x + x, y: position.y + y, z: position.z + z }, true)
+      body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    },
   }))
 
   const playerId = useGameStore((s) => s.playerId)
