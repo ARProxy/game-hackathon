@@ -6,6 +6,7 @@ import {
   CORRIDOR_WIDTH,
   COURTYARD_BOUNDS,
   FLOOR_HEIGHT,
+  FLOOR_Y,
 } from '../src/game/compactSchoolData.js'
 import collisionContract from '../src/game/serverCollisionContract.json' with { type: 'json' }
 import verticalMapContract from '../src/game/verticalMapContract.json' with { type: 'json' }
@@ -15,6 +16,11 @@ const CAPSULE_RADIUS = 0.36
 const SERVER_BARRIER_ROLES = new Set([
   'wall', 'window', 'rail', 'parapet', 'equipmentCollider', 'hvac', 'missionConsole', 'entryPost',
 ])
+const isServerBarrier = (item) => {
+  if (!item.collider || !SERVER_BARRIER_ROLES.has(item.role)) return false
+  const floorY = FLOOR_Y[item.f] ?? 0
+  return item.p[1] - item.s[1] / 2 - floorY < 1.8
+}
 
 assert.equal(FLOOR_HEIGHT, 3.6, '층고 계약은 3.6m여야 한다')
 assert.equal(CORRIDOR_WIDTH, 4.2, '순환 복도 유효 폭은 4.2m여야 한다')
@@ -52,7 +58,7 @@ for (const floor of ['F1', 'F2', 'F3', 'ROOF']) {
   for (const node of COMPACT_SCHOOL.navNodes.filter((item) => item.floor === floor)) {
     assert.ok(slabAt(floor, node.p[0], node.p[2]), `${node.id} 아래에 바닥이 없다`)
     const blocker = COMPACT_SCHOOL.boxes.find((item) => (
-      item.f === floor && item.collider && SERVER_BARRIER_ROLES.has(item.role)
+      item.f === floor && isServerBarrier(item)
       && pointInsideBoxXZ(node.p[0], node.p[2], item, CAPSULE_RADIUS)
     ))
     assert.equal(blocker, undefined, `${node.id}가 ${blocker?.id ?? '장벽'}의 캡슐 여유 폭을 침범한다`)
@@ -88,14 +94,14 @@ for (const suffix of ['A', 'B', 'C']) {
   const slot = slots[`ROOF_RUNNER_SPAWN_${suffix}`]
   assert.ok(slabAt('ROOF', slot.position[0], slot.position[2]), `${suffix} 스폰 아래에 옥상 슬래브가 없다`)
   const blocker = COMPACT_SCHOOL.boxes.find((item) => (
-    item.f === 'ROOF' && item.collider && SERVER_BARRIER_ROLES.has(item.role)
+    item.f === 'ROOF' && isServerBarrier(item)
     && pointInsideBoxXZ(slot.position[0], slot.position[2], item, CAPSULE_RADIUS)
   ))
   assert.equal(blocker, undefined, `${suffix} 스폰이 ${blocker?.id ?? '옥상 장벽'}과 겹친다`)
 }
 
 const exportedWalls = COMPACT_SCHOOL.boxes
-  .filter((item) => item.collider && SERVER_BARRIER_ROLES.has(item.role))
+  .filter(isServerBarrier)
   .map((item) => ({
     floor: item.f,
     center: [item.p[0], item.p[2]],

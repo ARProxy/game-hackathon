@@ -169,6 +169,31 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                 "reason": "rooftop_signal_scout",
             }
 
+        # 두 번째 동료는 플레이어와 미션 담당 동료를 따라 겹치지 않고,
+        # 다음 층으로 이어지는 안전 경로를 미리 확인한다.
+        if companion_id == "partner-2" and session.vertical_round.phase in {
+            VerticalRoundPhase.FLOOR_3,
+            VerticalRoundPhase.FLOOR_2,
+            VerticalRoundPhase.FLOOR_1,
+        }:
+            if session.vertical_round.phase == VerticalRoundPhase.FLOOR_3:
+                route, slot_id = "east", "F3_TO_F2_STAIR_EAST"
+            elif session.vertical_round.phase == VerticalRoundPhase.FLOOR_2:
+                route, slot_id = "west", "F2_TO_F1_STAIR_WEST"
+            elif session.vertical_round.final_route == FinalRoute.BASEMENT:
+                route, slot_id = "basement", "F1_TO_BASEMENT_FIRE_DOOR"
+            else:
+                route, slot_id = "field", "F1_TO_FIELD_FIRE_DOOR"
+            route_slot = _get_map_slot(slot_id)
+            rx, _, rz = route_slot["position"]
+            return {
+                "state": "EXPLORE_ZONE",
+                "target_id": f"{session.vertical_round.phase.value}_route_scout_{route}",
+                "target": {"x": rx, "z": rz},
+                "reason": "next_route_scout",
+                "route": route,
+            }
+
         # 2층 인터폰 미션: AI가 자신의 인터폰 위치로 이동
         if (
             session.vertical_round.phase == VerticalRoundPhase.FLOOR_2
@@ -178,7 +203,6 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
             intercom = vm.intercom
             if (
                 not intercom.completed
-                and intercom.started_at is not None
                 and intercom.ai_companion_id == companion_id
             ):
                 ai_slot = _get_map_slot(intercom.ai_position_slot)
@@ -417,6 +441,39 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         # 되는 판단 틱에만 서버에 실제 조작을 요청한다.
         if rooftop is not None and rooftop.next_signal_id == signal_id:
             action = {"type": "rooftop_signal_ready", "signal_id": signal_id}
+    elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] == "intercom_mission":
+        intercom = session.vertical_missions.intercom if session.vertical_missions is not None else None
+        if (
+            intercom is not None
+            and intercom.started_at is not None
+            and intent["target_id"] not in runtime.memory
+        ):
+            runtime.memory[intent["target_id"]] = {
+                "discovered_at": now,
+                "position": intent["target"],
+                "zone": session.vertical_round.phase.value,
+            }
+            action = {
+                "type": "intercom_report",
+                "phase": session.vertical_round.phase.value,
+                "sequence": intercom.sequence,
+            }
+    elif (
+        intent["state"] == "EXPLORE_ZONE"
+        and arrived
+        and "_route_scout_" in str(intent["target_id"])
+        and intent["target_id"] not in runtime.memory
+    ):
+        runtime.memory[intent["target_id"]] = {
+            "discovered_at": now,
+            "position": intent["target"],
+            "zone": session.vertical_round.phase.value,
+        }
+        action = {
+            "type": "route_scout_report",
+            "phase": session.vertical_round.phase.value,
+            "route": intent.get("route", "west"),
+        }
     elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] not in runtime.memory:
         if session.vertical_progression_enabled and session.round_data is None:
             runtime.memory[intent["target_id"]] = {
@@ -424,16 +481,8 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
                 "position": intent["target"],
                 "zone": session.vertical_round.phase.value,
             }
-            # 인터폰 미션: AI가 도착하면 시퀀스 보고 액션 발생
-            if intent["target_id"] == "intercom_mission" and session.vertical_missions is not None:
-                vm = session.vertical_missions
-                action = {
-                    "type": "intercom_report",
-                    "phase": session.vertical_round.phase.value,
-                    "sequence": vm.intercom.sequence,
-                }
             # 동시 조작 미션: AI가 도착하면 준비 완료 액션 발생
-            elif intent["target_id"] == "simultaneous_mission" and session.vertical_missions is not None:
+            if intent["target_id"] == "simultaneous_mission" and session.vertical_missions is not None:
                 action = {
                     "type": "simultaneous_ready",
                     "phase": session.vertical_round.phase.value,
@@ -525,6 +574,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "trap": (SpeechIntent.REPORT_OBSERVATION, "트랩에 걸렸어!"),
     "vertical_objective": (SpeechIntent.REPORT_OBSERVATION, "장치를 찾았어."),
     "rooftop_signal_ready": (SpeechIntent.DECLARE_ACTION, "내 담당 신호를 지금 동기화할게!"),
+    "route_scout_report": (SpeechIntent.REPORT_OBSERVATION, "다음 층으로 이어지는 경로를 확인했어."),
     "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
     "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),
     "simultaneous_ready": (SpeechIntent.DECLARE_ACTION, "준비됐어! 동시에 작동하자!"),

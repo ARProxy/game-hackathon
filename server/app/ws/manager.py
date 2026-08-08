@@ -1941,6 +1941,22 @@ class ConnectionManager:
             if signal["completed"]:
                 event = complete_current_stage(session, companion_id)
                 await self._publish_vertical_stage_advance(room_id, companion_id, event)
+        elif action["type"] == "route_scout_report":
+            route_label = {
+                "east": "동쪽 계단",
+                "west": "서쪽 계단",
+                "field": "운동장 방화문",
+                "basement": "지하 방화문",
+            }.get(str(action.get("route", "")), "다음 이동 경로")
+            message = f"{route_label}까지 먼저 확인했어. 현재 미션이 끝나면 이쪽으로 이동하자."
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report",
+                "companion_id": companion_id,
+                "message": message,
+                "phase": action.get("phase", ""),
+                "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
+                "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
+            }, companion_id)
         elif action["type"] == "vertical_objective":
             phase = action["phase"]
             if phase == VerticalRoundPhase.FLOOR_3.value:

@@ -49,6 +49,87 @@ NAVIGATION_NODES_BY_FLOOR: dict[str, tuple[dict, ...]] = {
 }
 
 
+def next_navigation_waypoint(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    floor: str,
+) -> tuple[float, float]:
+    """공유 맵 그래프에서 목표로 가는 다음 가시 waypoint를 반환한다.
+
+    시작·목표가 직접 보이면 그래프를 사용하지 않는다. 방 안 목표처럼 목표가
+    벽 AABB와 맞닿아 가시 노드가 없을 때는 가장 가까운 노드를 종점으로 삼고,
+    마지막 접근은 기존 벽 회피 이동에 맡긴다.
+    """
+    if math.dist(start, end) <= 6.0 and has_clear_catch_line(start, end, floor):
+        return end
+    nodes = NAVIGATION_NODES_BY_FLOOR.get(floor, ())
+    if not nodes:
+        return end
+    by_id = {node["id"]: node for node in nodes}
+
+    def node_position(node: dict) -> tuple[float, float]:
+        return float(node["position"][0]), float(node["position"][1])
+
+    start_nodes = [
+        node for node in nodes
+        if not str(node["id"]).endswith("_nav_room")
+        or math.dist(start, node_position(node)) <= 3.0
+        if has_clear_catch_line(start, node_position(node), floor)
+    ]
+    goal_nodes = [
+        node for node in nodes
+        if has_clear_catch_line(node_position(node), end, floor)
+    ]
+    if not start_nodes:
+        start_nodes = sorted(nodes, key=lambda node: math.dist(start, node_position(node)))[:1]
+    if not goal_nodes:
+        goal_nodes = sorted(nodes, key=lambda node: math.dist(end, node_position(node)))[:1]
+
+    distances = {node_id: math.inf for node_id in by_id}
+    previous: dict[str, str | None] = {node_id: None for node_id in by_id}
+    pending: set[str] = set(by_id)
+    for node in start_nodes:
+        node_id = str(node["id"])
+        distances[node_id] = math.dist(start, node_position(node))
+
+    while pending:
+        current_id = min(pending, key=lambda node_id: distances[node_id])
+        if not math.isfinite(distances[current_id]):
+            break
+        pending.remove(current_id)
+        current = by_id[current_id]
+        current_position = node_position(current)
+        for neighbor_id in current.get("links", ()):
+            if neighbor_id not in pending or neighbor_id not in by_id:
+                continue
+            neighbor_position = node_position(by_id[neighbor_id])
+            candidate = distances[current_id] + math.dist(current_position, neighbor_position)
+            if candidate < distances[neighbor_id]:
+                distances[neighbor_id] = candidate
+                previous[neighbor_id] = current_id
+
+    reachable_goals = [node for node in goal_nodes if math.isfinite(distances[str(node["id"])])]
+    if not reachable_goals:
+        return end
+    goal = min(
+        reachable_goals,
+        key=lambda node: distances[str(node["id"])] + math.dist(node_position(node), end),
+    )
+    path_ids = [str(goal["id"])]
+    while previous[path_ids[-1]] is not None:
+        parent_id = previous[path_ids[-1]]
+        if parent_id is None:
+            break
+        path_ids.append(parent_id)
+    path_ids.reverse()
+    waypoint_reached_radius = 1.25
+    for waypoint_id in path_ids:
+        waypoint = node_position(by_id[waypoint_id])
+        if math.dist(start, waypoint) > waypoint_reached_radius:
+            return waypoint
+    return end
+
+
 @dataclass(frozen=True)
 class MovementSample:
     x: float

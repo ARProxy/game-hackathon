@@ -206,8 +206,8 @@ function facadeOpenings(floor, side) {
 }
 
 function corridorWindowOpenings(axis) {
-  const centers = axis === 'x' ? [-36, -28, -20, -12] : [-32, -24]
-  return centers.map((center) => ({ center, width: axis === 'x' ? 5.2 : 4.4, type: 'window', sill: 0.95, head: 2.5 }))
+  const centers = axis === 'x' ? [-32, -24, -16] : [-32, -28, -24]
+  return centers.map((center) => ({ center, width: axis === 'x' ? 4.8 : 2.8, type: 'window', sill: 0.95, head: 2.5 }))
 }
 
 const FLOOR_PROGRAM = {
@@ -248,8 +248,8 @@ function addFloorShell(floor) {
   addWallRun(floor, 'z', B.x1, B.z0, B.z1, facadeOpenings(floor, 'east'), { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
 
   // 중정 면. 유리와 하부 벽 모두 실제 충돌을 가진다.
-  addWallRun(floor, 'x', C.z0, -40, -8, corridorWindowOpenings('x'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
-  addWallRun(floor, 'x', C.z1, -40, -8, corridorWindowOpenings('x'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
+  addWallRun(floor, 'x', C.z0, C.x0, C.x1, corridorWindowOpenings('x'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
+  addWallRun(floor, 'x', C.z1, C.x0, C.x1, corridorWindowOpenings('x'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
   addWallRun(floor, 'z', C.x0, C.z0, C.z1, corridorWindowOpenings('z'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
   addWallRun(floor, 'z', C.x1, C.z0, C.z1, corridorWindowOpenings('z'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
 
@@ -536,6 +536,42 @@ function addNavigation() {
       [-10, -18], [-24, -18], [-38, -18], [-38, -28],
     ]
     ring.forEach(([x, z], index) => navNodes.push({ id: `${floor}_ring_${index}`, floor, p: [x, y, z], links: [`${floor}_ring_${(index + 7) % 8}`, `${floor}_ring_${(index + 1) % 8}`] }))
+  }
+
+  // 교실 안 목표와 복도 링을 실제 문 개구부로 연결한다. 잠긴 문에는
+  // 포털을 만들지 않아 AI가 벽을 통과하는 경로를 선택할 수 없다.
+  for (const door of doors) {
+    if (door.kind !== 'room' || door.permanentlyLocked || !floors.includes(door.f)) continue
+    const center = door.axis === 'x'
+      ? [door.hinge[0] + door.w / 2, door.fixed]
+      : [door.fixed, door.hinge[2] + door.w / 2]
+    const corridorSign = door.fixed === -40 ? 1 : -1
+    const corridor = door.axis === 'x'
+      ? [center[0], center[1] + corridorSign * 1.05]
+      : [center[0] + corridorSign * 1.05, center[1]]
+    const room = door.axis === 'x'
+      ? [center[0], center[1] - corridorSign * 1.05]
+      : [center[0] - corridorSign * 1.05, center[1]]
+    const corridorId = `${door.id}_nav_corridor`
+    const roomId = `${door.id}_nav_room`
+    const corridorNode = {
+      id: corridorId, floor: door.f, p: [corridor[0], FY[door.f], corridor[1]], links: [roomId],
+    }
+    const roomNode = {
+      id: roomId, floor: door.f, p: [room[0], FY[door.f], room[1]], links: [corridorId],
+    }
+    const nearestRingNodes = navNodes
+      .filter((node) => node.floor === door.f && node.id.includes('_ring_'))
+      .sort((left, right) => (
+        Math.hypot(left.p[0] - corridor[0], left.p[2] - corridor[1])
+        - Math.hypot(right.p[0] - corridor[0], right.p[2] - corridor[1])
+      ))
+      .slice(0, 2)
+    for (const ringNode of nearestRingNodes) {
+      corridorNode.links.push(ringNode.id)
+      ringNode.links.push(corridorId)
+    }
+    navNodes.push(corridorNode, roomNode)
   }
 }
 

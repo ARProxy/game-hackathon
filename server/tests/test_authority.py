@@ -1,11 +1,18 @@
 """서버 이동 속도와 벽 시야 계약 단위 테스트."""
 
+import math
+
+import pytest
+
+from app.ai.hunter import _safe_hunter_step
 from app.game.authority import (
     MovementSample,
+    NAVIGATION_NODES_BY_FLOOR,
     WALL_RECTS_BY_FLOOR,
     has_clear_catch_line,
     movement_is_plausible,
 )
+from app.game.map_slots import get_map_slot
 
 
 def test_normal_10hz_movement_has_jitter_headroom() -> None:
@@ -38,3 +45,54 @@ def test_outdoor_wall_blocks_short_rescue_or_catch_line() -> None:
 def test_low_outdoor_props_do_not_block_open_line() -> None:
     # 낮은 벤치와 화분은 시야 계약에 넣지 않아 열린 구조선으로 취급한다.
     assert has_clear_catch_line((-24.0, 8.0), (-24.0, 9.0), "OUT")
+
+
+def test_navigation_graph_links_only_use_clear_authored_openings() -> None:
+    for floor, nodes in NAVIGATION_NODES_BY_FLOOR.items():
+        by_id = {node["id"]: node for node in nodes}
+        for node in nodes:
+            for neighbor_id in node["links"]:
+                assert neighbor_id in by_id
+                assert has_clear_catch_line(
+                    tuple(node["position"]),
+                    tuple(by_id[neighbor_id]["position"]),
+                    floor,
+                ), f"blocked navigation edge: {node['id']} -> {neighbor_id}"
+
+
+def test_permanently_locked_room_door_has_no_navigation_portal() -> None:
+    node_ids = {
+        node["id"]
+        for nodes in NAVIGATION_NODES_BY_FLOOR.values()
+        for node in nodes
+    }
+    assert "north_room_F1_3_nav_corridor" not in node_ids
+    assert "south_room_F1_0_nav_corridor" not in node_ids
+
+
+@pytest.mark.parametrize(
+    ("floor", "slot_id"),
+    [
+        ("F2", "F2_INTERCOM_A"),
+        ("F2", "F2_INTERCOM_B"),
+        ("F1", "F1_DEVICE_A"),
+        ("F1", "F1_DEVICE_B"),
+    ],
+)
+def test_navigation_reaches_vertical_mission_devices_without_crossing_walls(
+    floor: str,
+    slot_id: str,
+) -> None:
+    start = (-36.0, -39.7)
+    slot = get_map_slot(slot_id)
+    target = (float(slot["position"][0]), float(slot["position"][2]))
+    position = start
+
+    for _ in range(120):
+        if math.dist(position, target) <= 1.5:
+            break
+        next_position = _safe_hunter_step(*position, *target, 0.8, floor)
+        assert has_clear_catch_line(position, next_position, floor)
+        position = next_position
+
+    assert math.dist(position, target) <= 1.5

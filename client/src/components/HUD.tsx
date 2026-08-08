@@ -30,9 +30,32 @@ const COMPANION_LABELS: Record<string, string> = {
   AVOID_SEEKER: '동료가 술래를 피해 우회 중',
   RESCUE_TEAMMATE: '동료가 구조하러 이동 중',
   REGROUP: '동료가 팀과 합류 중',
+  FOLLOW_TO_FLOOR: '동료가 다음 층으로 이동 중',
   MOVE_TO_GATE: '동료가 탈출구로 이동 중',
   ESCAPE: '동료가 탈출구를 통과 중',
   INCAPACITATED: '동료가 움직일 수 없음',
+}
+
+const COMPANION_REASON_LABELS: Record<string, string> = {
+  rooftop_signal_scout: '담당 옥상 신호로 이동',
+  vertical_stage_objective: '현재 미션 장치 지원',
+  intercom_ai_position: '인터폰 판독 위치로 이동',
+  simultaneous_ai_position: '동시 조작 B 장치 준비',
+  basement_device_assignment: '담당 지하 설비 점검',
+  next_route_scout: '다음 층 이동 경로 정찰',
+  player_descended: '플레이어의 층 이동을 확인하고 합류',
+  waiting_for_floor_transition: '현재 미션 완료를 기다리는 중',
+  seeker_visible: '술래를 발견해 안전 경로로 회피',
+  seeker_last_seen: '술래의 마지막 위치를 피해 우회',
+  assigned_rescue: '빙결된 팀원 구조',
+}
+
+function companionSummary(
+  state: string | undefined,
+  reason: string | undefined,
+): string | null {
+  if (!state) return null
+  return COMPANION_REASON_LABELS[reason ?? ''] ?? COMPANION_LABELS[state] ?? '다음 행동을 판단 중'
 }
 
 const VERTICAL_INSTRUCTIONS: Record<string, string> = {
@@ -367,7 +390,14 @@ export default function HUD() {
   const playerStatus = useGameStore((s) => s.players[s.playerId]?.status)
   // 좌표 snapshot은 3D 프레임 루프가 직접 읽고 HUD는 상태 전환만 구독한다.
   const hunterState = useGameStore((s) => s.hunterIntent?.state ?? null)
-  const companionState = useGameStore((s) => s.companionIntent?.state ?? null)
+  const companionOneSummary = useGameStore((s) => companionSummary(
+    s.companionIntents.partner?.state ?? s.companionIntent?.state,
+    s.companionIntents.partner?.reason ?? s.companionIntent?.reason,
+  ))
+  const companionTwoSummary = useGameStore((s) => companionSummary(
+    s.companionIntents['partner-2']?.state,
+    s.companionIntents['partner-2']?.reason,
+  ))
   const verticalProgression = useGameStore((s) => s.verticalProgression)
   const rooftopSignal = useGameStore((s) => s.rooftopSignal)
   const activeMissionPrompt = useGameStore((s) => s.activeMissionPrompt)
@@ -568,14 +598,15 @@ export default function HUD() {
         </div>
       )}
 
-      {companionState && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
+      {(companionOneSummary || companionTwoSummary) && (phase === 'playing' || phase === 'final_spell' || phase === 'escape') && (
         <div style={{
           position: 'absolute', top: 62, left: '50%', transform: 'translateX(-50%)',
-          padding: '6px 11px', borderRadius: 20,
+          padding: '7px 12px', borderRadius: 12,
           border: '1px solid rgba(182,255,61,.4)', background: 'rgba(20,40,12,.72)',
-          color: '#B6FF3D', fontSize: 10, fontWeight: 800, letterSpacing: '.06em',
+          color: '#B6FF3D', fontSize: 10, fontWeight: 800,
         }}>
-          {COMPANION_LABELS[companionState] ?? '동료가 다음 행동을 판단 중'}
+          {companionOneSummary && <div>동료 1 · {companionOneSummary}</div>}
+          {companionTwoSummary && <div style={{ marginTop: companionOneSummary ? 3 : 0 }}>동료 2 · {companionTwoSummary}</div>}
         </div>
       )}
 

@@ -14,7 +14,7 @@ from app.game.map_slots import get_map_slot
 from app.game.session import GameSession
 from app.game.progression import FinalRoute, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, PlayerRole
-from app.game.vertical_flow import mission_interaction_position
+from app.game.vertical_flow import mission_interaction_position, start_intercom_mission
 
 
 def make_session(room_id: str) -> GameSession:
@@ -298,3 +298,55 @@ def test_rooftop_companion_waits_at_assigned_signal_until_its_turn() -> None:
 
     assert ready_action == {"type": "rooftop_signal_ready", "signal_id": "east"}
     assert "roof_signal_scout_east" not in session.companion_states["partner"].memory
+
+
+def test_vertical_companions_split_mission_support_and_route_scout_roles() -> None:
+    expected_support_reasons = {
+        VerticalRoundPhase.FLOOR_3: "vertical_stage_objective",
+        VerticalRoundPhase.FLOOR_2: "intercom_ai_position",
+        VerticalRoundPhase.FLOOR_1: "simultaneous_ai_position",
+    }
+    floor_by_phase = {
+        VerticalRoundPhase.FLOOR_3: WorldFloor.F3,
+        VerticalRoundPhase.FLOOR_2: WorldFloor.F2,
+        VerticalRoundPhase.FLOOR_1: WorldFloor.F1,
+    }
+    for phase, support_reason in expected_support_reasons.items():
+        session = make_session(f"companion-role-{phase.value}")
+        session.round_data = None
+        session.vertical_round.phase = phase
+        seeker = session.state.get_player("seeker")
+        seeker.position.floor = WorldFloor.ROOF
+        for companion_id in ("partner", "partner-2"):
+            session.state.get_player(companion_id).position.floor = floor_by_phase[phase]
+
+        support = decide_companion_intent(session, "partner")
+        scout = decide_companion_intent(session, "partner-2")
+
+        assert support["reason"] == support_reason
+        assert scout["reason"] == "next_route_scout"
+        assert support["target_id"] != scout["target_id"]
+        assert support["target"] != scout["target"]
+
+
+def test_intercom_companion_prepositions_but_waits_for_human_to_start_device() -> None:
+    session = make_session("companion-intercom-preposition")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    seeker = session.state.get_player("seeker")
+    seeker.position.floor = WorldFloor.ROOF
+    partner = session.state.get_player("partner")
+    intercom_position = get_map_slot("F2_INTERCOM_A")["position"]
+    partner.position.x, partner.position.y, partner.position.z = intercom_position
+    partner.position.floor = WorldFloor.F2
+
+    _, early_action = advance_companion(session, "partner")
+
+    assert early_action is None
+    assert "intercom_mission" not in session.companion_states["partner"].memory
+
+    start_intercom_mission(session)
+    _, report_action = advance_companion(session, "partner")
+
+    assert report_action["type"] == "intercom_report"
+    assert report_action["sequence"] == session.vertical_missions.intercom.sequence
