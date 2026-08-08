@@ -62,6 +62,7 @@ from app.game.vertical_flow import (
     complete_current_stage,
     evaluate_broadcast_phrase,
     final_escape_slot,
+    refresh_closing_floor,
     start_intercom_mission,
     submit_intercom_answer,
     use_open_floor_transition,
@@ -1904,6 +1905,7 @@ class ConnectionManager:
                 session.position_samples[partner.player_id] = MovementSample(
                     partner.position.x, partner.position.z, time.monotonic(),
                 )
+                closed_floor = refresh_closing_floor(session)
                 await self.broadcast(room_id, {
                     "type": "actor_floor_changed",
                     "actor_id": companion_id,
@@ -1915,6 +1917,8 @@ class ConnectionManager:
                         "floor": target["floor"],
                         "zone": partner.position.zone,
                     },
+                    "closed_floor": closed_floor.value if closed_floor else None,
+                    "progression": session.vertical_round.to_dict(),
                 })
         elif action["type"] == "rooftop_signal_ready":
             signal_id = str(action.get("signal_id", ""))

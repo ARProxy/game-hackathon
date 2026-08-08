@@ -32,16 +32,27 @@ const ROOFTOP_SIGNALS = [
 ] as const
 const TRANSITIONS: Record<string, { source: string; route: string }[]> = {
   'ROOF>F3': [{ source: 'ROOF_TO_F3_FIRE_DOOR', route: 'west' }],
+  'F3>ROOF': [{ source: 'F3_TO_F2_STAIR_WEST', route: 'west' }],
   'F3>F2': [
     { source: 'F3_TO_F2_STAIR_WEST', route: 'west' },
     { source: 'F3_TO_F2_STAIR_EAST', route: 'east' },
+  ],
+  'F2>F3': [
+    { source: 'F2_TO_F1_STAIR_WEST', route: 'west' },
+    { source: 'F2_TO_F1_STAIR_EAST', route: 'east' },
   ],
   'F2>F1': [
     { source: 'F2_TO_F1_STAIR_WEST', route: 'west' },
     { source: 'F2_TO_F1_STAIR_EAST', route: 'east' },
   ],
+  'F1>F2': [
+    { source: 'F1_STAIR_ARRIVAL_WEST', route: 'west' },
+    { source: 'F1_STAIR_ARRIVAL_EAST', route: 'east' },
+  ],
   'F1>FIELD': [{ source: 'F1_TO_FIELD_FIRE_DOOR', route: 'field' }],
+  'FIELD>F1': [{ source: 'FIELD_FINAL_ENTRY', route: 'field' }],
   'F1>B1': [{ source: 'F1_TO_BASEMENT_FIRE_DOOR', route: 'basement' }],
+  'B1>F1': [{ source: 'BASEMENT_FINAL_ENTRY', route: 'basement' }],
 }
 const BASEMENT_DEVICES = [
   { slotId: 'BASEMENT_DEVICE_PANEL', deviceId: 'panel', label: '배전반' },
@@ -211,37 +222,46 @@ function BasementDeviceObjectives({ playerRef }: {
   </>
 }
 
+function FloorTransitionBeacon({ position, targetFloor, primary }: {
+  position: [number, number, number]
+  targetFloor: string
+  primary: boolean
+}) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.52, 0.78, 32]} />
+        <meshBasicMaterial color={primary ? '#52E5FF' : '#A7C9D8'} transparent opacity={primary ? 0.78 : 0.42} />
+      </mesh>
+      <Html position={[0, 1.9, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
+        <div style={{
+          width: 'max-content', padding: '6px 10px', borderRadius: 8,
+          border: `1px solid ${primary ? 'rgba(82,229,255,.68)' : 'rgba(167,201,216,.42)'}`,
+          color: primary ? '#BDEFFF' : '#D6E7EE', background: 'rgba(5,15,22,.9)',
+          fontSize: 11, fontWeight: 800,
+        }}>
+          E · {targetFloor} 구역으로 이동
+        </div>
+      </Html>
+    </group>
+  )
+}
+
 export default function VerticalObjectives({ playerRef }: {
   playerRef: React.RefObject<THREE.Group | null>
 }) {
   const progression = useGameStore((state) => state.verticalProgression)
   const playerFloor = useGameStore((state) => state.players[state.playerId]?.position.floor)
   const phase = useGameStore((state) => state.phase)
-  const nearbyRef = useRef(false)
-  const [nearby, setNearby] = useState(false)
-  const transitionKey = progression?.active_floor && playerFloor !== progression.active_floor
-    ? String(playerFloor) + '>' + progression.active_floor
-    : ''
+  const missionNearbyRef = useRef(false)
+  const nearbyTransitionRef = useRef<{ source: string; route: string } | null>(null)
+  const [missionNearby, setMissionNearby] = useState(false)
+  const previousFloor = progression?.accessible_floors.find((floor) => floor !== progression.active_floor)
+  const targetFloor = progression?.active_floor && playerFloor !== progression.active_floor
+    ? progression.active_floor
+    : previousFloor
+  const transitionKey = playerFloor && targetFloor ? `${playerFloor}>${targetFloor}` : ''
   const choices = TRANSITIONS[transitionKey] ?? []
-  const nearestTransition = choices.reduce<{ source: string; route: string } | null>((best, choice) => {
-    const player = playerRef.current
-    if (!player) return best ?? choice
-    player.getWorldPosition(_playerPosition)
-    const choicePosition = positionOf(slots[choice.source])
-    const distance = Math.hypot(
-      choicePosition[0] - _playerPosition.x,
-      choicePosition[1] - _playerPosition.y,
-      choicePosition[2] - _playerPosition.z,
-    )
-    if (!best) return choice
-    const bestPosition = positionOf(slots[best.source])
-    const bestDistance = Math.hypot(
-      bestPosition[0] - _playerPosition.x,
-      bestPosition[1] - _playerPosition.y,
-      bestPosition[2] - _playerPosition.z,
-    )
-    return distance < bestDistance ? choice : best
-  }, null)
   const escapeSlotId = progression?.final_route === 'basement'
     ? 'BASEMENT_ESCAPE_GATE'
     : 'FIELD_ESCAPE_GATE'
@@ -251,34 +271,43 @@ export default function VerticalObjectives({ playerRef }: {
   )
     ? progression.phase === 'escape_open' ? escapeSlotId : MISSION_SLOT[progression.phase]
     : undefined
-  const objectiveSlotId = nearestTransition?.source ?? missionSlotId
-  const objectivePosition = objectiveSlotId ? positionOf(slots[objectiveSlotId]) : null
+  const missionPosition = missionSlotId ? positionOf(slots[missionSlotId]) : null
+  const transitionIsPrimary = Boolean(progression?.active_floor && playerFloor !== progression.active_floor)
 
   useFrame(() => {
     const player = playerRef.current
     if (player) player.getWorldPosition(_playerPosition)
-    const nextNearby = Boolean(player && objectivePosition
-      && Math.abs(_playerPosition.y - objectivePosition[1]) < 1.6
-      && Math.hypot(_playerPosition.x - objectivePosition[0], _playerPosition.z - objectivePosition[2]) <= 2.25)
-    if (nextNearby !== nearbyRef.current) {
-      nearbyRef.current = nextNearby
-      setNearby(nextNearby)
+    const nextMissionNearby = Boolean(player && missionPosition
+      && Math.abs(_playerPosition.y - missionPosition[1]) < 1.6
+      && Math.hypot(_playerPosition.x - missionPosition[0], _playerPosition.z - missionPosition[2]) <= 2.25)
+    if (nextMissionNearby !== missionNearbyRef.current) {
+      missionNearbyRef.current = nextMissionNearby
+      setMissionNearby(nextMissionNearby)
     }
+    nearbyTransitionRef.current = player
+      ? choices.find((choice) => {
+          const position = positionOf(slots[choice.source])
+          return Math.abs(_playerPosition.y - position[1]) < 1.6
+            && Math.hypot(_playerPosition.x - position[0], _playerPosition.z - position[2]) <= 2.25
+        }) ?? null
+      : null
   })
 
   useEffect(() => {
     const interact = (event: KeyboardEvent) => {
-      if (event.code !== 'KeyE' || event.repeat || !nearbyRef.current || !progression) return
+      if (event.code !== 'KeyE' || event.repeat || !progression) return
+      const nearbyTransition = nearbyTransitionRef.current
+      if (!nearbyTransition && !missionNearbyRef.current) return
       event.preventDefault()
       sendGameMessage(progression.phase === 'escape_open'
         ? { type: 'action', payload: { action_type: 'vertical_escape' } }
-        : nearestTransition
-        ? { type: 'action', payload: { action_type: 'use_floor_transition', route: nearestTransition.route } }
+        : nearbyTransition
+        ? { type: 'action', payload: { action_type: 'use_floor_transition', route: nearbyTransition.route } }
         : { type: 'action', payload: { action_type: 'interact_stage_mission' } })
     }
     window.addEventListener('keydown', interact)
     return () => window.removeEventListener('keydown', interact)
-  }, [nearestTransition, progression])
+  }, [progression])
 
   if (
     progression?.enabled
@@ -286,18 +315,27 @@ export default function VerticalObjectives({ playerRef }: {
     && playerFloor === 'ROOF'
     && phase === 'playing'
   ) return <RooftopSignalObjectives playerRef={playerRef} />
+  const transitionBeacons = choices.map((choice) => (
+    <FloorTransitionBeacon
+      key={`${transitionKey}-${choice.route}`}
+      position={positionOf(slots[choice.source])}
+      targetFloor={String(targetFloor)}
+      primary={transitionIsPrimary}
+    />
+  ))
   if (
     progression?.enabled
     && progression.phase === 'basement_final'
     && playerFloor === 'B1'
     && phase === 'playing'
-  ) return <BasementDeviceObjectives playerRef={playerRef} />
-  if (!progression?.enabled || !objectivePosition || !['playing', 'final_spell', 'escape'].includes(phase)) return null
-  const label = nearestTransition
-    ? progression.active_floor + ' 구역으로 이동한다'
-    : MISSION_LABEL[progression.phase] ?? '현재 구역 목표를 수행한다'
+  ) return <><BasementDeviceObjectives playerRef={playerRef} />{transitionBeacons}</>
+  if (!progression?.enabled || !['playing', 'final_spell', 'escape'].includes(phase)) return null
+  if (!missionPosition) return <>{transitionBeacons}</>
+  const label = MISSION_LABEL[progression.phase] ?? '현재 구역 목표를 수행한다'
   return (
-    <group position={objectivePosition}>
+    <>
+    {transitionBeacons}
+    <group position={missionPosition}>
       {progression.phase === 'escape_open' && (
         <mesh position={[0, 18, 0]}>
           <cylinderGeometry args={[0.35, 1.4, 36, 18, 1, true]} />
@@ -306,19 +344,20 @@ export default function VerticalObjectives({ playerRef }: {
       )}
       <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[0.55, 0.82, 32]} />
-        <meshBasicMaterial color={nearby ? '#B6FF3D' : '#52E5FF'} transparent opacity={0.72} />
+        <meshBasicMaterial color={missionNearby ? '#B6FF3D' : '#52E5FF'} transparent opacity={0.72} />
       </mesh>
-      <pointLight position={[0, 1.1, 0]} color={nearby ? '#B6FF3D' : '#52E5FF'} intensity={8} distance={4} />
+      <pointLight position={[0, 1.1, 0]} color={missionNearby ? '#B6FF3D' : '#52E5FF'} intensity={8} distance={4} />
       <Html position={[0, 2.1, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
         <div style={{
           width: 'max-content', maxWidth: 280, padding: '7px 11px',
-          border: '1px solid ' + (nearby ? '#B6FF3D' : 'rgba(82,229,255,.58)'),
-          borderRadius: 8, color: nearby ? '#E9FFB8' : '#BDEFFF',
+          border: '1px solid ' + (missionNearby ? '#B6FF3D' : 'rgba(82,229,255,.58)'),
+          borderRadius: 8, color: missionNearby ? '#E9FFB8' : '#BDEFFF',
           background: 'rgba(5,15,22,.92)', fontSize: 12, fontWeight: 800, textAlign: 'center',
         }}>
-          {nearby ? 'E · ' + label : label}
+          {missionNearby ? 'E · ' + label : label}
         </div>
       </Html>
     </group>
+    </>
   )
 }

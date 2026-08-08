@@ -100,6 +100,7 @@ def test_serialized_policy_contains_client_safe_values() -> None:
         "final_route": None,
         "active_floor": "ROOF",
         "accessible_floors": ["ROOF"],
+        "closing_pending_floor": None,
         "seeker_count": 0,
         "seeker_threat": "inactive",
         "time_escalation_enabled": True,
@@ -107,6 +108,18 @@ def test_serialized_policy_contains_client_safe_values() -> None:
         "fw_rage_tier": "calm",
         "fw_speed_multiplier": 1.0,
     }
+
+
+def test_rooftop_stays_open_until_pending_closure_is_confirmed() -> None:
+    state = VerticalRoundState()
+
+    assert complete_and_advance(state) == VerticalRoundPhase.FLOOR_3
+    assert state.closing_pending_floor == WorldFloor.ROOF
+    assert state.accessible_floors == (WorldFloor.ROOF, WorldFloor.F3)
+
+    assert state.close_pending_floor() == WorldFloor.ROOF
+    assert state.closing_pending_floor is None
+    assert state.accessible_floors == (WorldFloor.F3,)
 
 
 def test_result_can_end_the_round_from_danger_state() -> None:

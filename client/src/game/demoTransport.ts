@@ -24,6 +24,7 @@ const ROOFTOP_PROGRESSION = {
   final_route: null,
   active_floor: 'ROOF',
   accessible_floors: ['ROOF'],
+  closing_pending_floor: null,
   seeker_count: 0,
   seeker_threat: 'inactive',
   time_escalation_enabled: true,
@@ -261,7 +262,8 @@ export default class DemoTransport {
         completed_phase: 'rooftop_intro', next_phase: 'floor_3', clue: null,
         progression: {
           ...ROOFTOP_PROGRESSION,
-          phase: 'floor_3', active_floor: 'F3', accessible_floors: ['ROOF', 'F3'], seeker_count: 1,
+          phase: 'floor_3', active_floor: 'F3', accessible_floors: ['ROOF', 'F3'],
+          closing_pending_floor: 'ROOF', seeker_count: 1,
         },
       })
     } else if (action === 'seeker_think') {

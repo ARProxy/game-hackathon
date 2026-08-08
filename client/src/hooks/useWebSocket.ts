@@ -249,6 +249,15 @@ export default function useWebSocket() {
 
       case 'actor_floor_changed':
         useGameStore.getState().updatePlayer(data.actor_id, { position: data.position })
+        if (data.progression) {
+          useGameStore.getState().setVerticalProgression({
+            enabled: true,
+            ...data.progression,
+          })
+        }
+        if (data.closed_floor) {
+          addSubtitle('system', `${data.closed_floor} 구역 방화문이 닫혔습니다.`)
+        }
         if (data.actor_id === useGameStore.getState().playerId) {
           addSubtitle('system', `${data.position.floor} 구역으로 이동했습니다.`)
         } else if (data.actor_id?.startsWith('seeker')) {

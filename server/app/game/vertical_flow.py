@@ -51,6 +51,11 @@ TRANSITION_SLOTS_BY_PHASE = {
         "basement": ("F1_TO_BASEMENT_FIRE_DOOR", "BASEMENT_FINAL_ENTRY"),
     },
 }
+FLOOR_CLOSED_AFTER_PHASE = {
+    VerticalRoundPhase.FLOOR_3: WorldFloor.ROOF,
+    VerticalRoundPhase.FLOOR_2: WorldFloor.F3,
+    VerticalRoundPhase.FLOOR_1: WorldFloor.F2,
+}
 FINAL_STATION_SLOT_BY_ACTOR = {
     "partner": "FIELD_FINAL_STATION_A",
     "partner-2": "FIELD_FINAL_STATION_C",
@@ -208,6 +213,20 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
         if not vm_f1.simultaneous.completed:
             raise InvalidProgression("1층 동시 조작 미션을 먼저 완료해야 한다")
 
+    floor_to_close = FLOOR_CLOSED_AFTER_PHASE.get(phase)
+    if floor_to_close is not None:
+        stranded = sorted(
+            player.player_id for player in session.state.players.values()
+            if player.role != PlayerRole.SEEKER
+            and player.status in {PlayerStatus.ALIVE, PlayerStatus.FROZEN}
+            and player.position.floor == floor_to_close
+        )
+        if stranded:
+            raise InvalidProgression(
+                f"{floor_to_close.value}에 남은 팀원이 있어 다음 구역을 열 수 없다: "
+                + ", ".join(stranded)
+            )
+
     session.vertical_round.mark_mission_complete()
     next_phase = session.vertical_round.advance()
     if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
@@ -315,24 +334,33 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
     routes = TRANSITION_SLOTS_BY_PHASE.get(phase, {})
     if route not in routes:
         raise InvalidProgression("현재 단계에서 사용할 수 없는 층 이동 경로다")
-    source_id, destination_id = routes[route]
-    source = get_map_slot(source_id)
-    destination = get_map_slot(destination_id)
-    source_position = source["position"]
-    if actor.position.floor.value != source["floor"]:
+    first_id, second_id = routes[route]
+    first = get_map_slot(first_id)
+    second = get_map_slot(second_id)
+    if actor.position.floor.value == first["floor"]:
+        source, destination = first, second
+    elif actor.position.floor.value == second["floor"]:
+        source, destination = second, first
+    else:
         raise InvalidProgression("출발 층이 일치하지 않는다")
+    accessible_floors = session.vertical_round.accessible_floors
+    if (
+        WorldFloor(source["floor"]) not in accessible_floors
+        or WorldFloor(destination["floor"]) not in accessible_floors
+    ):
+        raise InvalidProgression("닫혔거나 아직 열리지 않은 층 이동 경로다")
+    source_position = source["position"]
     if math.hypot(
         actor.position.x - source_position[0], actor.position.z - source_position[2]
     ) > MISSION_INTERACTION_RADIUS:
         raise InvalidProgression("열린 층 이동 경로와 거리가 너무 멀다")
 
-    destination_floor = session.vertical_round.policy.active_floor
-    if destination["floor"] != destination_floor.value:
-        raise InvalidProgression("목적지가 현재 활성 층과 일치하지 않는다")
+    destination_floor = WorldFloor(destination["floor"])
     x, y, z = destination["position"]
     actor.position.x, actor.position.y, actor.position.z = x, y, z
     actor.position.floor = destination_floor
     actor.position.zone = destination["zone"]
+    closed_floor = refresh_closing_floor(session)
     return {
         "actor_id": actor_id,
         "route": route,
@@ -341,7 +369,25 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
             "floor": destination_floor.value,
             "zone": destination["zone"],
         },
+        "closed_floor": closed_floor.value if closed_floor else None,
+        "progression": session.vertical_round.to_dict(),
     }
+
+
+def refresh_closing_floor(session: Any) -> WorldFloor | None:
+    """필수 actor가 모두 떠난 폐쇄 대기 층을 안전하게 닫는다."""
+    pending = session.vertical_round.closing_pending_floor
+    if pending is None:
+        return None
+    has_runner = any(
+        player.role != PlayerRole.SEEKER
+        and player.status in {PlayerStatus.ALIVE, PlayerStatus.FROZEN}
+        and player.position.floor == pending
+        for player in session.state.players.values()
+    )
+    if has_runner:
+        return None
+    return session.vertical_round.close_pending_floor()
 
 
 # ---------------------------------------------------------------------------
@@ -404,7 +450,7 @@ def use_elevator(session: Any, actor_id: str, elevator_id: str, target_floor: st
         elevator_x, elevator_z = ELEVATOR_POSITION_BY_ID[elevator_id]
     except (ValueError, KeyError) as error:
         raise InvalidProgression("정의되지 않은 엘리베이터 또는 목적 층이다") from error
-    if destination not in session.vertical_round.policy.accessible_floors:
+    if destination not in session.vertical_round.accessible_floors:
         raise InvalidProgression("아직 열리지 않은 층으로는 이동할 수 없다")
     if destination not in {WorldFloor.B1, WorldFloor.F1, WorldFloor.F2, WorldFloor.F3}:
         raise InvalidProgression("이 엘리베이터가 운행하지 않는 층이다")

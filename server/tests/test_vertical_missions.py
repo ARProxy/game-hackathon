@@ -43,6 +43,9 @@ def place_at_current_mission(session: GameSession, actor) -> None:
     x, y, z = mission_interaction_position(session.vertical_round.phase)
     actor.position.x, actor.position.y, actor.position.z = x, y, z
     actor.position.floor = session.vertical_round.policy.active_floor
+    for runner in session.state.players.values():
+        if runner.role != PlayerRole.SEEKER:
+            runner.position.floor = session.vertical_round.policy.active_floor
 
 
 def advance_to_floor(session: GameSession, human, target_phase: VerticalRoundPhase) -> None:

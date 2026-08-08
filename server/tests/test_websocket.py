@@ -66,6 +66,7 @@ class TestWebSocketConnection:
                 "final_route": None,
                 "active_floor": "ROOF",
                 "accessible_floors": ["ROOF"],
+                "closing_pending_floor": None,
                 "seeker_count": 0,
                 "seeker_threat": "inactive",
                 "time_escalation_enabled": True,

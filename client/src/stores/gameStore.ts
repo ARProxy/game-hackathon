@@ -67,6 +67,7 @@ export interface VerticalProgressionState {
   final_route: 'field' | 'basement' | null
   active_floor: 'ROOF' | 'F3' | 'F2' | 'F1' | 'FIELD' | 'B1' | null
   accessible_floors: string[]
+  closing_pending_floor: 'ROOF' | 'F3' | 'F2' | 'F1' | 'FIELD' | 'B1' | null
   seeker_count: number
   seeker_threat: string
   time_escalation_enabled: boolean

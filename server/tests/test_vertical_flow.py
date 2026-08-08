@@ -38,6 +38,9 @@ def place_at_current_mission(session: GameSession, actor) -> None:
     x, y, z = mission_interaction_position(session.vertical_round.phase)
     actor.position.x, actor.position.y, actor.position.z = x, y, z
     actor.position.floor = session.vertical_round.policy.active_floor
+    for runner in session.state.players.values():
+        if runner.role != PlayerRole.SEEKER:
+            runner.position.floor = session.vertical_round.policy.active_floor
 
 
 def test_disabled_compatibility_game_cannot_advance_vertical_stage() -> None:
@@ -160,13 +163,72 @@ def test_transition_rejects_wrong_floor_and_remote_use() -> None:
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
 
-    human.position.floor = WorldFloor.F3
+    human.position.floor = WorldFloor.F2
     with pytest.raises(InvalidProgression, match="출발 층"):
         use_open_floor_transition(session, "human", "west")
 
     human.position.floor = WorldFloor.ROOF
     with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
         use_open_floor_transition(session, "human", "west")
+
+
+def test_rooftop_closes_only_after_every_runner_descends() -> None:
+    from app.game.map_slots import get_map_slot
+
+    session, human = active_session()
+    _mark_vertical_missions_done(session)
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    roof_door = get_map_slot("ROOF_TO_F3_FIRE_DOOR")
+    f3_stair = get_map_slot("F3_TO_F2_STAIR_WEST")
+
+    for actor_id in ("human", "partner", "partner-2"):
+        actor = session.state.get_player(actor_id)
+        actor.position.x, actor.position.y, actor.position.z = roof_door["position"]
+        actor.position.floor = WorldFloor.ROOF
+        event = use_open_floor_transition(session, actor_id, "west")
+
+    assert event["closed_floor"] == "ROOF"
+    assert event["progression"]["accessible_floors"] == ["F3"]
+    assert event["progression"]["closing_pending_floor"] is None
+
+    human.position.x, human.position.y, human.position.z = f3_stair["position"]
+    human.position.floor = WorldFloor.F3
+    with pytest.raises(InvalidProgression, match="닫혔거나"):
+        use_open_floor_transition(session, "human", "west")
+
+
+def test_current_and_previous_floor_transition_is_bidirectional() -> None:
+    from app.game.map_slots import get_map_slot
+
+    session, human = active_session()
+    _mark_vertical_missions_done(session)
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+
+    f3_stair = get_map_slot("F3_TO_F2_STAIR_EAST")
+    f2_stair = get_map_slot("F2_TO_F1_STAIR_EAST")
+    human.position.x, human.position.y, human.position.z = f3_stair["position"]
+    human.position.floor = WorldFloor.F3
+    assert use_open_floor_transition(session, "human", "east")["position"]["floor"] == "F2"
+
+    human.position.x, human.position.y, human.position.z = f2_stair["position"]
+    human.position.floor = WorldFloor.F2
+    assert use_open_floor_transition(session, "human", "east")["position"]["floor"] == "F3"
+
+
+def test_stage_advance_waits_for_runner_on_floor_that_will_close() -> None:
+    session, human = active_session()
+    _mark_vertical_missions_done(session)
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    place_at_current_mission(session, human)
+    session.state.get_player("partner-2").position.floor = WorldFloor.ROOF
+
+    with pytest.raises(InvalidProgression, match="ROOF에 남은 팀원"):
+        complete_current_stage(session, "human")
 
 
 def test_east_and_west_routes_open_after_third_floor_completion() -> None:
