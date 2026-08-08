@@ -111,10 +111,18 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         assert self.session.state.phase == GamePhase.PLAYING
 
     async def test_ai_rescue_cannot_reach_human_through_a_wall(self) -> None:
+        from app.game.authority import WALL_RECTS_BY_FLOOR
+        from app.game.progression import WorldFloor
         human = self.session.state.get_player(self.player_id)
         partner = self.session.state.get_player("partner")
-        human.position.x, human.position.z = 0.0, -24.9
-        partner.position.x, partner.position.z = 0.0, -25.9
+        x, z, sx, sz = next(rect for rect in WALL_RECTS_BY_FLOOR["F1"] if min(rect[2], rect[3]) <= 0.5)
+        if sx < sz:
+            partner.position.x, partner.position.z = x - sx, z
+            human.position.x, human.position.z = x + sx, z
+        else:
+            partner.position.x, partner.position.z = x, z - sz
+            human.position.x, human.position.z = x, z + sz
+        human.position.floor = partner.position.floor = WorldFloor.F1
         human.freeze()
         await self.manager._complete_partner_rescue(self.room_id, human.player_id)
         assert human.status == PlayerStatus.FROZEN

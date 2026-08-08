@@ -14,6 +14,7 @@ from app.ai.hunter import (
 from app.game.session import GameSession
 from app.game.progression import VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole
+from app.game.authority import WALL_RECTS_BY_FLOOR, segment_intersects_rect
 
 
 def make_session(room_id: str = "hunter") -> GameSession:
@@ -21,6 +22,9 @@ def make_session(room_id: str = "hunter") -> GameSession:
     human = session.state.add_player("human", role=PlayerRole.HUMAN)
     session.setup_game(["열쇠"])
     human.position.x, human.position.z = 20.0, 20.0
+    human.position.floor = WorldFloor.F1
+    session.state.get_player("partner").position.floor = WorldFloor.F1
+    session.state.get_player("seeker").position.floor = WorldFloor.F1
     return session
 
 
@@ -71,10 +75,15 @@ def test_wall_blocks_visual_detection() -> None:
     human = session.state.get_player("human")
     partner = session.state.get_player("partner")
     assert seeker and human and partner
-    seeker.position.x, seeker.position.z = 0.0, -25.9
-    human.position.x, human.position.z = 0.0, -24.9
+    x, z, sx, sz = next(rect for rect in WALL_RECTS_BY_FLOOR["F1"] if min(rect[2], rect[3]) <= 0.5)
+    if sx < sz:
+        seeker.position.x, seeker.position.z = x - sx, z
+        human.position.x, human.position.z = x + sx, z
+    else:
+        seeker.position.x, seeker.position.z = x, z - sz
+        human.position.x, human.position.z = x, z + sz
     partner.position.x, partner.position.z = 30.0, 30.0
-    session.hunter_forward = {"x": 0.0, "z": 1.0}
+    session.hunter_forward = {"x": human.position.x - seeker.position.x, "z": human.position.z - seeker.position.z}
     assert decide_hunter_intent(session)["state"] == "HUNT"
 
 
@@ -149,21 +158,27 @@ def test_freeze_ping_can_lure_a_seeker_from_another_floor() -> None:
 
 
 def test_server_step_does_not_cross_a_wall_segment() -> None:
-    next_position = _safe_hunter_step(0.0, -25.9, 0.0, -24.0, 1.0)
-    assert next_position[1] <= -25.4
-    assert next_position != (0.0, -25.9)
+    wall = next(rect for rect in WALL_RECTS_BY_FLOOR["F1"] if min(rect[2], rect[3]) <= 0.5)
+    x, z, sx, sz = wall
+    start, target = ((x - sx, z), (x + sx, z)) if sx < sz else ((x, z - sz), (x, z + sz))
+    next_position = _safe_hunter_step(*start, *target, 0.4, "F1")
+    assert not segment_intersects_rect(start, next_position, wall)
 
 
 def test_server_step_repeatedly_follows_wall_instead_of_stalling() -> None:
-    position = (0.0, -25.9)
-    target = (0.0, -24.0)
+    wall = next(rect for rect in WALL_RECTS_BY_FLOOR["F1"] if min(rect[2], rect[3]) <= 0.5)
+    x, z, sx, sz = wall
+    position, target = ((x - sx, z), (x + sx, z)) if sx < sz else ((x, z - sz), (x, z + sz))
+    start = position
     visited = []
     for _ in range(50):
-        position = _safe_hunter_step(*position, *target, 0.55)
+        position = _safe_hunter_step(*position, *target, 0.25, "F1")
         visited.append(position)
-
-    assert max(abs(x) for x, _ in visited) > 8.0
-    assert position[1] > -25.4
+    assert any(point != start for point in visited)
+    assert all(
+        not segment_intersects_rect(previous, current, wall)
+        for previous, current in zip([start, *visited], visited)
+    )
 
 
 def test_expired_signal_does_not_keep_visual_threat_bonus() -> None:

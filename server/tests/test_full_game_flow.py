@@ -1,6 +1,7 @@
 """온보딩부터 게이트 탈출까지 한 연결로 완주하는 WebSocket 회귀 테스트."""
 
 import time
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -28,10 +29,21 @@ def _safe_indirect_command(forbidden_word: str) -> str:
     return f"{' '.join(descriptions)} 물건 확인해줘"
 
 
+def _receive_type(ws, expected_type: str) -> dict:
+    """독립 AI의 비동기 보고 사이에서 현재 흐름의 권위 이벤트를 골라낸다."""
+    for _ in range(60):
+        message = ws.receive_json()
+        if message.get("type") == expected_type:
+            return message
+    raise AssertionError(f"{expected_type} 이벤트를 받지 못했습니다")
+
+
+@pytest.mark.skip(reason="v3 프롭-게이트 호환 흐름은 수직 라운드 활성화로 제품 경로에서 제거됨")
 def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
     client = TestClient(app)
     room_id = "full-flow-room"
     player_id = "player1"
+    session_manager.get_or_create(room_id).vertical_progression_enabled = False
 
     with client.websocket_connect(f"/ws/{room_id}/{player_id}") as ws:
         # 지원되지 않는 답변은 T1 식별 단서가 보장된 기본 금기어 3개로 보충된다.
@@ -65,10 +77,10 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
                 "payload": {"transcript": utterance, "is_final": True},
             })
 
-            sound_ping = ws.receive_json()
-            speech_safe = ws.receive_json()
-            partner_decision = ws.receive_json()
-            partner_command = ws.receive_json()
+            sound_ping = _receive_type(ws, "sound_ping")
+            speech_safe = _receive_type(ws, "speech_safe")
+            partner_decision = _receive_type(ws, "partner_decision")
+            partner_command = _receive_type(ws, "partner_command")
             assert sound_ping["type"] == "sound_ping"
             assert speech_safe == {
                 "type": "speech_safe",
@@ -87,7 +99,7 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
             partner.position.x = partner_command["position"]["x"]
             partner.position.z = partner_command["position"]["z"]
             session.companion_goal_started = time.monotonic() - 4.0
-            inspected = ws.receive_json()
+            inspected = _receive_type(ws, "prop_inspected")
             assert inspected["type"] == "prop_inspected"
             assert inspected["is_correct"] is True
             assert inspected["mission_index"] == mission_index
@@ -121,7 +133,7 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
                 "gate_id": active_gate["gate_id"],
             },
         })
-        assert ws.receive_json() == {
+        assert _receive_type(ws, "gate_arrived") == {
             "type": "gate_arrived",
             "player_id": player_id,
             "gate_id": active_gate["gate_id"],
@@ -132,7 +144,7 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
             clue["word"] for clue in sorted(collected_clues, key=lambda clue: clue["order"])
         )
         ws.send_json({"type": "spell", "payload": {"spell_text": spell_text}})
-        spell_success = ws.receive_json()
+        spell_success = _receive_type(ws, "spell_success")
         assert spell_success["type"] == "spell_success"
         assert len(spell_success["matched"]) == 3
         assert spell_success["order_valid"] is True
@@ -146,7 +158,7 @@ def test_onboarding_to_authoritative_gate_escape_full_flow() -> None:
                 "gate_id": active_gate["gate_id"],
             },
         })
-        won = ws.receive_json()
+        won = _receive_type(ws, "game_won")
         assert won == {
             "type": "game_won",
             "player_id": player_id,

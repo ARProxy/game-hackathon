@@ -119,6 +119,7 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         seeker = self.session.state.get_player("seeker")
         seeker.position.x = player.position.x  # type: ignore[union-attr]
         seeker.position.z = player.position.z  # type: ignore[union-attr]
+        seeker.position.floor = player.position.floor  # type: ignore[union-attr]
 
         await self.manager.handle_message(self.room_id, self.player_id, {
             "type": "action",

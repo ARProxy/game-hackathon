@@ -64,8 +64,10 @@ def test_rooftop_spawns_are_separate_and_keep_actor_feet_on_roof() -> None:
 def test_actor_spawn_mapping_has_exact_solo_team() -> None:
     spawns = actor_spawn_slots()
 
-    assert set(spawns) == {"human", "partner", "partner-2"}
-    assert all(slot["floor"] == "ROOF" for slot in spawns.values())
+    assert set(spawns) == {"human", "partner", "partner-2", "seeker", "seeker-2"}
+    assert all(spawns[actor_id]["floor"] == "ROOF" for actor_id in ("human", "partner", "partner-2"))
+    assert spawns["seeker"]["floor"] == "F3"
+    assert spawns["seeker-2"]["floor"] == "F1"
 
 
 @pytest.mark.parametrize("pool_id", [

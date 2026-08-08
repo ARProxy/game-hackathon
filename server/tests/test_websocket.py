@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.game.authority import MovementSample
+from app.game.progression import VerticalRoundPhase
 
 
 def allow_elapsed_movement(session, player_id: str, seconds: float = 20.0) -> None:
@@ -46,7 +47,7 @@ class TestWebSocketConnection:
             assert data["state"]["phase"] == "playing"
             assert data["state"]["forbidden_words"] == ["열쇠", "커피", "빨간"]
             assert data["state"]["vertical_progression"] == {
-                "enabled": False,
+                "enabled": True,
                 "phase": "rooftop_intro",
                 "mission_complete": False,
                 "final_route": None,
@@ -80,7 +81,7 @@ class TestSpeechJudgment:
             ping = ws.receive_json()
             data = ws.receive_json()
             assert ping["type"] == "sound_ping"
-            assert ping["position"] == {"x": -20.0, "z": -48.3}
+            assert ping["position"] == {"x": -27, "z": -52}
             assert data["type"] == "speech_safe"
             assert data["transcript"] == "반짝이는 물건 확인해줘"
 
@@ -140,7 +141,7 @@ class TestVerticalStageInteraction:
             self._start_game(ws)
             ws.send_json({
                 "type": "action",
-                "payload": {"action_type": "move", "x": -19.8, "z": -48.0},
+                "payload": {"action_type": "move", "x": -26.8, "z": -51.8},
             })
             ws.send_json({
                 "type": "speech",
@@ -152,7 +153,7 @@ class TestVerticalStageInteraction:
             assert ping == {
                 "type": "sound_ping",
                 "player_id": "player1",
-                "position": {"x": -19.8, "z": -48.0},
+                "position": {"x": -26.8, "z": -51.8},
             }
             assert judgment["type"] == "speech_safe"
 
@@ -241,7 +242,7 @@ class TestActions:
                 "action_type": "move",
                 "reason": "implausible_movement",
             }
-            assert (player.position.x, player.position.z) == (-20.0, -48.3)
+            assert (player.position.x, player.position.z) == (-27, -52)
 
     def test_ai_partner_can_rescue_human(self, client):
         from app.game.session import session_manager
@@ -361,6 +362,7 @@ class TestActions:
             assert player is not None and seeker is not None
             seeker.position.x = player.position.x
             seeker.position.z = player.position.z
+            seeker.position.floor = player.position.floor
             ws.send_json({
                 "type": "action",
                 "payload": {"action_type": "seeker_catch"},
@@ -501,6 +503,7 @@ class TestActiveHunterFlow:
             assert seeker and partner
             seeker.position.x = partner.position.x
             seeker.position.z = partner.position.z
+            seeker.position.floor = partner.position.floor
             ws.send_json({
                 "type": "action",
                 "payload": {"action_type": "seeker_catch", "target_id": "partner"},
@@ -524,7 +527,10 @@ class TestActiveHunterFlow:
             ws.receive_json()
             session = session_manager.get_or_create("hunter-authority")
             seeker = session.state.get_player("seeker")
+            player = session.state.get_player("player1")
             assert seeker
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+            player.position.floor = seeker.position.floor
             start = (seeker.position.x, seeker.position.z)
 
             ws.send_json({
@@ -636,6 +642,7 @@ class TestEscapeFlow:
             player.position.z = gate["position"]["z"]
             seeker.position.x = player.position.x
             seeker.position.z = player.position.z
+            seeker.position.floor = player.position.floor
             session.state.phase = GamePhase.ESCAPE
 
             ws.send_json({
