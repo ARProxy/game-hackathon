@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 
-import { buildCampus, CLASSROOM_LAYOUTS, FLOOR_Y } from '../src/game/campusV4Data.js'
+import {
+  buildCampus,
+  CLASSROOM_LAYOUTS,
+  FLOOR_Y,
+  MISSION_SLOTS,
+  PROP_SLOTS,
+} from '../src/game/campusV4Data.js'
 import collisionContract from '../src/game/serverCollisionContract.json' with { type: 'json' }
 
 const campus = buildCampus({ seed: 0 })
@@ -104,5 +110,7 @@ const exportedWalls = campus.solids.filter(structural).filter((item) => item.s[1
   rotationY: Array.isArray(item.rot) ? (item.rot[1] ?? 0) : (item.rot?.rot?.[1] ?? 0),
 }))
 assert.deepEqual(collisionContract.walls, exportedWalls, 'Server collision export is stale')
+assert.deepEqual(campus.slots.props.map((slot) => slot.p), PROP_SLOTS.map((slot) => slot.p), 'Prop anchors were moved from their surfaces')
+assert.deepEqual(campus.slots.missions.map((slot) => slot.p), MISSION_SLOTS.map((slot) => slot.p), 'Mission anchors were moved from their fixtures')
 
 console.log('Campus architecture contract verified:', { ...expected, normalRate, layouts: classrooms.map((room) => room.layoutId) })

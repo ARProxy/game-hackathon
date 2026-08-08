@@ -2173,8 +2173,8 @@ export function buildCampus(opts = {}) {
   }
 
   /**
-   * 슬롯 재배치 — 특별실이 판마다 자리를 바꾸므로 고정 좌표는 어긋난다.
-   * room id 가 있는 슬롯은 실제 방 중심으로 다시 잡는다.
+   * 슬롯 앵커 검증. 각 슬롯의 실제 표면 좌표를 보존하고 방 중심으로 덮어쓰지 않는다.
+   * 정본 프로그램이 고정됐으므로 어긋난 슬롯은 조용히 이동시키지 않고 생성 단계에서 실패한다.
    */
   const byId = {}
   for (const r of rooms) byId[r.id] = r
@@ -2190,14 +2190,25 @@ export function buildCampus(opts = {}) {
       return dx > r.x0 - 0.6 && dx < r.x1 + 0.6 && dz > r.z0 - 0.6 && dz < r.z1 + 0.6
     }).map((dd) => dd.id),
   }))
-  const relocate = (list) => list.map((s) => {
-    const r = s.room && byId[s.room]
-    if (!r) return s
-    return Object.assign({}, s, { p: [r.cx, r.cz], floor: r.floor, roomName: r.name })
+  const anchorSlots = (list) => list.map((s) => {
+    if ('surfaceY' in s) {
+      const floorY = FLOOR_Y[s.floor]
+      if (!Number.isFinite(s.surfaceY) || floorY == null || s.surfaceY < floorY || s.surfaceY > floorY + CEIL_H) {
+        throw new Error(`Slot ${s.id} has invalid surfaceY ${s.surfaceY}`)
+      }
+    }
+    if (!s.room) return Object.assign({}, s)
+    const r = byId[s.room]
+    if (!r) throw new Error(`Slot ${s.id} references missing room ${s.room}`)
+    if (s.floor !== r.floor) throw new Error(`Slot ${s.id} floor ${s.floor} does not match ${r.id} floor ${r.floor}`)
+    const margin = 0.12
+    const inside = s.p[0] >= r.x0 + margin && s.p[0] <= r.x1 - margin && s.p[1] >= r.z0 + margin && s.p[1] <= r.z1 - margin
+    if (!inside) throw new Error(`Slot ${s.id} at ${s.p.join(',')} is outside room ${r.id}`)
+    return Object.assign({}, s, { roomName: r.name })
   })
 
   return { solids, visuals, plates, cyls, fixtures, lamps, rooms, doors, dims, stats, devices: DEVICES,
-    slots: { props: relocate(PROP_SLOTS), missions: relocate(MISSION_SLOTS), traps: TRAP_SLOTS, gates: GATE_SLOTS }, cells, EV: EVS[0], EVS, SITE, conditions: COND, holes: HOLES, leaks: LEAKS, breachW: BREACH_W, bridges: BRIDGE, spiral: SPIRAL, seed: SEED }
+    slots: { props: anchorSlots(PROP_SLOTS), missions: anchorSlots(MISSION_SLOTS), traps: TRAP_SLOTS, gates: GATE_SLOTS }, cells, EV: EVS[0], EVS, SITE, conditions: COND, holes: HOLES, leaks: LEAKS, breachW: BREACH_W, bridges: BRIDGE, spiral: SPIRAL, seed: SEED }
 }
 
 /* ─────────────────── 게임플레이 슬롯 · 계약 ─────────────────── */
@@ -2212,8 +2223,8 @@ export const PROP_SLOTS = [
   { id: 'p_f1_health_bed', room: 'f1_health', p: [-8, -54.2], floor: 'F1', surfaceY: 0.62, note: '보건실 침대 옆' },
   { id: 'p_f1_cafe_tray', room: 'f1_cafeteria', p: [-52.2, -39], floor: 'F1', surfaceY: 0.73, note: '급식실 배식대' },
   { id: 'p_f1_kitchen_rack', room: 'f1_kitchen', p: [-52.2, -29], floor: 'F1', surfaceY: 0.92, note: '조리대 상단' },
-  { id: 'p_f1_council_box', room: 'f1_council', p: [4.2, -18], floor: 'F1', surfaceY: 0.75, note: '학생회실 의견함' },
-  { id: 'p_f1_lobby_shoe', room: 'f1_core_se_b', p: [4.2, -1.8], floor: 'F1', surfaceY: 1.8, note: '중앙 현관 신발장 위' },
+  { id: 'p_f1_council_box', room: 'f1_council', p: [4.2, -22], floor: 'F1', surfaceY: 0.75, note: '학생회실 의견함' },
+  { id: 'p_f1_lobby_shoe', room: 'f1_core_se_b', p: [3.6, -1.8], floor: 'F1', surfaceY: 1.8, note: '중앙 현관 신발장 위' },
   { id: 'p_f1_counsel_sofa', room: 'f1_counsel', p: [4.2, -42], floor: 'F1', surfaceY: 0.44, note: '상담실 소파 쿠션 밑' },
   { id: 'p_f2_c22_locker', room: 'f2_c22', p: [-32, -54.2], floor: 'F2', surfaceY: 5.4, note: '2-2 사물함 위' },
   { id: 'p_f2_c24_podium', room: 'f2_c24', p: [-16, -54.2], floor: 'F2', surfaceY: 4.55, note: '2-4 교탁 서랍' },
@@ -2229,7 +2240,7 @@ export const PROP_SLOTS = [
   { id: 'p_f3_dance_mat', room: 'f3_dance', p: [-52.2, -38], floor: 'F3', surfaceY: 7.45, note: '무용실 매트 아래' },
   { id: 'p_f3_earth_bench', room: 'f3_earth', p: [4.2, -18], floor: 'F3', surfaceY: 8.05, note: '지구과학실 실험대' },
   { id: 'p_b1_shelf', room: 'b1_foodstore', p: [-12, -54], floor: 'B1', surfaceY: -2.55, note: '급식창고 선반' },
-  { id: 'p_out_podium', room: 'field', p: [-42, -5], floor: 'OUT', surfaceY: 1.2, note: '조회대 위' },
+  { id: 'p_out_podium', p: [-42, -5], floor: 'OUT', surfaceY: 1.2, note: '조회대 위' },
   { id: 'p_out_deck', room: 'f3_deck', p: [-24, -27.6], floor: 'F3', surfaceY: 7.22, note: '전망 데크 난간 밑' },
 ]
 
@@ -2244,7 +2255,7 @@ export const MISSION_SLOTS = [
   { id: 'm_f3_broadcast', name: '방송실 비밀번호', tags: ['solo', 'voice'], room: 'f3_broadcast', p: [4.2, -42], floor: 'F3', hintZone: '3층 동익 방송실', doc: 'M01' },
   { id: 'm_f3_dance', name: '동시 스위치', tags: ['coop'], room: 'f3_dance', p: [-52.2, -38], floor: 'F3', hintZone: '무용실' },
   { id: 'm_f3_deck', name: '피뢰 계측기 보정', tags: ['coop'], p: [-24, -27.6], floor: 'F3', hintZone: '3층 남향 전망 데크' },
-  { id: 'm_b1_mach', name: '급수 밸브 압력', tags: ['coop'], room: 'b1_mach', p: [-36, -54], floor: 'B1', hintZone: '지하 기계실' },
+  { id: 'm_b1_mach', name: '급수 밸브 압력', tags: ['coop'], room: 'b1_mach', p: [-39, -54], floor: 'B1', hintZone: '지하 기계실' },
 ]
 
 /**

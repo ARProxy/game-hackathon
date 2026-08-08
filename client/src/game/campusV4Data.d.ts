@@ -94,6 +94,16 @@ export interface CampusRoom {
   tone: string
 }
 
+export interface CampusSlot {
+  id: string
+  p: V2
+  floor: CampusFloor
+  room?: string
+  roomName?: string
+  surfaceY?: number
+  [key: string]: unknown
+}
+
 export interface CampusData {
   solids: CampusBox[]
   visuals: CampusBox[]
@@ -105,6 +115,12 @@ export interface CampusData {
   rooms: CampusRoom[]
   devices: CampusDevice[]
   cells: CampusCell[]
+  slots: {
+    props: CampusSlot[]
+    missions: CampusSlot[]
+    traps: CampusSlot[]
+    gates: CampusSlot[]
+  }
   EVS: Array<{ id: string; name: string; x: V2; z: V2; roof: boolean }>
   seed: number
 }
@@ -115,6 +131,8 @@ export const FLOOR_Y: Record<CampusFloor, number>
 export const EVS: Array<{ id: string; name: string; x: V2; z: V2; roof: boolean }>
 export const TONE: Record<string, string>
 export const CLASSROOM_LAYOUTS: Record<string, ClassroomLayout>
+export const PROP_SLOTS: CampusSlot[]
+export const MISSION_SLOTS: CampusSlot[]
 export const SPAWNS: {
   human: { p: V2; floor: CampusFloor; note: string }
   partners: Array<{ p: V2; floor: CampusFloor; note: string }>
