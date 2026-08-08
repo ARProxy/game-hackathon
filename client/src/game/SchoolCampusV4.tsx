@@ -8,7 +8,6 @@ import {
   TONE,
   type CampusBox,
   type CampusCylinder,
-  type CampusDoor,
   type CampusFloor,
   type CampusPlate,
   type CampusRotation,
@@ -169,22 +168,7 @@ function PBRCylinderBatch({ items, family }: { items: CampusCylinder[]; family: 
   )
 }
 
-function DoorBatch({ doors, families }: { doors: CampusDoor[]; families: Record<string, BakedFamily> }) {
-  const items = useMemo<CampusBox[]>(() => doors.map((door) => ({
-    f: door.f,
-    p: [
-      door.hinge[0] + (door.axis === 'x' ? door.w / 2 : 0),
-      door.hinge[1] + door.h / 2,
-      door.hinge[2] + (door.axis === 'z' ? door.w / 2 : 0),
-    ],
-    s: door.axis === 'x' ? [door.w, door.h, door.t] : [door.t, door.h, door.w],
-    c: door.c,
-  })), [doors])
-  const groups = useMemo(() => groupByFamily(items), [items])
-  return <>{[...groups].map(([familyName, group]) => (
-    <PBRBoxBatch key={familyName} family={families[familyName] ?? families.paint} items={group} />
-  ))}</>
-}
+// DoorBatch 제거 — OriginalDoors가 인터랙티브 문을 전담한다
 
 /** 재질군별 그룹핑 — 같은 재질군은 같은 InstancedMesh로 배칭 */
 function groupByFamily<T extends { c: string }>(items: T[]) {
@@ -247,8 +231,6 @@ export default function SchoolCampusV4({ visibleFloors, playerRef }: {
   const fixtures = useMemo<CampusBox[]>(() => CAMPUS.fixtures.filter((item) => show(item.f)).map((item) => ({
     f: item.f, p: item.p, s: [1.8, 0.07, 0.22] as V3, c: item.c, e: 1,
   })), [show])
-  const doors = useMemo(() => CAMPUS.doors.filter((item) => show(item.f)), [show])
-
   const boxGroups = useMemo(() => groupByFamily([...solids, ...visuals]), [solids, visuals])
   const plateGroups = useMemo(() => groupByFamily(plates), [plates])
   const cylinderGroups = useMemo(() => groupByFamily(cylinders), [cylinders])
@@ -288,7 +270,7 @@ export default function SchoolCampusV4({ visibleFloors, playerRef }: {
       {[...fixtureGroups].map(([familyName, items]) => (
         <PBRBoxBatch key={`fx-${familyName}`} family={families[familyName] ?? families.paint} items={items} emissive />
       ))}
-      <DoorBatch doors={doors} families={families} />
+      {/* 문은 OriginalDoors가 인터랙티브로 렌더링한다 */}
       {dynamicFixtures.map((fixture, index) => (
         <pointLight key={index} position={fixture.p} color={TONE[fixture.tone] ?? fixture.c} intensity={42} distance={11} decay={1.8} />
       ))}
