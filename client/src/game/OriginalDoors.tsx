@@ -8,20 +8,21 @@ import { buildCampus, type CampusDoor, type CampusFloor } from './campusV4Data.j
 import type { PlayerHandle } from './Player'
 
 const CAMPUS_DOORS = buildCampus({ seed: 0 }).doors
+const CAMPUS_DOOR_BY_ID = new Map(CAMPUS_DOORS.map((door) => [door.id, door]))
 const INTERACTION_DISTANCE = 1.8
+const MOTION_EPSILON = 0.0005
 
 export default function OriginalDoors({ visibleFloors, playerRef }: {
   visibleFloors?: CampusFloor[]
   playerRef: React.RefObject<PlayerHandle | null>
 }) {
   const visible = useMemo(() => new Set(visibleFloors), [visibleFloors])
-  const doors = useMemo(
-    () => CAMPUS_DOORS.filter((door) => !visibleFloors || visible.has(door.f)),
-    [visible, visibleFloors],
-  )
+  // 문 actor/collider는 항상 유지하고 층 필터에서는 메시만 숨긴다.
+  const doors = CAMPUS_DOORS
   const bodies = useRef(new Map<string, RapierRigidBody>())
   const openness = useRef(new Map<string, number>())
   const targets = useRef(new Map<string, boolean>())
+  const activeDoorIds = useRef(new Set<string>())
   const nearbyRef = useRef<CampusDoor | null>(null)
   const [nearby, setNearby] = useState<CampusDoor | null>(null)
 
@@ -31,6 +32,7 @@ export default function OriginalDoors({ visibleFloors, playerRef }: {
       if (event.code !== 'KeyE' || event.repeat || !door) return
       event.preventDefault()
       targets.current.set(door.id, !targets.current.get(door.id))
+      activeDoorIds.current.add(door.id)
     }
     window.addEventListener('keydown', toggle)
     return () => window.removeEventListener('keydown', toggle)
@@ -53,19 +55,36 @@ export default function OriginalDoors({ visibleFloors, playerRef }: {
       nearbyRef.current = closest
       setNearby(closest)
     }
-    for (const door of doors) {
+    // 정지한 122개 문은 Rapier에 쓰지 않는다. 목표가 바뀐 문만 완전히 열리거나
+    // 닫힐 때까지 이 작은 집합에 남아 WASM borrow/lifecycle 압력을 줄인다.
+    for (const doorId of activeDoorIds.current) {
+      const door = CAMPUS_DOOR_BY_ID.get(doorId)
+      if (!door) {
+        activeDoorIds.current.delete(doorId)
+        continue
+      }
       const body = bodies.current.get(door.id)
       if (!body) continue
       const current = openness.current.get(door.id) ?? 0
-      const next = THREE.MathUtils.damp(current, targets.current.get(door.id) ? 1 : 0, 7, delta)
+      const target = targets.current.get(door.id) ? 1 : 0
+      const damped = THREE.MathUtils.damp(current, target, 7, delta)
+      const next = Math.abs(target - damped) <= MOTION_EPSILON ? target : damped
       openness.current.set(door.id, next)
       const angle = next * door.swing * Math.PI * 0.48
       body.setNextKinematicRotation({ x: 0, y: Math.sin(angle / 2), z: 0, w: Math.cos(angle / 2) })
+      if (next === target) activeDoorIds.current.delete(door.id)
     }
   })
 
   return <>
-    {doors.map((door) => <DoorActor key={door.id} door={door} bodies={bodies} />)}
+    {doors.map((door) => (
+      <DoorActor
+        key={door.id}
+        door={door}
+        bodies={bodies}
+        visualVisible={!visibleFloors || visible.has(door.f)}
+      />
+    ))}
     {nearby && (
       <Html position={[nearby.hinge[0], nearby.hinge[1] + 2.55, nearby.hinge[2]]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
         <div style={{ whiteSpace: 'nowrap', padding: '6px 10px', borderRadius: 7, color: '#E7F5FF', background: 'rgba(5,15,22,.92)', border: '1px solid rgba(189,239,255,.55)', fontSize: 12, fontWeight: 800 }}>
@@ -76,9 +95,10 @@ export default function OriginalDoors({ visibleFloors, playerRef }: {
   </>
 }
 
-function DoorActor({ door, bodies }: {
+function DoorActor({ door, bodies, visualVisible }: {
   door: CampusDoor
   bodies: React.RefObject<Map<string, RapierRigidBody>>
+  visualVisible: boolean
 }) {
   const alongX = door.axis === 'x'
   const extension = door.flip ? -door.w / 2 : door.w / 2
@@ -93,18 +113,20 @@ function DoorActor({ door, bodies }: {
         args={[alongX ? door.w / 2 : door.t / 2, door.h / 2, alongX ? door.t / 2 : door.w / 2]}
         position={[alongX ? extension : 0, door.h / 2, alongX ? 0 : extension]}
       />
-      <mesh
-        position={[alongX ? extension : 0, door.h / 2, alongX ? 0 : extension]}
-        scale={[alongX ? door.w : door.t, door.h, alongX ? door.t : door.w]}
-        castShadow receiveShadow
-      >
-        <boxGeometry />
-        <meshStandardMaterial color={door.c} roughness={0.62} metalness={door.kind === 'fire' ? 0.5 : 0.05} />
-      </mesh>
-      <mesh position={[alongX ? (door.flip ? -door.w + 0.12 : door.w - 0.12) : 0.07, 1.02, alongX ? 0.07 : (door.flip ? -door.w + 0.12 : door.w - 0.12)]} rotation={alongX ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.032, 0.032, 0.13, 8]} />
-        <meshStandardMaterial color="#b9c0c4" roughness={0.3} metalness={0.8} />
-      </mesh>
+      <group visible={visualVisible}>
+        <mesh
+          position={[alongX ? extension : 0, door.h / 2, alongX ? 0 : extension]}
+          scale={[alongX ? door.w : door.t, door.h, alongX ? door.t : door.w]}
+          castShadow receiveShadow
+        >
+          <boxGeometry />
+          <meshStandardMaterial color={door.c} roughness={0.62} metalness={door.kind === 'fire' ? 0.5 : 0.05} />
+        </mesh>
+        <mesh position={[alongX ? (door.flip ? -door.w + 0.12 : door.w - 0.12) : 0.07, 1.02, alongX ? 0.07 : (door.flip ? -door.w + 0.12 : door.w - 0.12)]} rotation={alongX ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.032, 0.032, 0.13, 8]} />
+          <meshStandardMaterial color="#b9c0c4" roughness={0.3} metalness={0.8} />
+        </mesh>
+      </group>
     </RigidBody>
   )
 }
