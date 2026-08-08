@@ -11,7 +11,7 @@ from app.ai.companion import (
 )
 from app.ai.mission import generate_round
 from app.game.session import GameSession
-from app.game.progression import VerticalRoundPhase, WorldFloor
+from app.game.progression import FinalRoute, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, PlayerRole
 from app.game.vertical_flow import mission_interaction_position
 
@@ -177,6 +177,30 @@ def test_partner_moves_to_gate_in_final_phases() -> None:
     assert decide_companion_intent(session)["state"] == "MOVE_TO_GATE"
     session.state.phase = GamePhase.ESCAPE
     assert decide_companion_intent(session)["state"] == "ESCAPE"
+
+
+def test_vertical_partner_holds_station_then_runs_to_field_exit() -> None:
+    from app.game.map_slots import get_map_slot
+    from app.game.vertical_flow import final_station_position
+
+    session = make_session("companion-vertical-field-exit")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FIELD_FINAL
+    session.vertical_round.final_route = FinalRoute.FIELD
+
+    session.state.phase = GamePhase.FINAL_SPELL
+    spell_intent = decide_companion_intent(session)
+    station_x, _, station_z = final_station_position("partner")
+    assert spell_intent["state"] == "MOVE_TO_GATE"
+    assert spell_intent["target"] == {"x": station_x, "z": station_z}
+
+    session.vertical_round.phase = VerticalRoundPhase.ESCAPE_OPEN
+    session.state.phase = GamePhase.ESCAPE
+    escape_intent = decide_companion_intent(session)
+    exit_x, _, exit_z = get_map_slot("FIELD_ESCAPE_GATE")["position"]
+    assert escape_intent["state"] == "ESCAPE"
+    assert escape_intent["target_id"] == "vertical_field_exit"
+    assert escape_intent["target"] == {"x": exit_x, "z": exit_z}
 
 
 def test_visible_seeker_makes_rescue_wait_instead_of_running_into_capture() -> None:

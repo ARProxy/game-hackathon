@@ -1,64 +1,66 @@
 {
   "version": 1,
-  "source": "campusV4Data.js",
-  "sourceSeed": 0,
+  "source": "compactSchoolData.js",
   "enabled": true,
   "floorY": { "B1": -3.6, "F1": 0, "F2": 3.6, "F3": 7.2, "ROOF": 10.8, "FIELD": 0 },
   "slots": {
-    "ROOF_RUNNER_SPAWN_A": { "kind": "spawn", "floor": "ROOF", "position": [-27, 10.8, -52], "zone": "roof_north" },
-    "ROOF_RUNNER_SPAWN_B": { "kind": "spawn", "floor": "ROOF", "position": [-24, 10.8, -52], "zone": "roof_north" },
-    "ROOF_RUNNER_SPAWN_C": { "kind": "spawn", "floor": "ROOF", "position": [-21, 10.8, -52], "zone": "roof_north" },
-    "ROOF_INTRO_MISSION": { "kind": "mission", "floor": "ROOF", "position": [-24, 10.8, -40], "zone": "roof_helipad" },
+    "ROOF_RUNNER_SPAWN_A": { "kind": "spawn", "floor": "ROOF", "position": [-27, 10.8, -37.4], "zone": "roof_north" },
+    "ROOF_RUNNER_SPAWN_B": { "kind": "spawn", "floor": "ROOF", "position": [-24, 10.8, -37.4], "zone": "roof_north" },
+    "ROOF_RUNNER_SPAWN_C": { "kind": "spawn", "floor": "ROOF", "position": [-21, 10.8, -37.4], "zone": "roof_north" },
+    "ROOF_INTRO_MISSION": { "kind": "mission", "floor": "ROOF", "position": [-24, 10.8, -39.1], "zone": "roof_signal_center" },
+    "ROOF_SIGNAL_CENTER": { "kind": "device", "floor": "ROOF", "position": [-24, 11.52, -39.1], "interactionPosition": [-24, 10.8, -39.1], "zone": "roof_signal_center", "deviceId": "roof_signal_center" },
+    "ROOF_SIGNAL_EAST": { "kind": "device", "floor": "ROOF", "position": [-5.5, 11.52, -27.8], "interactionPosition": [-5.5, 10.8, -27.8], "zone": "roof_signal_east", "deviceId": "roof_signal_east" },
+    "ROOF_SIGNAL_WEST": { "kind": "device", "floor": "ROOF", "position": [-42.5, 11.52, -27.8], "interactionPosition": [-42.5, 10.8, -27.8], "zone": "roof_signal_west", "deviceId": "roof_signal_west" },
     "ROOF_TO_F3_FIRE_DOOR": {
       "kind": "transition_lock",
       "floor": "ROOF",
-      "position": [-54.05, 10.8, -54.2],
-      "zone": "roof_west_stair",
+      "position": [-36, 10.8, -39.7],
+      "zone": "roof_northwest_stair",
       "anchorRoom": "f3_core_nw",
-      "authoredDoorIds": [],
-      "note": "옥상 개구부는 존재하지만 전용 문 메시가 없어 의미 잠금 ID로 선행 계약"
+      "authoredDoorIds": ["roof_to_f3"],
+      "note": "북서 계단 펜트하우스의 실제 방화문과 잠금 collider를 공유"
     },
 
     "F3_MISSION_ROOM_POOL": {
       "kind": "room_pool",
       "floor": "F3",
-      "interactionPosition": [4.2, 7.2, -41.95],
+      "interactionPosition": [-28, 7.2, -39.4],
       "roomIds": ["f3_broadcast", "f3_av", "f3_dance", "f3_c33"],
       "deviceIds": ["ip_f3_broadcast", "ip_f3_av", "ip_f3_dance", "ip_f3_c33"]
     },
-    "F3_SEEKER_REVEAL_ENTRY": { "kind": "spawn", "floor": "F3", "position": [-54.05, 7.2, -54.2], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
-    "F3_TO_F2_STAIR_WEST": { "kind": "stair", "floor": "F3", "position": [-54.05, 7.2, -54.2], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
-    "F3_TO_F2_STAIR_EAST": { "kind": "stair", "floor": "F3", "position": [6.05, 7.2, -54.2], "zone": "f3_core_ne", "anchorRoom": "f3_core_ne" },
+    "F3_SEEKER_REVEAL_ENTRY": { "kind": "spawn", "floor": "F3", "position": [-36, 7.2, -38.2], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
+    "F3_TO_F2_STAIR_WEST": { "kind": "stair", "floor": "F3", "position": [-36, 7.2, -39.7], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
+    "F3_TO_F2_STAIR_EAST": { "kind": "stair", "floor": "F3", "position": [-12, 7.2, -16.3], "zone": "f3_core_se", "anchorRoom": "f3_core_se" },
 
     "F2_MISSION_ROOM_POOL": {
       "kind": "room_pool",
       "floor": "F2",
-      "interactionPosition": [-52.2, 3.6, -37.9],
+      "interactionPosition": [-39.4, 3.6, -28],
       "roomIds": ["f2_library", "f2_science", "f2_music", "f2_c23"],
       "deviceIds": ["ip_f2_library", "ip_f2_science", "ip_f2_music", "ip_f2_c23"]
     },
-    "F2_INTERCOM_A": { "kind": "device", "floor": "F2", "position": [-21.4, 5.02, -50.78], "zone": "f2_c23", "deviceId": "ip_f2_c23", "anchorRoom": "f2_c23" },
-    "F2_INTERCOM_B": { "kind": "device", "floor": "F2", "position": [-48.78, 5.02, -35.3], "zone": "f2_library", "deviceId": "ip_f2_library", "anchorRoom": "f2_library" },
-    "F2_TO_F1_STAIR_WEST": { "kind": "stair", "floor": "F2", "position": [-54.05, 3.6, -54.2], "zone": "f2_core_nw", "anchorRoom": "f2_core_nw" },
-    "F2_TO_F1_STAIR_EAST": { "kind": "stair", "floor": "F2", "position": [6.05, 3.6, -54.2], "zone": "f2_core_ne", "anchorRoom": "f2_core_ne" },
-    "F1_STAIR_ARRIVAL_WEST": { "kind": "stair", "floor": "F1", "position": [-54.05, 0, -54.2], "zone": "f1_core_nw", "anchorRoom": "f1_core_nw" },
-    "F1_STAIR_ARRIVAL_EAST": { "kind": "stair", "floor": "F1", "position": [6.05, 0, -54.2], "zone": "f1_core_ne", "anchorRoom": "f1_core_ne" },
+    "F2_INTERCOM_A": { "kind": "device", "floor": "F2", "position": [-20, 5.02, -40.15], "zone": "f2_c23", "deviceId": "ip_f2_c23", "anchorRoom": "f2_c23" },
+    "F2_INTERCOM_B": { "kind": "device", "floor": "F2", "position": [-40.15, 5.02, -28], "zone": "f2_library", "deviceId": "ip_f2_library", "anchorRoom": "f2_library" },
+    "F2_TO_F1_STAIR_WEST": { "kind": "stair", "floor": "F2", "position": [-36, 3.6, -39.7], "zone": "f2_core_nw", "anchorRoom": "f2_core_nw" },
+    "F2_TO_F1_STAIR_EAST": { "kind": "stair", "floor": "F2", "position": [-12, 3.6, -16.3], "zone": "f2_core_se", "anchorRoom": "f2_core_se" },
+    "F1_STAIR_ARRIVAL_WEST": { "kind": "stair", "floor": "F1", "position": [-36, 0, -39.7], "zone": "f1_core_nw", "anchorRoom": "f1_core_nw" },
+    "F1_STAIR_ARRIVAL_EAST": { "kind": "stair", "floor": "F1", "position": [-12, 0, -16.3], "zone": "f1_core_se", "anchorRoom": "f1_core_se" },
 
     "F1_MISSION_ROOM_POOL": {
       "kind": "room_pool",
       "floor": "F1",
-      "interactionPosition": [4.2, 0, -12.25],
+      "interactionPosition": [-7.7, 0, -28],
       "roomIds": ["f1_security", "f1_admin", "f1_kitchen", "f1_health"],
       "deviceIds": ["ip_f1_security", "ip_f1_admin", "ip_f1_kitchen", "ip_f1_health"]
     },
-    "F1_SECURITY_ROOM": { "kind": "room", "floor": "F1", "position": [4.2, 0, -12.25], "zone": "f1_security", "anchorRoom": "f1_security" },
-    "F1_DEVICE_A": { "kind": "device", "floor": "F1", "position": [0.78, 1.42, -9.65], "zone": "f1_security", "deviceId": "ip_f1_security", "anchorRoom": "f1_security" },
-    "F1_DEVICE_B": { "kind": "device", "floor": "F1", "position": [-21.4, 1.42, -50.78], "zone": "f1_admin", "deviceId": "ip_f1_admin", "anchorRoom": "f1_admin" },
-    "F1_BLOCKER_SPAWN_ENTRY": { "kind": "spawn", "floor": "F1", "position": [-52.8, 0, -47.25], "zone": "f1_basement_stair", "anchorRoom": "b1_stair" },
+    "F1_SECURITY_ROOM": { "kind": "room", "floor": "F1", "position": [-7.7, 0, -28], "zone": "f1_security", "anchorRoom": "f1_security" },
+    "F1_DEVICE_A": { "kind": "device", "floor": "F1", "position": [-7.7, 1.42, -28], "zone": "f1_security", "deviceId": "ip_f1_security", "anchorRoom": "f1_security" },
+    "F1_DEVICE_B": { "kind": "device", "floor": "F1", "position": [-24, 1.42, -40.15], "zone": "f1_admin", "deviceId": "ip_f1_admin", "anchorRoom": "f1_admin" },
+    "F1_BLOCKER_SPAWN_ENTRY": { "kind": "spawn", "floor": "F1", "position": [-12, 0, -17.8], "zone": "f1_basement_stair", "anchorRoom": "b1_stair" },
     "F1_TO_BASEMENT_FIRE_DOOR": {
       "kind": "transition_lock",
       "floor": "F1",
-      "position": [-52.8, 0, -47.25],
+      "position": [-36, 0, -39.7],
       "zone": "f1_basement_stair",
       "anchorRoom": "b1_stair",
       "authoredDoorIds": []
@@ -66,26 +68,26 @@
     "F1_TO_FIELD_FIRE_DOOR": {
       "kind": "transition_lock",
       "floor": "F1",
-      "position": [2.35, 0, -1.8],
+      "position": [-24, 0, -8.1],
       "zone": "f1_main_lobby",
       "anchorRoom": "f1_core_se_b",
-      "authoredDoorIds": ["door_F1_z_0.5_-3.4", "door_F1_x_-5.5_4.2"]
+      "authoredDoorIds": ["main_entry"]
     },
 
-    "ELEVATOR_SHAFT_PASSENGER": { "kind": "elevator", "floor": "F1", "position": [2.35, 0, -56], "zone": "passenger_elevator", "elevatorId": "evp", "servedFloors": ["B1", "F1", "F2", "F3", "ROOF"] },
-    "ELEVATOR_SHAFT_CARGO": { "kind": "elevator", "floor": "F1", "position": [-50.35, 0, -56], "zone": "cargo_elevator", "elevatorId": "evc", "servedFloors": ["B1", "F1", "F2", "F3"] },
+    "ELEVATOR_SHAFT_PASSENGER": { "kind": "elevator", "floor": "F1", "position": [-12, 0, -44], "zone": "passenger_elevator", "elevatorId": "evp", "servedFloors": ["B1", "F1", "F2", "F3", "ROOF"] },
+    "ELEVATOR_SHAFT_CARGO": { "kind": "elevator", "floor": "F1", "position": [-44, 0, -44], "zone": "cargo_elevator", "elevatorId": "evc", "servedFloors": ["B1", "F1", "F2", "F3"] },
 
-    "BASEMENT_FINAL_ENTRY": { "kind": "final_entry", "floor": "B1", "position": [-52.8, -3.6, -47.25], "zone": "b1_stair", "anchorRoom": "b1_stair" },
-    "BASEMENT_FINAL_DEVICE_POOL": { "kind": "room_pool", "floor": "B1", "interactionPosition": [-42.2, -3.6, -54.2], "roomIds": ["b1_mach", "b1_elec", "b1_archive", "b1_shelter"], "deviceIds": ["ip_b1_mach", "ip_b1_elec", "ip_b1_archive", "ip_b1_shelter"] },
-    "BASEMENT_DEVICE_PANEL": { "kind": "device", "floor": "B1", "position": [-28.8, -2.18, -50.78], "zone": "b1_elec", "deviceId": "ip_b1_elec", "anchorRoom": "b1_elec" },
-    "BASEMENT_DEVICE_VALVE": { "kind": "device", "floor": "B1", "position": [-39.6, -2.18, -50.78], "zone": "b1_mach", "deviceId": "ip_b1_mach", "anchorRoom": "b1_mach" },
-    "BASEMENT_DEVICE_GENERATOR": { "kind": "device", "floor": "B1", "position": [-19.3, -2.18, -50.78], "zone": "b1_archive", "deviceId": "ip_b1_archive", "anchorRoom": "b1_archive" },
-    "BASEMENT_ESCAPE_GATE": { "kind": "escape_gate", "floor": "B1", "position": [-2, -3.6, -30.1], "zone": "b1_tunnel", "anchorRoom": "b1_tunnel" },
+    "BASEMENT_FINAL_ENTRY": { "kind": "final_entry", "floor": "B1", "position": [-36, -3.6, -42], "zone": "b1_stair", "anchorRoom": "b1_stair" },
+    "BASEMENT_FINAL_DEVICE_POOL": { "kind": "room_pool", "floor": "B1", "interactionPosition": [-24, -3.6, -44], "roomIds": ["b1_mach", "b1_elec", "b1_archive", "b1_shelter"], "deviceIds": ["ip_b1_mach", "ip_b1_elec", "ip_b1_archive", "ip_b1_shelter"] },
+    "BASEMENT_DEVICE_PANEL": { "kind": "device", "floor": "B1", "position": [-18, -2.18, -44], "zone": "b1_elec", "deviceId": "ip_b1_elec", "anchorRoom": "b1_elec" },
+    "BASEMENT_DEVICE_VALVE": { "kind": "device", "floor": "B1", "position": [-30, -2.18, -44], "zone": "b1_mach", "deviceId": "ip_b1_mach", "anchorRoom": "b1_mach" },
+    "BASEMENT_DEVICE_GENERATOR": { "kind": "device", "floor": "B1", "position": [-12, -2.18, -44], "zone": "b1_archive", "deviceId": "ip_b1_archive", "anchorRoom": "b1_archive" },
+    "BASEMENT_ESCAPE_GATE": { "kind": "escape_gate", "floor": "B1", "position": [-9, -3.6, -44], "zone": "b1_tunnel", "anchorRoom": "b1_tunnel" },
 
-    "FIELD_FINAL_ENTRY": { "kind": "final_entry", "floor": "FIELD", "position": [4.2, 0, 2.2], "zone": "field_east_entry" },
-    "FIELD_FINAL_STATION_A": { "kind": "mission", "floor": "FIELD", "position": [-42, 0, -5], "zone": "field_podium" },
-    "FIELD_FINAL_STATION_B": { "kind": "mission", "floor": "FIELD", "position": [-24, 0, 10], "zone": "field_center" },
-    "FIELD_FINAL_STATION_C": { "kind": "mission", "floor": "FIELD", "position": [-6, 0, -5], "zone": "field_east" },
-    "FIELD_ESCAPE_GATE": { "kind": "escape_gate", "floor": "FIELD", "position": [-24, 0, 24], "zone": "field_south_gate" }
+    "FIELD_FINAL_ENTRY": { "kind": "final_entry", "floor": "FIELD", "position": [-24, 0, -5.5], "zone": "field_north_entry" },
+    "FIELD_FINAL_STATION_A": { "kind": "mission", "floor": "FIELD", "position": [-38, 0, 8], "zone": "field_west" },
+    "FIELD_FINAL_STATION_B": { "kind": "mission", "floor": "FIELD", "position": [-24, 0, 14], "zone": "field_center" },
+    "FIELD_FINAL_STATION_C": { "kind": "mission", "floor": "FIELD", "position": [-10, 0, 8], "zone": "field_east" },
+    "FIELD_ESCAPE_GATE": { "kind": "escape_gate", "floor": "FIELD", "position": [-24, 0, 26], "zone": "field_south_gate" }
   }
 }

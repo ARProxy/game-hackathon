@@ -12,6 +12,7 @@ import hunter from './hunterContract.json'
 
 const CATCH_RETRY_SECONDS = 0.35
 const PROXIMITY_SOUND_RANGE = 18
+const ACTOR_CORRECTION_SPEED = 7
 
 interface SeekerProps {
   playerRef: React.RefObject<THREE.Group | null>
@@ -49,15 +50,15 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
   const baseY = spawn[1]
   const lastPos = useRef(new THREE.Vector3(...spawn))
   const avoidanceSide = useRef(1)
-  const fixedSolidFilters = rapier.QueryFilterFlags.EXCLUDE_SENSORS
-    | rapier.QueryFilterFlags.ONLY_FIXED
+  const solidFilters = rapier.QueryFilterFlags.EXCLUDE_SENSORS
+    | rapier.QueryFilterFlags.EXCLUDE_DYNAMIC
 
   const moveToward = (pos: THREE.Vector3, dx: number, dz: number, maxStep: number) => {
     const step = planAvoidedStep(dx, dz, maxStep, (direction, distance) => Boolean(world.castShape(
-      { x: pos.x, y: 0.78, z: pos.z },
+      { x: pos.x, y: baseY + 0.78, z: pos.z },
       { x: 0, y: 0, z: 0, w: 1 },
       { x: direction.x, y: 0, z: direction.z },
-      navigationShape, 0.02, distance + 0.08, false, fixedSolidFilters,
+      navigationShape, 0.02, distance + 0.08, false, solidFilters,
     )), avoidanceSide.current)
     if (step.x === 0 && step.z === 0) avoidanceSide.current *= -1
     pos.x += step.x
@@ -85,18 +86,21 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         playSeekerDetected()
       }
       previousState.current = intent.state
-      if (lastAuthorityPosition.current !== intent.seekerPosition) {
-        pos.x = intent.seekerPosition.x
-        pos.z = intent.seekerPosition.z
-        lastAuthorityPosition.current = intent.seekerPosition
+      const authorityDx = intent.seekerPosition.x - pos.x
+      const authorityDz = intent.seekerPosition.z - pos.z
+      const authorityDistance = Math.hypot(authorityDx, authorityDz)
+      const correctingAuthority = authorityDistance > 0.12
+      if (correctingAuthority) {
+        moveToward(pos, authorityDx, authorityDz, Math.min(ACTOR_CORRECTION_SPEED * delta, authorityDistance))
       }
+      lastAuthorityPosition.current = intent.seekerPosition
       const dx = intent.target.x - pos.x
       const dz = intent.target.z - pos.z
       const distance = Math.hypot(dx, dz)
       if (distance > 0.15) {
         group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, Math.atan2(dx, dz), 0.16)
         const stopDistance = intent.state === 'RUSH_GATE' ? 1.4 : 0.5
-        if (intent.state !== 'DETECTED' && distance > stopDistance) {
+        if (!correctingAuthority && intent.state !== 'DETECTED' && distance > stopDistance) {
           moveToward(pos, dx, dz, Math.min(
             SPEEDS[intent.state] * intent.speedMultiplier * intent.stageSpeedMultiplier * delta,
             distance - stopDistance,

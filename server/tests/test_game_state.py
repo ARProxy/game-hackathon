@@ -139,6 +139,7 @@ class TestGameState:
 class TestGameSessionTeamComposition:
     def test_setup_game_adds_required_ai_roles(self):
         from app.game.session import GameSession
+        from app.game.map_slots import get_map_slot
 
         session = GameSession("solo")
         session.state.add_player("human1", PlayerRole.HUMAN)
@@ -151,7 +152,9 @@ class TestGameSessionTeamComposition:
         assert session.state.get_player("partner").position != session.state.get_player("partner-2").position
         assert session.state.get_player("human1").position.z < -25.4
         assert session.state.get_player("partner").position.z < -25.4
-        assert session.state.get_player("partner-2").position.z == pytest.approx(-52.0)
+        assert session.state.get_player("partner-2").position.z == pytest.approx(
+            get_map_slot("ROOF_RUNNER_SPAWN_C")["position"][2]
+        )
 
     def test_setup_game_is_idempotent_for_ai_roles(self):
         from app.game.session import GameSession

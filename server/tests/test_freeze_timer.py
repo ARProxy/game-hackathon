@@ -57,10 +57,10 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         ]
         self.assertEqual(len(eliminated), 1)
         self.assertEqual(eliminated[0]["reason"], "freeze_timeout")
-        self.assertEqual(self.websocket.messages[-1], {
-            "type": "game_over",
-            "reason": "all_humans_eliminated",
-        })
+        game_over = self.websocket.messages[-1]
+        self.assertEqual(game_over["type"], "game_over")
+        self.assertEqual(game_over["reason"], "all_humans_eliminated")
+        self.assertEqual(game_over["escaped_player_ids"], [])
         self.assertNotIn(
             (self.room_id, self.player_id), self.manager._freeze_tasks
         )
@@ -131,11 +131,12 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(player.status.value, "eliminated")  # type: ignore[union-attr]
         self.assertTrue(task.cancelled())
         self.assertNotIn(key, self.manager._freeze_tasks)
-        self.assertEqual(self.websocket.messages[-2:], [
-            {
-                "type": "eliminated",
-                "player_id": self.player_id,
-                "reason": "caught_by_seeker",
-            },
-            {"type": "game_over", "reason": "caught_by_seeker"},
-        ])
+        eliminated, game_over = self.websocket.messages[-2:]
+        self.assertEqual(eliminated, {
+            "type": "eliminated",
+            "player_id": self.player_id,
+            "reason": "caught_by_seeker",
+        })
+        self.assertEqual(game_over["type"], "game_over")
+        self.assertEqual(game_over["reason"], "caught_by_seeker")
+        self.assertEqual(game_over["escaped_player_ids"], [])

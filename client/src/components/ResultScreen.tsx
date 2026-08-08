@@ -1,7 +1,7 @@
 /**
  * 정산 화면
  * - 승리/실패 표시
- * - 금기어 출처 공개 (온보딩 답변에서 추출)
+ * - 플레이 중 형성된 금기어 세대 공개
  * - 획득한 단서, 금기어 위반 횟수
  * - 다시 하기 버튼
  */
@@ -18,7 +18,7 @@ function formatElapsed(totalSeconds: number): string {
 export default function ResultScreen() {
   const phase = useGameStore((s) => s.phase)
   const forbiddenWords = useGameStore((s) => s.forbiddenWords)
-  const sourceAnswers = useGameStore((s) => s.sourceAnswers)
+  const forbiddenProfileHistory = useGameStore((s) => s.forbiddenProfileHistory)
   const freezeCount = useGameStore((s) => s.freezeCount)
   const acquiredClues = useGameStore((s) => s.acquiredClues)
   const totalClues = useGameStore((s) => s.totalClues)
@@ -108,7 +108,7 @@ export default function ResultScreen() {
         <StatBox label="플레이 시간" value={formatElapsed(elapsedSeconds ?? 0)} color="#B6FF3D" />
       </div>
 
-      {/* 금기어 출처 공개 */}
+      {/* 플레이 종료 후에만 비공개 금기어 이력을 공개한다. */}
       <div style={{
         background: 'rgba(255, 255, 255, 0.05)',
         borderRadius: 12,
@@ -117,39 +117,34 @@ export default function ResultScreen() {
         textAlign: 'center',
       }}>
         <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 12 }}>
-          온보딩 답변과 게임에서 표현 가능한 단어를 바탕으로 구성되었습니다
+          게임이 당신의 대화에서 학습했던 금기어
         </div>
-        {sourceAnswers.length > 0 && (
-          <div style={{
-            display: 'grid',
-            gap: 6,
-            marginBottom: 16,
-            maxWidth: 560,
-            textAlign: 'left',
-          }}>
-            {sourceAnswers.map((answer, index) => (
-              <div key={`${index}-${answer}`} style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)' }}>
-                <span style={{ color: '#52E5FF', marginRight: 8 }}>답변 {index + 1}</span>
-                {answer}
-              </div>
+        {(forbiddenProfileHistory.length > 0
+          ? forbiddenProfileHistory
+          : forbiddenWords.length > 0
+            ? [{ generation: 1, words: forbiddenWords, reason: 'legacy' }]
+            : []
+        ).map((entry) => (
+          <div key={entry.generation} style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'center', marginTop: 9 }}>
+            <span style={{ width: 44, fontSize: 11, opacity: 0.45 }}>흔적 {entry.generation}</span>
+            {entry.words.map((word) => (
+              <span key={`${entry.generation}-${word}`} style={{
+                background: 'rgba(255, 47, 110, 0.2)',
+                border: '1px solid rgba(255, 47, 110, 0.4)',
+                borderRadius: 8,
+                padding: '6px 16px',
+                fontSize: 18,
+                fontWeight: 600,
+                color: '#FF2F6E',
+              }}>
+                {word}
+              </span>
             ))}
           </div>
+        ))}
+        {forbiddenProfileHistory.length === 0 && forbiddenWords.length === 0 && (
+          <div style={{ fontSize: 13, opacity: 0.65 }}>충분한 대화가 쌓이기 전에 라운드가 종료되었습니다.</div>
         )}
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-          {forbiddenWords.map((word) => (
-            <span key={word} style={{
-              background: 'rgba(255, 47, 110, 0.2)',
-              border: '1px solid rgba(255, 47, 110, 0.4)',
-              borderRadius: 8,
-              padding: '6px 16px',
-              fontSize: 18,
-              fontWeight: 600,
-              color: '#FF2F6E',
-            }}>
-              {word}
-            </span>
-          ))}
-        </div>
       </div>
 
       {/* 다시 하기 */}

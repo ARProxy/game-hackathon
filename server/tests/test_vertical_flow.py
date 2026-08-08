@@ -2,13 +2,15 @@
 
 import pytest
 
-from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFloor
+from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.session import GameSession
 from app.game.state import PlayerRole
 from app.game.vertical_flow import (
+    activate_rooftop_signal,
     activate_final_station,
     complete_current_stage,
     evaluate_broadcast_phrase,
+    final_escape_position,
     final_station_position,
     mission_interaction_position,
     use_open_floor_transition,
@@ -28,6 +30,7 @@ def active_session() -> tuple[GameSession, object]:
     human = session.state.add_player("human", PlayerRole.HUMAN)
     session.setup_game(["열쇠"])
     session.vertical_progression_enabled = True
+    session.final_route_choice = FinalRoute.FIELD
     return session, human
 
 
@@ -48,17 +51,28 @@ def test_disabled_compatibility_game_cannot_advance_vertical_stage() -> None:
 
 
 def test_rooftop_mission_advances_only_when_actor_is_near_device() -> None:
+    from app.game.map_slots import get_map_slot
+
     session, human = active_session()
     human.position.floor = WorldFloor.ROOF
 
     with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
-        complete_current_stage(session, "human")
+        activate_rooftop_signal(session, "human", "center")
 
-    place_at_current_mission(session, human)
+    for signal_id, slot_id in [
+        ("center", "ROOF_SIGNAL_CENTER"),
+        ("east", "ROOF_SIGNAL_EAST"),
+        ("west", "ROOF_SIGNAL_WEST"),
+    ]:
+        slot = get_map_slot(slot_id)
+        human.position.x, human.position.y, human.position.z = slot["interactionPosition"]
+        progress = activate_rooftop_signal(session, "human", signal_id)
+    assert progress["completed"]
     result = complete_current_stage(session, "human")
 
     assert result["completed_phase"] == "rooftop_intro"
     assert result["next_phase"] == "floor_3"
+    assert result["clue"] is None
     assert result["progression"]["accessible_floors"] == ["ROOF", "F3"]
 
 
@@ -73,8 +87,9 @@ def test_actor_on_wrong_floor_cannot_complete_current_mission() -> None:
 
 
 def _mark_vertical_missions_done(session: GameSession) -> None:
-    """2층/1층 미션을 완료 상태로 표시하여 stage advance를 허용한다."""
+    """직접 stage advance를 검증할 때 각 전용 미션을 완료 상태로 둔다."""
     if session.vertical_missions is not None:
+        session.vertical_missions.rooftop.completed = True
         session.vertical_missions.intercom.completed = True
         session.vertical_missions.simultaneous.completed = True
 
@@ -95,6 +110,22 @@ def test_each_floor_uses_its_own_semantic_mission_position() -> None:
         assert result["next_phase"] == next_phase.value
 
 
+def test_three_internal_floors_award_ordered_spell_clues() -> None:
+    session, human = active_session()
+    _mark_vertical_missions_done(session)
+    clues = []
+    for _ in range(4):
+        place_at_current_mission(session, human)
+        event = complete_current_stage(session, "human")
+        if event["clue"]:
+            clues.append(event["clue"])
+    assert clues == [
+        {"word": "달빛", "order": 1, "total": 3},
+        {"word": "교정", "order": 2, "total": 3},
+        {"word": "탈출", "order": 3, "total": 3},
+    ]
+
+
 def test_frozen_actor_cannot_complete_stage() -> None:
     session, human = active_session()
     place_at_current_mission(session, human)
@@ -105,10 +136,15 @@ def test_frozen_actor_cannot_complete_stage() -> None:
 
 
 def test_open_transition_moves_actor_from_rooftop_to_active_third_floor() -> None:
+    from app.game.map_slots import get_map_slot
+
     session, human = active_session()
+    _mark_vertical_missions_done(session)
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
-    human.position.x, human.position.y, human.position.z = -54.05, 10.8, -54.2
+    human.position.x, human.position.y, human.position.z = get_map_slot(
+        "ROOF_TO_F3_FIRE_DOOR"
+    )["position"]
     human.position.floor = WorldFloor.ROOF
 
     event = use_open_floor_transition(session, "human", "west")
@@ -120,6 +156,7 @@ def test_open_transition_moves_actor_from_rooftop_to_active_third_floor() -> Non
 
 def test_transition_rejects_wrong_floor_and_remote_use() -> None:
     session, human = active_session()
+    _mark_vertical_missions_done(session)
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
 
@@ -133,24 +170,33 @@ def test_transition_rejects_wrong_floor_and_remote_use() -> None:
 
 
 def test_east_and_west_routes_open_after_third_floor_completion() -> None:
+    from app.game.map_slots import get_map_slot
+
     session, human = active_session()
+    _mark_vertical_missions_done(session)
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
-    human.position.x, human.position.y, human.position.z = -54.05, 10.8, -54.2
+    human.position.x, human.position.y, human.position.z = get_map_slot(
+        "ROOF_TO_F3_FIRE_DOOR"
+    )["position"]
     human.position.floor = WorldFloor.ROOF
     use_open_floor_transition(session, "human", "west")
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
 
-    human.position.x, human.position.y, human.position.z = 6.05, 7.2, -54.2
+    human.position.x, human.position.y, human.position.z = get_map_slot(
+        "F3_TO_F2_STAIR_EAST"
+    )["position"]
     human.position.floor = WorldFloor.F3
     event = use_open_floor_transition(session, "human", "east")
 
     assert event["position"]["floor"] == "F2"
-    assert event["position"]["zone"] == "f2_core_ne"
+    assert event["position"]["zone"] == "f2_core_se"
 
 
 def test_first_floor_completion_opens_field_transition() -> None:
+    from app.game.map_slots import get_map_slot
+
     session, human = active_session()
     _mark_vertical_missions_done(session)
     for _ in range(4):
@@ -158,10 +204,35 @@ def test_first_floor_completion_opens_field_transition() -> None:
         result = complete_current_stage(session, "human")
     assert result["next_phase"] == "field_final"
     assert session.vertical_round.final_route.value == "field"
-    human.position.x, human.position.y, human.position.z = 2.35, 0, -1.8
+    human.position.x, human.position.y, human.position.z = get_map_slot(
+        "F1_TO_FIELD_FIRE_DOOR"
+    )["position"]
     human.position.floor = WorldFloor.F1
     event = use_open_floor_transition(session, "human", "field")
     assert event["position"]["floor"] == "FIELD"
+
+
+def test_first_floor_completion_can_open_basement_transition() -> None:
+    from app.game.map_slots import get_map_slot
+
+    session, human = active_session()
+    session.final_route_choice = FinalRoute.BASEMENT
+    _mark_vertical_missions_done(session)
+    for _ in range(4):
+        place_at_current_mission(session, human)
+        result = complete_current_stage(session, "human")
+    assert result["next_phase"] == "basement_final"
+    assert session.vertical_round.final_route == FinalRoute.BASEMENT
+
+    human.position.x, human.position.y, human.position.z = get_map_slot(
+        "F1_TO_BASEMENT_FIRE_DOOR"
+    )["position"]
+    human.position.floor = WorldFloor.F1
+    event = use_open_floor_transition(session, "human", "basement")
+    assert event["position"]["floor"] == "B1"
+    assert final_escape_position(session) == tuple(
+        float(value) for value in get_map_slot("BASEMENT_ESCAPE_GATE")["position"]
+    )
 
 
 def test_field_final_requires_every_alive_runner_at_their_station() -> None:

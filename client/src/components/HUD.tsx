@@ -1,6 +1,6 @@
 /**
  * HUD — 화면 위에 겹쳐지는 게임 UI
- * - 금기어 표시
+ * - 비공개 언어 감시 상태
  * - 마이크 상태
  * - 자막 (STT 결과)
  * - 빙결 알림
@@ -33,6 +33,16 @@ const COMPANION_LABELS: Record<string, string> = {
   MOVE_TO_GATE: '동료가 탈출구로 이동 중',
   ESCAPE: '동료가 탈출구를 통과 중',
   INCAPACITATED: '동료가 움직일 수 없음',
+}
+
+const VERTICAL_INSTRUCTIONS: Record<string, string> = {
+  rooftop_intro: '옥상 신호 장치로 이동해 E를 눌러 팀 출발 신호를 보내세요.',
+  floor_3: '방송 장치에 E로 접속한 뒤 Q를 눌러 문구의 뜻을 우회해 전달하세요.',
+  floor_2: '인터폰에서 E를 누른 뒤 AI가 읽은 색과 도형을 Q로 순서대로 전달하세요.',
+  floor_1: 'AI가 반대편 장치에 준비되면 A 장치 앞에서 E를 눌러 동시에 작동하세요.',
+  field_final: '각자 맡은 운동장 장치에 도착해 E로 활성화하세요.',
+  basement_final: 'AI가 보고한 대기 장치를 찾아 배전반·밸브·발전기를 올바른 순서로 E 작동하세요.',
+  escape_open: '선택된 파이널 출구의 빛기둥으로 이동해 E를 누르세요.',
 }
 
 function formatElapsed(totalSeconds: number): string {
@@ -128,7 +138,7 @@ function FrozenCountdown() {
       <div style={{ fontSize: 14, color: '#FF8BAD', marginTop: 6 }}>
         {freezeEvent.matchedStage === 'trap'
           ? '얼음 트랩 발동'
-          : `“${freezeEvent.matchedWord}” 발화`} · 0초가 되면 탈락합니다
+          : '방금 발화에 위험 표현이 포함됨'} · 0초가 되면 탈락합니다
       </div>
       <div style={{
         height: 5,
@@ -323,7 +333,7 @@ function TextSpeechFallback({ phase, connected, gateArrived, playerStatus }: {
 
 export default function HUD() {
   const phase = useGameStore((s) => s.phase)
-  const forbiddenWords = useGameStore((s) => s.forbiddenWords)
+  const forbiddenProfile = useGameStore((s) => s.forbiddenProfile)
   const isSpeaking = useGameStore((s) => s.isSpeaking)
   const lastTranscript = useGameStore((s) => s.lastTranscript)
   const connected = useGameStore((s) => s.connected)
@@ -356,7 +366,7 @@ export default function HUD() {
       color: 'white',
     }}>
 
-      {/* 상단 — 연결 상태 + 금기어 */}
+      {/* 상단 — 연결 상태 + 비공개 언어 감시 */}
       <div style={{
         position: 'absolute',
         top: 16,
@@ -384,31 +394,20 @@ export default function HUD() {
           </div>
         )}
 
-        {/* 금기어 표시 */}
-        {phase === 'playing' && forbiddenWords.length > 0 && (
+        {phase === 'playing' && forbiddenProfile && (
           <div style={{
-            background: 'rgba(255, 47, 110, 0.15)',
-            border: '1px solid rgba(255, 47, 110, 0.4)',
+            background: 'rgba(255, 47, 110, 0.1)',
+            border: '1px solid rgba(255, 47, 110, 0.3)',
             borderRadius: 8,
             padding: '8px 12px',
+            fontSize: 11,
+            color: forbiddenProfile.status === 'observing' ? '#BDEFFF' : '#FF8BAD',
           }}>
-            <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
-              금기어
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {forbiddenWords.map((word) => (
-                <span key={word} style={{
-                  background: 'rgba(255, 47, 110, 0.25)',
-                  padding: '2px 8px',
-                  borderRadius: 4,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#FF2F6E',
-                }}>
-                  {word}
-                </span>
-              ))}
-            </div>
+            {forbiddenProfile.status === 'observing'
+              ? '학교가 당신의 말버릇을 듣고 있습니다'
+              : forbiddenProfile.status === 'locked'
+                ? '말의 흔적이 봉인되었습니다'
+                : '언어 감시 활성'}
           </div>
         )}
 
@@ -430,7 +429,7 @@ export default function HUD() {
               {currentMissionIndex < missions.length
                 ? <>
                     <strong style={{ color: '#52E5FF' }}>
-                      “{missions[currentMissionIndex]?.forbidden_word}” 이름은 절대 말하지 마세요.
+                      물건의 이름을 직접 말하지 말고 동료에게 설명하세요.
                     </strong>
                     <br />외형이나 쓰임새 특징을 2개 이상 조합해 동료에게 설명하세요.
                     <br /><span style={{ color: '#FF8BAD' }}>말할 때마다 술래가 현재 위치를 듣습니다.</span>
@@ -466,9 +465,8 @@ export default function HUD() {
             <div style={{ color: '#52E5FF', fontWeight: 900, marginBottom: 3 }}>
               {verticalProgression.active_floor} · {verticalProgression.phase}
             </div>
-              {verticalProgression.phase === 'floor_3'
-                ? '방송 장치에 E로 접속한 뒤 Q를 눌러 금기어 없이 문구의 뜻을 전달하세요.'
-                : '현재 층의 청색 목표를 찾아 E로 상호작용하세요.'}
+              {VERTICAL_INSTRUCTIONS[verticalProgression.phase]
+                ?? '현재 구역의 청색 목표를 찾아 E로 상호작용하세요.'}
           </div>
         )}
 
@@ -556,7 +554,7 @@ export default function HUD() {
           fontSize: 12,
         }}>
           <div style={{ color: '#B6FF3D', fontWeight: 800, marginBottom: 7 }}>
-            AI 후보 비교 · 확신 {Math.round(partnerDecision.confidence * 100)}%
+            AI 후보 비교 · 확신 {Math.round((partnerDecision.confidence ?? 0) * 100)}%
           </div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 7 }}>
             {partnerDecision.candidates.slice(0, 3).map((candidate) => (
@@ -604,7 +602,7 @@ export default function HUD() {
       }}>
         {/* 자막 */}
         {subtitlesEnabled && subtitles.slice(-2).map((sub, i, visibleSubtitles) => (
-          <div key={sub.timestamp} style={{
+          <div key={`${sub.timestamp}-${i}`} style={{
             background: 'rgba(0, 0, 0, 0.6)',
             padding: '4px 12px',
             borderRadius: 6,

@@ -5,6 +5,8 @@ import json
 import unittest
 
 from app.ai.companion import TRAP_CONTRACT, advance_companion
+from app.game.map_slots import get_map_slot
+from app.game.progression import FinalRoute, VerticalRoundPhase, WorldFloor
 from app.game.session import session_manager
 from app.game.state import GamePhase, PlayerStatus
 from app.ws.manager import ConnectionManager
@@ -50,6 +52,59 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         assert partner.status == PlayerStatus.FROZEN
         assert self.websocket.messages[-1]["type"] == "freeze"
         assert self.websocket.messages[-1]["player_id"] == "partner"
+
+    async def test_vertical_field_escape_records_each_runner_before_victory(self) -> None:
+        exit_x, exit_y, exit_z = get_map_slot("FIELD_ESCAPE_GATE")["position"]
+        self.session.round_data = None
+        self.session.vertical_round.final_route = FinalRoute.FIELD
+        self.session.vertical_round.phase = VerticalRoundPhase.ESCAPE_OPEN
+        self.session.state.phase = GamePhase.ESCAPE
+        for actor_id in (self.player_id, "partner", "partner-2"):
+            actor = self.session.state.get_player(actor_id)
+            actor.position.x, actor.position.y, actor.position.z = exit_x, exit_y, exit_z
+            actor.position.floor = WorldFloor.FIELD
+
+        await self.manager._complete_companion_escape(self.room_id, "partner")
+        assert self.session.state.phase == GamePhase.ESCAPE
+        await self.manager._complete_companion_escape(self.room_id, "partner-2")
+        assert self.session.state.phase == GamePhase.ESCAPE
+        await self.manager.handle_message(self.room_id, self.player_id, {
+            "type": "action",
+            "payload": {"action_type": "vertical_escape"},
+        })
+
+        assert [
+            message["player_id"] for message in self.websocket.messages
+            if message["type"] == "runner_escaped"
+        ] == ["partner", "partner-2", self.player_id]
+        won = self.websocket.messages[-1]
+        assert won["type"] == "game_won"
+        assert won["reason"] == "vertical_school_escape"
+        assert won["escaped_player_ids"] == ["human", "partner", "partner-2"]
+        assert won["progression"]["phase"] == "victory"
+
+    async def test_vertical_field_escape_can_end_as_partial_result(self) -> None:
+        exit_x, exit_y, exit_z = get_map_slot("FIELD_ESCAPE_GATE")["position"]
+        self.session.round_data = None
+        self.session.vertical_round.final_route = FinalRoute.FIELD
+        self.session.vertical_round.phase = VerticalRoundPhase.ESCAPE_OPEN
+        self.session.state.phase = GamePhase.ESCAPE
+        human = self.session.state.get_player(self.player_id)
+        human.position.x, human.position.y, human.position.z = exit_x, exit_y, exit_z
+        human.position.floor = WorldFloor.FIELD
+        self.session.state.get_player("partner").eliminate()
+        self.session.state.get_player("partner-2").eliminate()
+
+        await self.manager.handle_message(self.room_id, self.player_id, {
+            "type": "action",
+            "payload": {"action_type": "vertical_escape"},
+        })
+
+        assert self.websocket.messages[-2]["type"] == "runner_escaped"
+        won = self.websocket.messages[-1]
+        assert won["type"] == "game_won"
+        assert won["reason"] == "vertical_partial_escape"
+        assert won["progression"]["phase"] == "partial_result"
 
     async def test_human_rescues_frozen_ai_only_from_server_validated_range(self) -> None:
         human = self.session.state.get_player(self.player_id)
@@ -144,7 +199,10 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         finished = await self.manager._finish_if_team_frozen(self.room_id)
         assert finished
         assert self.session.state.phase == GamePhase.RESULT
-        assert self.websocket.messages[-1] == {"type": "game_over", "reason": "all_frozen"}
+        game_over = self.websocket.messages[-1]
+        assert game_over["type"] == "game_over"
+        assert game_over["reason"] == "all_frozen"
+        assert game_over["escaped_player_ids"] == []
 
 
 def test_server_trap_pool_only_activates_reachable_solo_floors() -> None:

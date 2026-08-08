@@ -24,6 +24,7 @@ from app.ai.speech import (
     select_speech_mode,
 )
 from app.game.authority import MovementSample, has_clear_catch_line
+from app.game.progression import FinalRoute
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
 
 CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/companionContract.json"
@@ -162,7 +163,11 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         ):
             vm = session.vertical_missions
             intercom = vm.intercom
-            if not intercom.completed and intercom.ai_companion_id == companion_id:
+            if (
+                not intercom.completed
+                and intercom.started_at is not None
+                and intercom.ai_companion_id == companion_id
+            ):
                 ai_slot = _get_map_slot(intercom.ai_position_slot)
                 ax, _, az = ai_slot["position"]
                 arrived = math.hypot(partner.position.x - ax, partner.position.z - az) <= 1.5
@@ -226,6 +231,40 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
             "target_id": session.vertical_round.phase.value,
             "target": {"x": x, "z": z},
             "reason": "vertical_stage_objective",
+        }
+
+    if (
+        session.vertical_progression_enabled
+        and session.round_data is None
+        and session.vertical_round.final_route in {FinalRoute.FIELD, FinalRoute.BASEMENT}
+        and session.state.phase in {GamePhase.FINAL_SPELL, GamePhase.ESCAPE}
+    ):
+        from app.game.map_slots import get_map_slot as _get_map_slot
+        from app.game.vertical_flow import final_escape_position, final_station_position
+
+        if session.state.phase == GamePhase.ESCAPE:
+            exit_x, _, exit_z = final_escape_position(session)
+            return {
+                "state": "ESCAPE",
+                "target_id": f"vertical_{session.vertical_round.final_route.value}_exit",
+                "target": {"x": exit_x, "z": exit_z},
+                "reason": "vertical_escape_open",
+        }
+        if session.vertical_round.final_route == FinalRoute.BASEMENT:
+            from app.game.session import DEFAULT_AI_PARTNER_IDS as _PARTNER_IDS
+            companion_index = (
+                _PARTNER_IDS.index(companion_id)
+                if companion_id in _PARTNER_IDS else 0
+            )
+            device = session.vertical_missions.basement.devices[companion_index]
+            station_x, _, station_z = _get_map_slot(device.slot_id)["position"]
+        else:
+            station_x, _, station_z = final_station_position(companion_id)
+        return {
+            "state": "MOVE_TO_GATE",
+            "target_id": f"vertical_station_{companion_id}",
+            "target": {"x": station_x, "z": station_z},
+            "reason": "hold_final_station",
         }
 
     if session.state.phase in {GamePhase.FINAL_SPELL, GamePhase.ESCAPE} and session.active_gate_id:

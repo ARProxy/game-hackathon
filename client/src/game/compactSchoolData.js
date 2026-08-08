@@ -1,0 +1,563 @@
+/**
+ * compactSchoolData.js — 수직 하강형 게임을 위한 단일 건물 구조 계약.
+ *
+ * 좌표, 시각물, Rapier 충돌과 서버 collision export가 모두 이 데이터에서
+ * 파생된다. 구조 역할을 크기로 추측하지 않는다.
+ */
+import { PAL, TONE } from './campusV4Data.js'
+
+export const FLOOR_HEIGHT = 3.6
+export const FLOOR_Y = { OUT: 0, B1: -3.6, F1: 0, F2: 3.6, F3: 7.2, ROOF: 10.8 }
+export const FLOOR_ORDER = ['B1', 'F1', 'F2', 'F3', 'ROOF']
+
+export const BUILDING_BOUNDS = { x0: -48, x1: 0, z0: -48, z1: -8 }
+export const COURTYARD_BOUNDS = { x0: -35.8, x1: -12.2, z0: -35.8, z1: -20.2 }
+export const CORRIDOR_WIDTH = 4.2
+export const WALL_HEIGHT = 3.2
+export const WALL_THICKNESS = 0.22
+export const SLAB_THICKNESS = 0.3
+
+export const COMPACT_PALETTE = {
+  ...PAL,
+  roofMembrane: '#737b80',
+  roofJoint: '#5f686e',
+  stairTread: '#737b80',
+  stairRiser: '#5b646a',
+  safetyGreen: '#6dcf92',
+  safetyRed: '#d04d4d',
+  courtyardTile: '#777f79',
+  darkGlass: '#5f8190',
+  signBlue: '#3f607d',
+  concreteLight: '#a7a39a',
+}
+
+const FY = FLOOR_Y
+const B = BUILDING_BOUNDS
+const C = COURTYARD_BOUNDS
+const boxes = []
+const cylinders = []
+const doors = []
+const fixtures = []
+const rooms = []
+const navNodes = []
+
+let serial = 0
+const nextId = (prefix) => `${prefix}_${serial++}`
+
+function addBox({ id = nextId('box'), floor, p, s, material, role, collider = true, visible = true, rot }) {
+  boxes.push({ id, f: floor, p, s, material, c: COMPACT_PALETTE[material] || material, role, collider, visible, rot })
+}
+
+function addCylinder({ id = nextId('cyl'), floor, p, r, h, material, role, collider = false, visible = true, rot }) {
+  cylinders.push({ id, f: floor, p, r, h, material, c: COMPACT_PALETTE[material] || material, role, collider, visible, rot })
+}
+
+function addFixture(floor, p, tone = 'cool') {
+  fixtures.push({ id: nextId('fixture'), f: floor, p, c: TONE[tone], tone })
+}
+
+function addWallSlice(floor, axis, fixed, start, end, bottom, height, material, role = 'wall', thickness = WALL_THICKNESS) {
+  if (end - start < 0.03 || height < 0.03) return
+  const y = FY[floor] + bottom + height / 2
+  addBox({
+    floor,
+    p: axis === 'x' ? [(start + end) / 2, y, fixed] : [fixed, y, (start + end) / 2],
+    s: axis === 'x' ? [end - start, height, thickness] : [thickness, height, end - start],
+    material,
+    role,
+  })
+}
+
+function addFullWallSegment(floor, axis, fixed, start, end, opt = {}) {
+  const baseHeight = opt.baseHeight ?? 0.9
+  const height = opt.height ?? WALL_HEIGHT
+  addWallSlice(floor, axis, fixed, start, end, 0, Math.min(baseHeight, height), opt.lower ?? 'corrBase', opt.role ?? 'wall', opt.thickness)
+  if (height > baseHeight) addWallSlice(floor, axis, fixed, start, end, baseHeight, height - baseHeight, opt.upper ?? 'corrWall', opt.role ?? 'wall', opt.thickness)
+}
+
+/** opening: { center, width, type:'door'|'window', sill?, head?, id?, kind?, unlockFloor? } */
+function addWallRun(floor, axis, fixed, start, end, openings = [], opt = {}) {
+  const sorted = openings.slice().sort((a, b) => a.center - b.center)
+  let cursor = start
+  for (const opening of sorted) {
+    const o0 = opening.center - opening.width / 2
+    const o1 = opening.center + opening.width / 2
+    addFullWallSegment(floor, axis, fixed, cursor, o0, opt)
+    const head = opening.head ?? (opening.type === 'window' ? 2.55 : 2.25)
+    const sill = opening.sill ?? (opening.type === 'window' ? 0.9 : 0)
+    if (sill > 0) addWallSlice(floor, axis, fixed, o0, o1, 0, sill, opt.lower ?? 'corrBase', 'wall', opt.thickness)
+    if (head < (opt.height ?? WALL_HEIGHT)) {
+      addWallSlice(floor, axis, fixed, o0, o1, head, (opt.height ?? WALL_HEIGHT) - head, opt.upper ?? 'corrWall', 'wall', opt.thickness)
+    }
+    if (opening.type === 'window') {
+      const glassThickness = 0.08
+      addWallSlice(floor, axis, fixed, o0 + 0.08, o1 - 0.08, sill + 0.05, head - sill - 0.1, opt.glass ?? 'darkGlass', 'window', glassThickness)
+      const frameMaterial = opt.frame ?? 'mullion'
+      for (const edge of [o0, o1]) {
+        addWallSlice(floor, axis, fixed, edge - 0.035, edge + 0.035, sill, head - sill, frameMaterial, 'trim', (opt.thickness ?? WALL_THICKNESS) + 0.04)
+        boxes[boxes.length - 1].collider = false
+      }
+      const mid = (o0 + o1) / 2
+      addWallSlice(floor, axis, fixed, mid - 0.025, mid + 0.025, sill, head - sill, frameMaterial, 'trim', (opt.thickness ?? WALL_THICKNESS) + 0.04)
+      boxes[boxes.length - 1].collider = false
+    } else {
+      addDoor({
+        id: opening.id,
+        floor,
+        axis,
+        fixed,
+        center: opening.center,
+        width: opening.width - 0.08,
+        height: head - 0.04,
+        kind: opening.kind ?? 'room',
+        unlockFloor: opening.unlockFloor,
+        permanentlyLocked: opening.permanentlyLocked,
+        swing: opening.swing ?? 1,
+        material: opening.material,
+      })
+    }
+    cursor = o1
+  }
+  addFullWallSegment(floor, axis, fixed, cursor, end, opt)
+}
+
+function addDoor({ id = nextId('door'), floor, axis, fixed, center, width = 1.05, height = 2.18, kind = 'room', unlockFloor, permanentlyLocked = false, swing = 1, material = 'door' }) {
+  const hinge = axis === 'x'
+    ? [center - width / 2, FY[floor], fixed]
+    : [fixed, FY[floor], center - width / 2]
+  doors.push({
+    id,
+    f: floor,
+    axis,
+    fixed,
+    hinge,
+    w: width,
+    h: height,
+    t: kind === 'fire' ? 0.12 : 0.08,
+    swing,
+    kind,
+    unlockFloor,
+    permanentlyLocked,
+    material,
+    c: COMPACT_PALETTE[material] || material,
+  })
+  const frame = axis === 'x'
+    ? { p: [center, FY[floor] + height / 2, fixed], s: [width + 0.22, height + 0.16, 0.08] }
+    : { p: [fixed, FY[floor] + height / 2, center], s: [0.08, height + 0.16, width + 0.22] }
+  addBox({ floor, ...frame, material: 'doorFrame', role: 'doorFrame', collider: false })
+}
+
+function subtractRect(rect, holes) {
+  let parts = [rect]
+  for (const h of holes) {
+    const next = []
+    for (const p of parts) {
+      const x0 = Math.max(p.x0, h.x0), x1 = Math.min(p.x1, h.x1)
+      const z0 = Math.max(p.z0, h.z0), z1 = Math.min(p.z1, h.z1)
+      if (x0 >= x1 || z0 >= z1) { next.push(p); continue }
+      if (p.z0 < z0) next.push({ x0: p.x0, z0: p.z0, x1: p.x1, z1: z0 })
+      if (z1 < p.z1) next.push({ x0: p.x0, z0: z1, x1: p.x1, z1: p.z1 })
+      if (p.x0 < x0) next.push({ x0: p.x0, z0, x1: x0, z1 })
+      if (x1 < p.x1) next.push({ x0: x1, z0, x1: p.x1, z1 })
+    }
+    parts = next
+  }
+  return parts
+}
+
+const NW_WELL = { x0: -39.5, x1: -32.5, z0: -47.6, z1: -40.35 }
+const SE_WELL = { x0: -15.5, x1: -8.5, z0: -15.65, z1: -8.4 }
+
+function addSlabRect(floor, rect, material) {
+  addBox({
+    floor,
+    p: [(rect.x0 + rect.x1) / 2, FY[floor] - SLAB_THICKNESS / 2, (rect.z0 + rect.z1) / 2],
+    s: [rect.x1 - rect.x0, SLAB_THICKNESS, rect.z1 - rect.z0],
+    material,
+    role: 'slab',
+  })
+}
+
+function addRingSlab(floor) {
+  const holes = floor === 'F1' ? [] : [NW_WELL, SE_WELL]
+  const bands = [
+    { x0: B.x0, x1: B.x1, z0: B.z0, z1: C.z0 },
+    { x0: B.x0, x1: B.x1, z0: C.z1, z1: B.z1 },
+    { x0: B.x0, x1: C.x0, z0: C.z0, z1: C.z1 },
+    { x0: C.x1, x1: B.x1, z0: C.z0, z1: C.z1 },
+  ]
+  for (const band of bands) {
+    for (const part of subtractRect(band, holes)) addSlabRect(floor, part, floor === 'ROOF' ? 'roofMembrane' : 'corrFloor')
+  }
+}
+
+const WINDOW_CENTERS_X = [-44, -36, -28, -20, -12, -4]
+const WINDOW_CENTERS_Z = [-44, -36, -28, -20, -12]
+
+function facadeOpenings(floor, side) {
+  const centers = side === 'north' || side === 'south' ? WINDOW_CENTERS_X : WINDOW_CENTERS_Z
+  return centers.map((center) => ({
+    center,
+    width: (center === -36 && side === 'north') || (center === -12 && side === 'south') ? 1.5 : 3.6,
+    type: 'window',
+    sill: floor === 'F1' ? 1.0 : 0.9,
+    head: 2.55,
+  }))
+}
+
+function corridorWindowOpenings(axis) {
+  const centers = axis === 'x' ? [-36, -28, -20, -12] : [-32, -24]
+  return centers.map((center) => ({ center, width: axis === 'x' ? 5.2 : 4.4, type: 'window', sill: 0.95, head: 2.5 }))
+}
+
+const FLOOR_PROGRAM = {
+  F1: ['경비·방재실', '행정실', '보건실', '교무실', '급식실', '조리실', '상담실', '인쇄실'],
+  F2: ['도서실', '음악실', '과학실', '컴퓨터실', '2-1 교실', '2-2 교실', '영어전용실', '시청각실'],
+  F3: ['방송실', '무용실', '미술실', '동아리실', '3-1 교실', '3-2 교실', '지구과학실', '서예실'],
+}
+
+function addRoomMetadata(floor) {
+  const names = FLOOR_PROGRAM[floor]
+  const footprints = [
+    [-32, -48, -24, -40], [-24, -48, -16, -40],
+    [-16, -48, -8, -40], [-40, -16, -32, -8],
+    [-32, -16, -24, -8], [-24, -16, -16, -8],
+    [-48, -36, -40, -28], [-8, -36, 0, -28],
+  ]
+  footprints.forEach(([x0, z0, x1, z1], index) => rooms.push({
+    id: `${floor.toLowerCase()}_room_${index + 1}`,
+    name: names[index], floor, x0, z0, x1, z1,
+    cx: (x0 + x1) / 2, cz: (z0 + z1) / 2,
+  }))
+}
+
+function addFloorShell(floor) {
+  addRingSlab(floor)
+  addRoomMetadata(floor)
+  const y = FY[floor]
+
+  // 외벽. F1 남측 중앙만 현관 개구부로 교체한다.
+  addWallRun(floor, 'x', B.z0, B.x0, B.x1, facadeOpenings(floor, 'north'), { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
+  const south = facadeOpenings(floor, 'south')
+  if (floor === 'F1') {
+    const filtered = south.filter((opening) => Math.abs(opening.center + 24) > 3)
+    filtered.push({ center: -24, width: 2.8, type: 'door', id: 'main_entry', kind: 'fire', permanentlyLocked: true, head: 2.45 })
+    addWallRun(floor, 'x', B.z1, B.x0, B.x1, filtered, { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
+  } else addWallRun(floor, 'x', B.z1, B.x0, B.x1, south, { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
+  addWallRun(floor, 'z', B.x0, B.z0, B.z1, facadeOpenings(floor, 'west'), { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
+  addWallRun(floor, 'z', B.x1, B.z0, B.z1, facadeOpenings(floor, 'east'), { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
+
+  // 중정 면. 유리와 하부 벽 모두 실제 충돌을 가진다.
+  addWallRun(floor, 'x', C.z0, -40, -8, corridorWindowOpenings('x'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
+  addWallRun(floor, 'x', C.z1, -40, -8, corridorWindowOpenings('x'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
+  addWallRun(floor, 'z', C.x0, C.z0, C.z1, corridorWindowOpenings('z'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
+  addWallRun(floor, 'z', C.x1, C.z0, C.z1, corridorWindowOpenings('z'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
+
+  const nextFloor = floor === 'F3' ? 'F2' : floor === 'F2' ? 'F1' : undefined
+  const northDoors = [-36, -28, -20, -12].map((center, index) => ({
+    center, width: index === 0 ? 1.25 : 1.05, type: 'door',
+    id: index === 0 ? `stair_nw_${floor}` : `north_room_${floor}_${index}`,
+    kind: index === 0 ? 'fire' : 'room',
+    unlockFloor: index === 0 ? nextFloor : undefined,
+    permanentlyLocked: index === 3,
+    head: index === 0 ? 2.35 : 2.2,
+  }))
+  addWallRun(floor, 'x', -40, -40, -8, northDoors, { lower: 'corrBase', upper: 'corrWall' })
+
+  const southDoors = [-36, -28, -20, -12].map((center, index) => ({
+    center, width: index === 3 ? 1.25 : 1.05, type: 'door',
+    id: index === 3 ? `stair_se_${floor}` : `south_room_${floor}_${index}`,
+    kind: index === 3 ? 'fire' : 'room',
+    unlockFloor: index === 3 ? nextFloor : undefined,
+    permanentlyLocked: floor === 'F1' && index === 0,
+    head: index === 3 ? 2.35 : 2.2,
+  }))
+  addWallRun(floor, 'x', -16, -40, -8, southDoors, { lower: 'corrBase', upper: 'corrWall' })
+
+  addWallRun(floor, 'z', -40, -35.8, -20.2, [-32, -24].map((center, i) => ({ center, width: 1.05, type: 'door', id: `west_room_${floor}_${i}`, kind: 'room' })), { lower: 'corrBase', upper: 'corrWall' })
+  addWallRun(floor, 'z', -8, -35.8, -20.2, [-32, -24].map((center, i) => ({ center, width: 1.05, type: 'door', id: `east_room_${floor}_${i}`, kind: 'room' })), { lower: 'corrBase', upper: 'corrWall' })
+
+  // 방 베이 칸막이. 문과 복도 앞 1.5m 완충영역은 침범하지 않는다.
+  for (const x of [-32, -24, -16]) {
+    addFullWallSegment(floor, 'z', x, B.z0, -40, { lower: 'classBase', upper: 'classWall' })
+    addFullWallSegment(floor, 'z', x, -16, B.z1, { lower: 'classBase', upper: 'classWall' })
+  }
+  addFullWallSegment(floor, 'x', -28, B.x0, -40, { lower: 'classBase', upper: 'classWall' })
+  addFullWallSegment(floor, 'x', -28, -8, B.x1, { lower: 'classBase', upper: 'classWall' })
+
+  // 복도 유도선과 조명 리듬.
+  const corridorRuns = [
+    { axis: 'x', fixed: -37.9, start: -38, end: -10 },
+    { axis: 'x', fixed: -18.1, start: -38, end: -10 },
+    { axis: 'z', fixed: -37.9, start: -34, end: -22 },
+    { axis: 'z', fixed: -10.1, start: -34, end: -22 },
+  ]
+  for (const run of corridorRuns) {
+    const len = run.end - run.start
+    addBox({
+      floor,
+      p: run.axis === 'x' ? [(run.start + run.end) / 2, y + 0.025, run.fixed] : [run.fixed, y + 0.025, (run.start + run.end) / 2],
+      s: run.axis === 'x' ? [len, 0.025, 0.08] : [0.08, 0.025, len],
+      material: 'corrLine', role: 'floorMarking', collider: false,
+    })
+    const count = Math.max(2, Math.floor(len / 5.5))
+    for (let i = 0; i < count; i++) {
+      const t = run.start + (i + 0.5) * len / count
+      const p = run.axis === 'x' ? [t, y + 3.05, run.fixed] : [run.fixed, y + 3.05, t]
+      addBox({ floor, p, s: run.axis === 'x' ? [1.4, 0.08, 0.24] : [0.24, 0.08, 1.4], material: 'white', role: 'lightFixture', collider: false })
+      addBox({ floor, p: [p[0], p[1] - 0.05, p[2]], s: run.axis === 'x' ? [1.2, 0.025, 0.18] : [0.18, 0.025, 1.2], material: TONE.cool, role: 'emissive', collider: false })
+      boxes[boxes.length - 1].emissive = true
+      addFixture(floor, [p[0], y + 2.8, p[2]], 'cool')
+    }
+  }
+
+  // 외관 층선과 계단 코어 세로 프레임.
+  for (const side of ['north', 'south']) {
+    addBox({ floor, p: [-24, y + 0.15, side === 'north' ? B.z0 - 0.08 : B.z1 + 0.08], s: [48.3, 0.22, 0.12], material: 'extBand', role: 'facadeBand', collider: false })
+  }
+  for (const [x, z, sx, sz] of [[-36, B.z0 - 0.14, 8.2, 0.08], [-12, B.z1 + 0.14, 8.2, 0.08]]) {
+    addBox({ floor, p: [x, y + 1.6, z], s: [sx, 3.2, sz], material: 'extFrame', role: 'coreFrame', collider: false })
+  }
+}
+
+function addRailBarrier(floor, p, s, rot) {
+  addBox({ floor, p, s, rot, material: 'rail', role: 'rail', collider: true, visible: false })
+}
+
+function addVisualRail(floor, p, s, rot) {
+  addBox({ floor, p, s, rot, material: 'rail', role: 'railVisual', collider: false })
+}
+
+function addSwitchbackStair(floor, core, dir) {
+  const y = FY[floor]
+  const laneWidth = 2.65
+  const leftX = core.x0 + 1.65
+  const rightX = core.x1 - 1.65
+  const entryZ = dir < 0 ? core.z1 : core.z0
+  const tread = 0.45
+  const riser = 0.225
+  const steps = 8
+  const run = tread * steps
+  const rise = riser * steps
+  const farZ = entryZ + dir * (0.8 + run)
+  const angle = Math.atan2(rise, run)
+  const length = Math.hypot(run, rise)
+
+  for (let i = 0; i < steps; i++) {
+    const z1 = entryZ + dir * (0.8 + (i + 0.5) * tread)
+    const top1 = y + (i + 1) * riser
+    addBox({ floor, p: [leftX, top1 - 0.055, z1], s: [laneWidth, 0.11, tread + 0.02], material: 'stairTread', role: 'stairTread', collider: false })
+    addBox({ floor, p: [leftX, top1 - riser / 2, z1 - dir * tread / 2], s: [laneWidth, riser, 0.07], material: 'stairRiser', role: 'stairRiser', collider: false })
+
+    const z2 = farZ - dir * ((i + 0.5) * tread)
+    const top2 = y + rise + (i + 1) * riser
+    addBox({ floor, p: [rightX, top2 - 0.055, z2], s: [laneWidth, 0.11, tread + 0.02], material: 'stairTread', role: 'stairTread', collider: false })
+    addBox({ floor, p: [rightX, top2 - riser / 2, z2 + dir * tread / 2], s: [laneWidth, riser, 0.07], material: 'stairRiser', role: 'stairRiser', collider: false })
+  }
+
+  const center1 = entryZ + dir * (0.8 + run / 2)
+  const center2 = farZ - dir * run / 2
+  addBox({ floor, p: [leftX, y + rise / 2 - 0.08, center1], s: [laneWidth, 0.18, length + 0.08], rot: [-dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
+  addBox({ floor, p: [rightX, y + rise + rise / 2 - 0.08, center2], s: [laneWidth, 0.18, length + 0.08], rot: [dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
+
+  const farLandingZ = farZ + dir * 0.55
+  addBox({ floor, p: [(core.x0 + core.x1) / 2, y + rise - 0.09, farLandingZ], s: [core.x1 - core.x0 - 0.55, 0.18, 1.25], material: 'stairTread', role: 'landing' })
+  const upperLandingZ = entryZ + dir * 0.34
+  addBox({ floor, p: [rightX, y + FLOOR_HEIGHT - 0.09, upperLandingZ], s: [laneWidth, 0.18, 0.72], material: 'stairTread', role: 'landing' })
+
+  // 계단 중앙과 외곽의 연속 난간. 보이는 손스침과 충돌 장벽은 동일 축을 공유한다.
+  for (const [x, z, rot, yMid] of [
+    [leftX + laneWidth / 2, center1, [-dir * angle, 0, 0], y + rise / 2 + 0.58],
+    [rightX - laneWidth / 2, center2, [dir * angle, 0, 0], y + rise + rise / 2 + 0.58],
+  ]) {
+    addRailBarrier(floor, [x, yMid, z], [0.14, 1.02, length + 0.2], rot)
+    addVisualRail(floor, [x, yMid + 0.52, z], [0.08, 0.08, length + 0.26], rot)
+  }
+  for (let i = 0; i <= steps; i += 2) {
+    const z = entryZ + dir * (0.8 + i * tread)
+    addVisualRail(floor, [leftX + laneWidth / 2, y + i * riser + 0.5, z], [0.06, 1.0, 0.06])
+    const zBack = farZ - dir * (i * tread)
+    addVisualRail(floor, [rightX - laneWidth / 2, y + rise + i * riser + 0.5, zBack], [0.06, 1.0, 0.06])
+  }
+}
+
+function addWellRails(floor, well, openSide) {
+  const y = FY[floor]
+  const edges = [
+    ['x', well.z0, well.x0, well.x1, 'N'], ['x', well.z1, well.x0, well.x1, 'S'],
+    ['z', well.x0, well.z0, well.z1, 'W'], ['z', well.x1, well.z0, well.z1, 'E'],
+  ]
+  for (const [axis, fixed, start, end, side] of edges) {
+    if (side === openSide) continue
+    const p = axis === 'x' ? [(start + end) / 2, y + 0.58, fixed] : [fixed, y + 0.58, (start + end) / 2]
+    const s = axis === 'x' ? [end - start, 1.16, 0.12] : [0.12, 1.16, end - start]
+    addRailBarrier(floor, p, s)
+    const topP = [p[0], y + 1.12, p[2]]
+    addVisualRail(floor, topP, axis === 'x' ? [end - start, 0.08, 0.08] : [0.08, 0.08, end - start])
+    const count = Math.max(2, Math.floor((end - start) / 1.2))
+    for (let i = 0; i <= count; i++) {
+      const t = start + (end - start) * i / count
+      addVisualRail(floor, axis === 'x' ? [t, y + 0.56, fixed] : [fixed, y + 0.56, t], [0.055, 1.05, 0.055])
+    }
+  }
+}
+
+function addStairs() {
+  for (const floor of ['F1', 'F2', 'F3']) {
+    addSwitchbackStair(floor, { x0: -40, x1: -32, z0: -48, z1: -40 }, -1)
+    addSwitchbackStair(floor, { x0: -16, x1: -8, z0: -16, z1: -8 }, 1)
+  }
+  for (const floor of ['F2', 'F3', 'ROOF']) {
+    addWellRails(floor, NW_WELL, 'S')
+    addWellRails(floor, SE_WELL, 'N')
+  }
+}
+
+function addParapet(floor, axis, fixed, start, end, material = 'extConcrete') {
+  const y = FY[floor]
+  addBox({
+    floor,
+    p: axis === 'x' ? [(start + end) / 2, y + 0.65, fixed] : [fixed, y + 0.65, (start + end) / 2],
+    s: axis === 'x' ? [end - start, 1.3, 0.32] : [0.32, 1.3, end - start],
+    material,
+    role: 'parapet',
+  })
+  addBox({
+    floor,
+    p: axis === 'x' ? [(start + end) / 2, y + 1.34, fixed] : [fixed, y + 1.34, (start + end) / 2],
+    s: axis === 'x' ? [end - start + 0.15, 0.08, 0.46] : [0.46, 0.08, end - start + 0.15],
+    material: 'mullion', role: 'parapetCap', collider: false,
+  })
+}
+
+function addPenthouse(id, rect, doorSide, doorCenter, unlockFloor, locked = false) {
+  const floor = 'ROOF'
+  const y = FY.ROOF
+  const openings = [{ center: doorCenter, width: 1.25, type: 'door', id, kind: 'fire', unlockFloor, permanentlyLocked: locked, head: 2.35 }]
+  addWallRun(floor, 'x', rect.z0, rect.x0, rect.x1, doorSide === 'north' ? openings : [], { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
+  addWallRun(floor, 'x', rect.z1, rect.x0, rect.x1, doorSide === 'south' ? openings : [], { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
+  addFullWallSegment(floor, 'z', rect.x0, rect.z0, rect.z1, { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
+  addFullWallSegment(floor, 'z', rect.x1, rect.z0, rect.z1, { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
+  addBox({ floor, p: [(rect.x0 + rect.x1) / 2, y + 3.0, (rect.z0 + rect.z1) / 2], s: [rect.x1 - rect.x0 + 0.45, 0.22, rect.z1 - rect.z0 + 0.45], material: 'extSteelDark', role: 'roofCap' })
+  addBox({ floor, p: [doorCenter, y + 2.52, doorSide === 'south' ? rect.z1 + 0.08 : rect.z0 - 0.08], s: [0.72, 0.22, 0.08], material: unlockFloor ? 'safetyRed' : 'white', role: 'exitSign', collider: false })
+  boxes[boxes.length - 1].emissive = true
+}
+
+function addRoof() {
+  addRingSlab('ROOF')
+  const y = FY.ROOF
+  addParapet('ROOF', 'x', B.z0, B.x0, B.x1)
+  addParapet('ROOF', 'x', B.z1, B.x0, B.x1)
+  addParapet('ROOF', 'z', B.x0, B.z0, B.z1)
+  addParapet('ROOF', 'z', B.x1, B.z0, B.z1)
+  addParapet('ROOF', 'x', C.z0, C.x0, C.x1)
+  addParapet('ROOF', 'x', C.z1, C.x0, C.x1)
+  addParapet('ROOF', 'z', C.x0, C.z0, C.z1)
+  addParapet('ROOF', 'z', C.x1, C.z0, C.z1)
+
+  addPenthouse('roof_to_f3', { x0: -40.35, x1: -31.65, z0: -48.15, z1: -39.62 }, 'south', -36, 'F3')
+  addPenthouse('roof_se_locked', { x0: -16.35, x1: -7.65, z0: -16.38, z1: -7.85 }, 'north', -12, undefined, true)
+
+  // 북측 물탱크 군 — 설비 사이 1.4m 이상의 통로를 유지한다.
+  for (const x of [-28, -22]) {
+    addCylinder({ floor: 'ROOF', p: [x, y + 1.35, -44], r: 1.45, h: 2.7, material: 'extBand', role: 'waterTank' })
+    addBox({ floor: 'ROOF', p: [x, y + 1.35, -44], s: [2.9, 2.7, 2.9], material: 'extBand', role: 'equipmentCollider', collider: true, visible: false })
+    for (const dx of [-1.1, 1.1]) for (const dz of [-1.1, 1.1]) {
+      addCylinder({ floor: 'ROOF', p: [x + dx, y + 0.48, -44 + dz], r: 0.08, h: 0.96, material: 'extSteel', role: 'tankLeg' })
+    }
+  }
+
+  // 서측 HVAC와 동측 안테나는 세 미션 지점을 시각적으로 구분한다.
+  for (let i = 0; i < 4; i++) {
+    const z = -33 + i * 3.2
+    addBox({ floor: 'ROOF', p: [-43.2, y + 0.65, z], s: [2.2, 1.3, 1.9], material: 'extSteel', role: 'hvac' })
+    addBox({ floor: 'ROOF', p: [-43.2, y + 0.72, z - 0.98], s: [1.5, 0.78, 0.08], material: 'extSteelDark', role: 'hvacGrille', collider: false })
+  }
+  addCylinder({ floor: 'ROOF', p: [-4.8, y + 3.5, -28], r: 0.11, h: 7, material: 'steel', role: 'antennaMast', collider: true })
+  for (let i = 0; i < 4; i++) addCylinder({ floor: 'ROOF', p: [-4.8, y + 2.2 + i * 0.7, -28], r: 0.42, h: 0.045, material: 'rail', role: 'antennaRing', rot: [Math.PI / 2, 0, 0] })
+  addBox({ floor: 'ROOF', p: [-4.8, y + 7.08, -28], s: [0.18, 0.18, 0.18], material: 'safetyRed', role: 'warningLight', collider: false })
+  boxes[boxes.length - 1].emissive = true
+
+  // 삼점 신호 미션의 물리적 장치. 현재는 골조/랜드마크이며 로직은 다음 패스에서 연결한다.
+  const consoles = [
+    { id: 'roof_signal_west', p: [-42.5, -27.8], color: 'safetyGreen' },
+    { id: 'roof_signal_center', p: [-24, -39.1], color: 'safetyYellow' },
+    { id: 'roof_signal_east', p: [-5.5, -27.8], color: 'signBlue' },
+  ]
+  for (const console of consoles) {
+    addBox({ id: console.id, floor: 'ROOF', p: [console.p[0], y + 0.72, console.p[1]], s: [1.25, 1.44, 0.72], material: 'extFrame', role: 'missionConsole' })
+    addBox({ floor: 'ROOF', p: [console.p[0], y + 1.18, console.p[1] - 0.38], s: [0.72, 0.38, 0.05], material: console.color, role: 'emissive', collider: false })
+    boxes[boxes.length - 1].emissive = true
+    addFixture('ROOF', [console.p[0], y + 1.4, console.p[1]], 'amber')
+  }
+
+  // 방수 시트 이음매와 안전 구획선.
+  for (let x = -45.6; x <= -2.4; x += 2.4) {
+    const segments = x > C.x0 && x < C.x1
+      ? [[B.z0 + 0.5, C.z0 - 0.4], [C.z1 + 0.4, B.z1 - 0.5]]
+      : [[B.z0 + 0.5, B.z1 - 0.5]]
+    for (const [z0, z1] of segments) addBox({ floor: 'ROOF', p: [x, y + 0.018, (z0 + z1) / 2], s: [0.045, 0.018, z1 - z0], material: 'roofJoint', role: 'roofJoint', collider: false })
+  }
+  for (const z of [-37.2, -18.8]) addBox({ floor: 'ROOF', p: [-24, y + 0.035, z], s: [18, 0.02, 0.1], material: 'safetyYellow', role: 'safetyMarking', collider: false })
+}
+
+function addBasementShell() {
+  const floor = 'B1', y = FY.B1
+  addBox({ floor, p: [-24, y - 0.15, -44], s: [32, 0.3, 8], material: 'machFloor', role: 'slab' })
+  addFullWallSegment(floor, 'x', -48, -40, -8, { lower: 'machBase', upper: 'machWall' })
+  addFullWallSegment(floor, 'x', -40, -40, -8, { lower: 'machBase', upper: 'machWall' })
+  addFullWallSegment(floor, 'z', -40, -48, -40, { lower: 'machBase', upper: 'machWall' })
+  addFullWallSegment(floor, 'z', -8, -48, -40, { lower: 'machBase', upper: 'machWall' })
+  for (const x of [-32, -24, -16]) addFullWallSegment(floor, 'z', x, -48, -40, { lower: 'machBase', upper: 'machWall' })
+  for (let i = 0; i < 6; i++) {
+    const x = -38 + i * 5.6
+    addBox({ floor, p: [x, y + 2.9, -44], s: [1.1, 0.1, 0.25], material: TONE.dim, role: 'emissive', collider: false })
+    boxes[boxes.length - 1].emissive = true
+    addFixture(floor, [x, y + 2.7, -44], 'dim')
+  }
+}
+
+function addGrounds() {
+  addBox({ floor: 'OUT', p: [-24, -0.22, -20], s: [72, 0.44, 80], material: 'asphalt', role: 'ground' })
+  addBox({ floor: 'OUT', p: [-24, -0.08, -28], s: [C.x1 - C.x0, 0.16, C.z1 - C.z0], material: 'courtyardTile', role: 'courtyardGround' })
+  addBox({ floor: 'OUT', p: [-24, -0.05, 12], s: [48, 0.1, 32], material: 'grass', role: 'fieldGround' })
+  // 남측 현관 캐노피와 학교 이름 띠.
+  addBox({ floor: 'OUT', p: [-24, 2.75, B.z1 + 1.4], s: [8.4, 0.24, 3.1], material: 'extConcrete', role: 'entryCanopy' })
+  for (const x of [-27.2, -20.8]) addBox({ floor: 'OUT', p: [x, 1.35, B.z1 + 2.5], s: [0.24, 2.7, 0.24], material: 'extFrame', role: 'entryPost' })
+  addBox({ floor: 'OUT', p: [-24, 8.8, B.z1 + 0.14], s: [9.8, 0.82, 0.12], material: 'signBlue', role: 'schoolSign', collider: false })
+}
+
+function addNavigation() {
+  const floors = ['F1', 'F2', 'F3', 'ROOF']
+  for (const floor of floors) {
+    const y = FY[floor]
+    const ring = [
+      [-38, -38], [-24, -38], [-10, -38], [-10, -28],
+      [-10, -18], [-24, -18], [-38, -18], [-38, -28],
+    ]
+    ring.forEach(([x, z], index) => navNodes.push({ id: `${floor}_ring_${index}`, floor, p: [x, y, z], links: [`${floor}_ring_${(index + 7) % 8}`, `${floor}_ring_${(index + 1) % 8}`] }))
+  }
+}
+
+addGrounds()
+for (const floor of ['F1', 'F2', 'F3']) addFloorShell(floor)
+addStairs()
+addRoof()
+addBasementShell()
+addNavigation()
+
+export const COMPACT_SCHOOL = Object.freeze({
+  boxes,
+  cylinders,
+  doors,
+  fixtures,
+  rooms,
+  navNodes,
+  bounds: BUILDING_BOUNDS,
+  courtyard: COURTYARD_BOUNDS,
+  floorY: FLOOR_Y,
+})
+
+export function buildCompactSchool() {
+  return COMPACT_SCHOOL
+}

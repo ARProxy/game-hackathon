@@ -38,6 +38,15 @@ WALL_RECTS_BY_FLOOR: dict[str, tuple[tuple[float, float, float, float], ...]] = 
 }
 # 기존 순수 함수·테스트 호환용 F1 벽 집합.
 WALL_RECTS = WALL_RECTS_BY_FLOOR.get("F1", ())
+NAVIGATION_NODES_BY_FLOOR: dict[str, tuple[dict, ...]] = {
+    floor: tuple(
+        node for node in COLLISION_CONTRACT.get("navigationNodes", ())
+        if node["floor"] == floor
+    )
+    for floor in {
+        node["floor"] for node in COLLISION_CONTRACT.get("navigationNodes", ())
+    }
+}
 
 
 @dataclass(frozen=True)

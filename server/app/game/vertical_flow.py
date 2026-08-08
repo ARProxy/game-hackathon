@@ -6,6 +6,7 @@ import math
 from typing import Any
 
 from app.game.map_slots import get_map_slot
+from app.ai.vertical_missions import ROOFTOP_SIGNAL_SLOT_BY_ID
 from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole, PlayerStatus
 
@@ -20,10 +21,15 @@ BROADCAST_ACTION_CUES = ("열", "개방", "통과")
 MISSION_SLOT_BY_PHASE = {
     VerticalRoundPhase.ROOFTOP_INTRO: "ROOF_INTRO_MISSION",
     VerticalRoundPhase.FLOOR_3: "F3_MISSION_ROOM_POOL",
-    VerticalRoundPhase.FLOOR_2: "F2_MISSION_ROOM_POOL",
-    VerticalRoundPhase.FLOOR_1: "F1_MISSION_ROOM_POOL",
+    VerticalRoundPhase.FLOOR_2: "F2_INTERCOM_B",
+    VerticalRoundPhase.FLOOR_1: "F1_DEVICE_A",
     VerticalRoundPhase.FIELD_FINAL: "FIELD_FINAL_STATION_B",
     VerticalRoundPhase.BASEMENT_FINAL: "BASEMENT_FINAL_DEVICE_POOL",
+}
+VERTICAL_CLUE_BY_PHASE = {
+    VerticalRoundPhase.FLOOR_3: {"word": "달빛", "order": 1, "total": 3},
+    VerticalRoundPhase.FLOOR_2: {"word": "교정", "order": 2, "total": 3},
+    VerticalRoundPhase.FLOOR_1: {"word": "탈출", "order": 3, "total": 3},
 }
 
 TRANSITION_SLOTS_BY_PHASE = {
@@ -40,6 +46,9 @@ TRANSITION_SLOTS_BY_PHASE = {
     },
     VerticalRoundPhase.FIELD_FINAL: {
         "field": ("F1_TO_FIELD_FIRE_DOOR", "FIELD_FINAL_ENTRY"),
+    },
+    VerticalRoundPhase.BASEMENT_FINAL: {
+        "basement": ("F1_TO_BASEMENT_FIRE_DOOR", "BASEMENT_FINAL_ENTRY"),
     },
 }
 FINAL_STATION_SLOT_BY_ACTOR = {
@@ -66,6 +75,19 @@ def mission_interaction_position(phase: VerticalRoundPhase) -> tuple[float, floa
 def final_station_position(actor_id: str) -> tuple[float, float, float]:
     slot_id = FINAL_STATION_SLOT_BY_ACTOR.get(actor_id, "FIELD_FINAL_STATION_B")
     return tuple(float(value) for value in get_map_slot(slot_id)["position"])
+
+
+def final_escape_slot(session: Any) -> dict:
+    slot_id = (
+        "BASEMENT_ESCAPE_GATE"
+        if session.vertical_round.final_route == FinalRoute.BASEMENT
+        else "FIELD_ESCAPE_GATE"
+    )
+    return get_map_slot(slot_id)
+
+
+def final_escape_position(session: Any) -> tuple[float, float, float]:
+    return tuple(float(value) for value in final_escape_slot(session)["position"])
 
 
 def activate_final_station(session: Any, actor_id: str) -> dict:
@@ -121,10 +143,56 @@ def validate_current_stage_interaction(session: Any, actor_id: str) -> None:
         raise InvalidProgression("미션 장치와 거리가 너무 멀다")
 
 
-def complete_current_stage(session: Any, actor_id: str) -> dict:
-    validate_current_stage_interaction(session, actor_id)
+def activate_rooftop_signal(session: Any, actor_id: str, signal_id: str) -> dict:
+    """서버 권위 좌표와 순서로 옥상 신호 콘솔 한 곳을 동기화한다."""
+    if not session.vertical_progression_enabled:
+        raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")
+    if session.vertical_round.phase != VerticalRoundPhase.ROOFTOP_INTRO:
+        raise InvalidProgression("옥상 신호 동기화 단계가 아니다")
+    actor = session.state.get_player(actor_id)
+    if (
+        actor is None
+        or actor.role not in {PlayerRole.HUMAN, PlayerRole.AI_PARTNER}
+        or actor.status != PlayerStatus.ALIVE
+        or actor.position.floor != WorldFloor.ROOF
+    ):
+        raise InvalidProgression("옥상의 살아 있는 도망자만 신호를 동기화할 수 있다")
+    if session.vertical_missions is None:
+        raise InvalidProgression("옥상 신호 미션이 초기화되지 않았다")
+    try:
+        slot = get_map_slot(ROOFTOP_SIGNAL_SLOT_BY_ID[signal_id])
+    except KeyError as error:
+        raise InvalidProgression("존재하지 않는 옥상 신호 장치다") from error
+    sx, _, sz = slot.get("interactionPosition", slot["position"])
+    if math.hypot(actor.position.x - sx, actor.position.z - sz) > MISSION_INTERACTION_RADIUS:
+        raise InvalidProgression("옥상 신호 장치와 거리가 너무 멀다")
+    result = session.vertical_missions.rooftop.activate(signal_id)
+    if not result.get("success"):
+        if result.get("reason") == "already_active":
+            raise InvalidProgression("이미 동기화한 옥상 신호 장치다")
+        raise InvalidProgression("점등된 안내 신호의 순서대로 조작해야 한다")
+    return result
 
+
+def complete_current_stage(session: Any, actor_id: str) -> dict:
+    if not session.vertical_progression_enabled:
+        raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")
     phase = session.vertical_round.phase
+
+    if phase == VerticalRoundPhase.ROOFTOP_INTRO:
+        actor = session.state.get_player(actor_id)
+        if (
+            actor is None
+            or actor.role not in {PlayerRole.HUMAN, PlayerRole.AI_PARTNER}
+            or actor.status != PlayerStatus.ALIVE
+        ):
+            raise InvalidProgression("살아 있는 도망자만 층 미션을 완료할 수 있다")
+        if actor.position.floor != WorldFloor.ROOF:
+            raise InvalidProgression("현재 활성 층의 actor만 미션을 완료할 수 있다")
+        if session.vertical_missions is None or not session.vertical_missions.rooftop.completed:
+            raise InvalidProgression("옥상 신호 세 곳을 순서대로 동기화해야 한다")
+    else:
+        validate_current_stage_interaction(session, actor_id)
 
     # 2층: 인터폰 미션 완료 여부 검사
     if phase == VerticalRoundPhase.FLOOR_2 and session.vertical_missions is not None:
@@ -143,11 +211,13 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
     session.vertical_round.mark_mission_complete()
     next_phase = session.vertical_round.advance()
     if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
-        next_phase = session.vertical_round.advance(final_route=FinalRoute.FIELD)
+        route = getattr(session, "final_route_choice", FinalRoute.FIELD)
+        next_phase = session.vertical_round.advance(final_route=route)
     return {
         "completed_phase": phase.value,
         "next_phase": next_phase.value,
         "progression": session.vertical_round.to_dict(),
+        "clue": VERTICAL_CLUE_BY_PHASE.get(phase),
     }
 
 
@@ -166,6 +236,7 @@ def start_intercom_mission(session: Any) -> dict:
     human_slot = get_map_slot(intercom.human_position_slot)
     return {
         "mission": "floor_2_intercom",
+        "prompt": "AI 동료가 다른 교실의 기호를 읽으면, 들은 색과 도형을 순서대로 말하세요.",
         "ai_position": ai_slot["position"],
         "human_position": human_slot["position"],
         "ai_companion_id": intercom.ai_companion_id,
@@ -182,6 +253,10 @@ def submit_intercom_answer(session: Any, actor_id: str, transcript: str) -> dict
     intercom = vm.intercom
     if intercom.completed:
         raise InvalidProgression("인터폰 미션은 이미 완료되었다")
+    if intercom.started_at is None:
+        raise InvalidProgression("인터폰 장치를 먼저 활성화해야 한다")
+    if not intercom.ai_arrived:
+        raise InvalidProgression("AI 동료의 기호 보고를 먼저 들어야 한다")
 
     actor = session.state.get_player(actor_id)
     if actor is None or actor.status != PlayerStatus.ALIVE:
@@ -285,6 +360,18 @@ def activate_basement_device(session: Any, actor_id: str, device_id: str) -> dic
         raise InvalidProgression("수직 미션이 초기화되지 않았다")
 
     bm = session.vertical_missions.basement
+    device = next(
+        (candidate for candidate in bm.devices if candidate.device_id == device_id),
+        None,
+    )
+    if device is None:
+        raise InvalidProgression("존재하지 않는 지하 장치다")
+    slot = get_map_slot(device.slot_id)
+    sx, _, sz = slot["position"]
+    if actor.position.floor != WorldFloor.B1:
+        raise InvalidProgression("지하 1층 장치 앞에 도착해야 한다")
+    if math.hypot(actor.position.x - sx, actor.position.z - sz) > MISSION_INTERACTION_RADIUS:
+        raise InvalidProgression("지하 장치와 거리가 너무 멀다")
     result = bm.activate_device(device_id, actor_id)
     return {"actor_id": actor_id, "device_id": device_id, **result}
 

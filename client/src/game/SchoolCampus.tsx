@@ -14,14 +14,14 @@ import { ACTOR_SPAWNS } from './spawnContract'
 
 export { GATE_SLOTS } from './gateContract'
 
-export type FloorKey = 'OUT' | 'F1' | 'F2' | 'F3' | 'ROOF'
+export type FloorKey = 'OUT' | 'B1' | 'F1' | 'F2' | 'F3' | 'ROOF'
 type V2 = [number, number]
 
 export const MAP_SIZE = 80
 export const FLOOR_HEIGHT = 3.6
 export const ROOF_Y = 10.8
 /** 층 → 바닥 Y */
-export const FLOOR_Y: Record<FloorKey, number> = { OUT: 0, F1: 0, F2: 3.6, F3: 7.2, ROOF: 10.8 }
+export const FLOOR_Y: Record<FloorKey, number> = { OUT: 0, B1: -3.6, F1: 0, F2: 3.6, F3: 7.2, ROOF: 10.8 }
 
 export type TrapKind = 'gap' | 'shortcut' | 'deadend' | 'vertical'
 

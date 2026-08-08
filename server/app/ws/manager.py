@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 
 from fastapi import WebSocket, WebSocketException, status
 
+from app.ai.dynamic_forbidden import analyze_dynamic_forbidden_words
 from app.ai.mission import generate_round, round_to_dict
-from app.ai.onboarding import generate_forbidden_words, generate_onboarding_questions
 from app.ai.partner import compare_partner_candidates
 from app.ai.companion import (
     CONTRACT as COMPANION_CONTRACT,
@@ -55,11 +55,13 @@ from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPh
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import (
     BROADCAST_MISSION_PROMPT,
+    activate_rooftop_signal,
     activate_basement_device,
     activate_final_station,
     activate_simultaneous_device,
     complete_current_stage,
     evaluate_broadcast_phrase,
+    final_escape_slot,
     start_intercom_mission,
     submit_intercom_answer,
     use_open_floor_transition,
@@ -83,6 +85,7 @@ class ConnectionManager:
         self._freeze_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
         self._hunter_tasks: dict[str, asyncio.Task[None]] = {}
         self._companion_tasks: dict[str, asyncio.Task[None]] = {}
+        self._forbidden_tasks: dict[str, asyncio.Task[None]] = {}
 
     async def connect(
         self, room_id: str, player_id: str, websocket: WebSocket
@@ -132,6 +135,9 @@ class ConnectionManager:
                 companion_task = self._companion_tasks.pop(room_id, None)
                 if companion_task:
                     companion_task.cancel()
+                forbidden_task = self._forbidden_tasks.pop(room_id, None)
+                if forbidden_task:
+                    forbidden_task.cancel()
                 del self.rooms[room_id]
                 session_manager.remove(room_id)
         logger.info("disconnected: room=%s player=%s", room_id, player_id)
@@ -146,12 +152,12 @@ class ConnectionManager:
             await self._handle_speech(room_id, player_id, payload)
         elif msg_type == "action":
             await self._handle_action(room_id, player_id, payload)
-        elif msg_type == "onboarding_complete":
-            await self._handle_onboarding(room_id, player_id, payload)
-        elif msg_type == "request_onboarding_questions":
-            questions = await asyncio.to_thread(generate_onboarding_questions, 3)
+        elif msg_type in {"onboarding_complete", "request_onboarding_questions"}:
+            # v5에서는 사전 질문과 금기어 공개 프로토콜을 폐기했다.
             await self.send_to(room_id, player_id, {
-                "type": "onboarding_questions", "questions": questions,
+                "type": "action_rejected",
+                "action_type": msg_type,
+                "reason": "hidden_dynamic_profile_required",
             })
         elif msg_type == "spell":
             await self._handle_spell(room_id, player_id, payload)
@@ -218,8 +224,22 @@ class ConnectionManager:
                 "position": signal_position,
             })
 
-        # 금기어 판정
-        result = session.engine.check(transcript)
+        # 동적 금기어는 인간의 확정 발화만 판정한다. 현재 발화를 먼저
+        # 판정한 뒤 관찰 목록에 넣어 새 세대가 소급 적용되지 않게 한다.
+        should_check = (
+            not session.dynamic_forbidden_enabled
+            or bool(
+                is_final and transcript.strip() and player
+                and player.role == PlayerRole.HUMAN
+            )
+        )
+        result = session.engine.check(transcript if should_check else "")
+        if (
+            session.dynamic_forbidden_enabled
+            and is_final and transcript.strip() and player
+            and player.role == PlayerRole.HUMAN
+        ):
+            self._record_dynamic_forbidden_utterance(room_id, session, transcript)
 
         if result.is_forbidden and player and player.role == PlayerRole.HUMAN:
             rage_policy = session.vertical_round.record_human_forbidden_word_violation()
@@ -228,20 +248,24 @@ class ConnectionManager:
                 session, player_id,
                 {"x": player.position.x, "z": player.position.z}, "freeze",
             )
-            await self.broadcast(room_id, {
+            freeze_event = {
                 "type": "freeze",
                 "player_id": player_id,
-                "matched_word": result.matched_word,
-                "matched_stage": result.matched_stage,
-                "confidence": result.confidence,
-                "elapsed_ms": result.elapsed_ms,
                 "position": {
                     "x": player.position.x,
                     "z": player.position.z,
                 },
                 "forbidden_word_violations": session.vertical_round.forbidden_word_violations,
                 "fw_rage_tier": rage_policy.tier.value,
-            })
+            }
+            if not session.dynamic_forbidden_enabled:
+                freeze_event.update({
+                    "matched_word": result.matched_word,
+                    "matched_stage": result.matched_stage,
+                    "confidence": result.confidence,
+                    "elapsed_ms": result.elapsed_ms,
+                })
+            await self.broadcast(room_id, freeze_event)
             self._schedule_freeze_timeout(room_id, player_id)
             logger.info(
                 "FREEZE: room=%s player=%s word=%s",
@@ -255,6 +279,7 @@ class ConnectionManager:
                 await self.broadcast(room_id, {
                     "type": "game_over",
                     "reason": "all_frozen",
+                    **session.result_payload(),
                 })
         else:
             # 안전한 발화 — 전사 텍스트를 브로드캐스트 (자막 표시용)
@@ -280,21 +305,32 @@ class ConnectionManager:
                     return
                 session.broadcast_mission_actor_id = None
                 event = complete_current_stage(session, player_id)
-                await self.broadcast(room_id, {
-                    "type": "vertical_stage_advanced", "actor_id": player_id, **event,
-                })
-                seeker = session.state.get_player("seeker")
-                slot = get_map_slot("F2_TO_F1_STAIR_EAST")
-                if seeker:
-                    x, y, z = slot["position"]
-                    seeker.position.x, seeker.position.y, seeker.position.z = x, y, z
-                    seeker.position.floor = WorldFloor(slot["floor"])
-                    seeker.position.zone = slot["zone"]
-                    await self.broadcast(room_id, {
-                        "type": "actor_floor_changed", "actor_id": seeker.player_id,
-                        "route": "seeker_descend",
-                        "position": {"x": x, "y": y, "z": z, "floor": slot["floor"], "zone": slot["zone"]},
+                await self._publish_vertical_stage_advance(
+                    room_id, player_id, event,
+                )
+                return
+            if (
+                is_final and transcript.strip()
+                and session.intercom_mission_actor_id == player_id
+                and session.vertical_round.phase == VerticalRoundPhase.FLOOR_2
+            ):
+                try:
+                    result = submit_intercom_answer(session, player_id, transcript)
+                except InvalidProgression as error:
+                    await self.send_to(room_id, player_id, {
+                        "type": "action_rejected",
+                        "action_type": "intercom_submit",
+                        "reason": str(error),
                     })
+                    return
+                await self.broadcast(room_id, {"type": "intercom_result", **result})
+                if not result.get("success"):
+                    return
+                session.intercom_mission_actor_id = None
+                event = complete_current_stage(session, player_id)
+                await self._publish_vertical_stage_advance(
+                    room_id, player_id, event,
+                )
                 return
             mission = session.current_mission()
             if mission and is_final and transcript.strip():
@@ -355,6 +391,100 @@ class ConnectionManager:
                         "utterance": transcript,
                     })
 
+    async def _publish_vertical_stage_advance(
+        self,
+        room_id: str,
+        actor_id: str,
+        event: dict,
+    ) -> None:
+        """단계 완료 방송과 술래 층 전환을 모든 미션에 동일하게 적용한다."""
+        session = session_manager.get_or_create(room_id)
+        await self.broadcast(room_id, {
+            "type": "vertical_stage_advanced",
+            "actor_id": actor_id,
+            **event,
+        })
+        if event["next_phase"] in {"field_final", "basement_final"}:
+            await self._lock_dynamic_forbidden(room_id, session)
+
+        if event["completed_phase"] == VerticalRoundPhase.ROOFTOP_INTRO.value:
+            seeker = session.state.get_player("seeker")
+            slot = seeker_reveal_slot()
+            if seeker:
+                await self._move_actor_to_slot(
+                    room_id, seeker, slot, route="seeker_reveal",
+                )
+            return
+
+        if event["next_phase"] not in {
+            "floor_2", "floor_1", "field_final", "basement_final",
+        }:
+            return
+        seeker = session.state.get_player("seeker")
+        slot_id = {
+            "floor_2": "F2_TO_F1_STAIR_EAST",
+            "floor_1": "F1_STAIR_ARRIVAL_EAST",
+            "field_final": "FIELD_FINAL_ENTRY",
+            "basement_final": "BASEMENT_FINAL_ENTRY",
+        }[event["next_phase"]]
+        if seeker:
+            await self._move_actor_to_slot(
+                room_id, seeker, get_map_slot(slot_id), route="seeker_descend",
+            )
+        secondary = session.state.get_player("seeker-2")
+        if event["next_phase"] == "floor_1":
+            if secondary:
+                await self._move_actor_to_slot(
+                    room_id,
+                    secondary,
+                    secondary_seeker_slot(),
+                    route="seeker_pincer_reveal",
+                )
+        elif event["next_phase"] in {"field_final", "basement_final"}:
+            blocker_slot_id = (
+                "FIELD_ESCAPE_GATE"
+                if event["next_phase"] == "field_final"
+                else "BASEMENT_ESCAPE_GATE"
+            )
+            if secondary:
+                authored_slot = get_map_slot(blocker_slot_id)
+                blocker_slot = {
+                    **authored_slot,
+                    "position": [
+                        authored_slot["position"][0],
+                        authored_slot["position"][1],
+                        authored_slot["position"][2] - 3.0,
+                    ],
+                }
+                await self._move_actor_to_slot(
+                    room_id,
+                    secondary,
+                    blocker_slot,
+                    route="seeker_final_blockade",
+                )
+
+    async def _move_actor_to_slot(
+        self,
+        room_id: str,
+        actor: Player,
+        slot: dict,
+        *,
+        route: str,
+    ) -> None:
+        x, y, z = slot["position"]
+        actor.position.x, actor.position.y, actor.position.z = x, y, z
+        actor.position.floor = WorldFloor(slot["floor"])
+        actor.position.zone = slot["zone"]
+        await self.broadcast(room_id, {
+            "type": "actor_floor_changed",
+            "actor_id": actor.player_id,
+            "route": route,
+            "position": {
+                "x": x, "y": y, "z": z,
+                "floor": slot["floor"], "zone": slot["zone"],
+            },
+        })
+
     async def _handle_action(
         self, room_id: str, player_id: str, payload: dict
     ) -> None:
@@ -407,7 +537,28 @@ class ConnectionManager:
             })
 
         elif action_type == "interact_stage_mission":
+            if session.vertical_round.phase == VerticalRoundPhase.ROOFTOP_INTRO:
+                try:
+                    signal = activate_rooftop_signal(
+                        session, player_id, str(payload.get("signal_id", "")),
+                    )
+                except InvalidProgression as error:
+                    await self.send_to(room_id, player_id, {
+                        "type": "action_rejected", "action_type": action_type,
+                        "reason": str(error),
+                    })
+                    return
+                await self.broadcast(room_id, {
+                    "type": "rooftop_signal_progress",
+                    "actor_id": player_id,
+                    **signal,
+                })
+                if signal["completed"]:
+                    event = complete_current_stage(session, player_id)
+                    await self._publish_vertical_stage_advance(room_id, player_id, event)
+                return
             if session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL:
+                await self._lock_dynamic_forbidden(room_id, session)
                 try:
                     station = activate_final_station(session, player_id)
                 except InvalidProgression as error:
@@ -421,7 +572,8 @@ class ConnectionManager:
                     session.spell_words = ["달빛", "교정", "탈출"]
                     session.state.phase = GamePhase.FINAL_SPELL
                     await self.broadcast(room_id, {
-                        "type": "vertical_final_ready", "spell_words": session.spell_words,
+                        "type": "vertical_final_ready",
+                        "required_clues": len(session.spell_words),
                         "progression": session.vertical_round.to_dict(),
                     })
                 return
@@ -451,10 +603,18 @@ class ConnectionManager:
                         "reason": str(error),
                     })
                     return
+                session.intercom_mission_actor_id = player_id
                 await self.send_to(room_id, player_id, {
                     "type": "vertical_mission_started",
                     **mission_info,
                 })
+                return
+            if session.vertical_round.phase == VerticalRoundPhase.FLOOR_1:
+                await self._handle_action(
+                    room_id,
+                    player_id,
+                    {"action_type": "activate_device", "device": "A"},
+                )
                 return
             try:
                 event = complete_current_stage(session, player_id)
@@ -465,63 +625,7 @@ class ConnectionManager:
                     "reason": str(error),
                 })
                 return
-            await self.broadcast(room_id, {
-                "type": "vertical_stage_advanced",
-                "actor_id": player_id,
-                **event,
-            })
-            if event["completed_phase"] == "rooftop_intro":
-                seeker = session.state.get_player("seeker")
-                slot = seeker_reveal_slot()
-                if seeker:
-                    x, y, z = slot["position"]
-                    seeker.position.x, seeker.position.y, seeker.position.z = x, y, z
-                    seeker.position.floor = WorldFloor(slot["floor"])
-                    seeker.position.zone = slot["zone"]
-                    await self.broadcast(room_id, {
-                        "type": "actor_floor_changed",
-                        "actor_id": seeker.player_id,
-                        "route": "seeker_reveal",
-                        "position": {
-                            "x": x, "y": y, "z": z,
-                            "floor": slot["floor"], "zone": slot["zone"],
-                        },
-                    })
-            elif event["next_phase"] in {"floor_2", "floor_1", "field_final"}:
-                seeker = session.state.get_player("seeker")
-                slot_id = {
-                    "floor_2": "F2_TO_F1_STAIR_EAST",
-                    "floor_1": "F1_STAIR_ARRIVAL_EAST",
-                    "field_final": "FIELD_FINAL_ENTRY",
-                }[event["next_phase"]]
-                slot = get_map_slot(slot_id)
-                if seeker:
-                    x, y, z = slot["position"]
-                    seeker.position.x, seeker.position.y, seeker.position.z = x, y, z
-                    seeker.position.floor = WorldFloor(slot["floor"])
-                    seeker.position.zone = slot["zone"]
-                    await self.broadcast(room_id, {
-                        "type": "actor_floor_changed",
-                        "actor_id": seeker.player_id,
-                        "route": "seeker_descend",
-                        "position": {
-                            "x": x, "y": y, "z": z,
-                            "floor": slot["floor"], "zone": slot["zone"],
-                        },
-                    })
-                if event["next_phase"] == "floor_1":
-                    secondary = session.state.get_player("seeker-2")
-                    secondary_slot = secondary_seeker_slot()
-                    if secondary:
-                        sx, sy, sz = secondary_slot["position"]
-                        secondary.position.x, secondary.position.y, secondary.position.z = sx, sy, sz
-                        secondary.position.floor = WorldFloor(secondary_slot["floor"])
-                        secondary.position.zone = secondary_slot["zone"]
-                        await self.broadcast(room_id, {
-                            "type": "actor_floor_changed", "actor_id": secondary.player_id,
-                            "route": "seeker_pincer_reveal",
-                            "position": {"x": sx, "y": sy, "z": sz, "floor": secondary_slot["floor"], "zone": secondary_slot["zone"]},
-                        })
+            await self._publish_vertical_stage_advance(room_id, player_id, event)
 
         elif action_type == "use_floor_transition":
             try:
@@ -549,13 +653,13 @@ class ConnectionManager:
                         }
 
         elif action_type == "vertical_escape":
-            exit_slot = get_map_slot("FIELD_FINAL_ENTRY")
+            exit_slot = final_escape_slot(session)
             exit_x, _, exit_z = exit_slot["position"]
             if (
                 session.vertical_round.phase != VerticalRoundPhase.ESCAPE_OPEN
                 or session.state.phase != GamePhase.ESCAPE
                 or not player or player.status != PlayerStatus.ALIVE
-                or player.position.floor != WorldFloor.FIELD
+                or player.position.floor != WorldFloor(exit_slot["floor"])
                 or math.hypot(player.position.x - exit_x, player.position.z - exit_z) > 2.25
             ):
                 await self.send_to(room_id, player_id, {
@@ -563,17 +667,29 @@ class ConnectionManager:
                     "reason": "escape_not_available",
                 })
                 return
+            for seeker_id in ("seeker", "seeker-2"):
+                seeker = session.state.get_player(seeker_id)
+                if (
+                    seeker
+                    and seeker.status == PlayerStatus.ALIVE
+                    and seeker.shares_floor_with(player)
+                    and self._players_within(seeker, player, 1.5)
+                    and has_clear_catch_line(
+                        (seeker.position.x, seeker.position.z),
+                        (player.position.x, player.position.z),
+                        seeker.position.floor.value,
+                    )
+                ):
+                    await self._finish_seeker_catch(room_id, player_id, player)
+                    return
             player.escape()
             session.escaped_player_ids.add(player_id)
-            session.vertical_round.finish(VerticalRoundPhase.VICTORY)
-            session.state.phase = GamePhase.RESULT
-            self._cancel_room_freeze_timeouts(room_id)
             await self.broadcast(room_id, {
-                "type": "game_won", "player_id": player_id,
-                "reason": "vertical_school_escape",
-                "progression": session.vertical_round.to_dict(),
-                **session.result_payload(),  # A7
+                "type": "runner_escaped",
+                "player_id": player_id,
+                "gate_id": f"{session.vertical_round.final_route.value}_final_exit",
             })
+            await self._finish_vertical_escape_if_resolved(room_id, player_id)
 
         elif action_type == "use_elevator":
             try:
@@ -605,33 +721,10 @@ class ConnectionManager:
                 })
 
         elif action_type == "intercom_submit":
-            try:
-                result = submit_intercom_answer(
-                    session, player_id, str(payload.get("transcript", "")),
-                )
-            except InvalidProgression as error:
-                await self.send_to(room_id, player_id, {
-                    "type": "action_rejected", "action_type": action_type,
-                    "reason": str(error),
-                })
-                return
-            await self.broadcast(room_id, {
-                "type": "intercom_result", **result,
+            await self._handle_speech(room_id, player_id, {
+                "transcript": str(payload.get("transcript", "")),
+                "is_final": True,
             })
-            if result.get("success"):
-                # 인터폰 정답 시 위치 검사 없이 직접 단계 진행
-                phase = session.vertical_round.phase
-                session.vertical_round.mark_mission_complete()
-                next_phase = session.vertical_round.advance()
-                if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
-                    next_phase = session.vertical_round.advance(final_route=FinalRoute.FIELD)
-                await self.broadcast(room_id, {
-                    "type": "vertical_stage_advanced",
-                    "actor_id": player_id,
-                    "completed_phase": phase.value,
-                    "next_phase": next_phase.value,
-                    "progression": session.vertical_round.to_dict(),
-                })
 
         elif action_type == "activate_device":
             device = str(payload.get("device", ""))
@@ -658,19 +751,10 @@ class ConnectionManager:
                 "type": "device_activated", **result,
             })
             if result.get("success"):
-                # 동시 조작 성공 시 위치 검사 없이 직접 단계 진행
-                phase = session.vertical_round.phase
-                session.vertical_round.mark_mission_complete()
-                next_phase = session.vertical_round.advance()
-                if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
-                    next_phase = session.vertical_round.advance(final_route=FinalRoute.FIELD)
-                await self.broadcast(room_id, {
-                    "type": "vertical_stage_advanced",
-                    "actor_id": player_id,
-                    "completed_phase": phase.value,
-                    "next_phase": next_phase.value,
-                    "progression": session.vertical_round.to_dict(),
-                })
+                event = complete_current_stage(session, player_id)
+                await self._publish_vertical_stage_advance(
+                    room_id, player_id, event,
+                )
 
         elif action_type == "activate_basement_device":
             device_id = str(payload.get("device_id", ""))
@@ -684,16 +768,32 @@ class ConnectionManager:
             await self.broadcast(room_id, {
                 "type": "basement_device_activated", **result,
             })
+            for runtime in session.companion_states.values():
+                for target_id in tuple(runtime.memory):
+                    if target_id.startswith("basement_"):
+                        runtime.memory.pop(target_id, None)
             if result.get("reset"):
                 # 잘못된 순서 → 소리 핑
-                record_hunter_signal(session, player_id,
-                    {"x": player.position.x, "z": player.position.z}, "device_reset")
+                reset_position = {"x": player.position.x, "z": player.position.z}
+                record_hunter_signal(
+                    session, player_id, reset_position, "device_reset",
+                )
+                await self.broadcast(room_id, {
+                    "type": "sound_ping",
+                    "player_id": player_id,
+                    "position": reset_position,
+                    "source": "basement_device_reset",
+                })
             if result.get("completed"):
                 # 지하 미션 완료 → 주문 단계
+                await self._lock_dynamic_forbidden(room_id, session)
                 session.spell_words = ["달빛", "교정", "탈출"]
+                session.final_station_actor_ids.add(player_id)
                 session.state.phase = GamePhase.FINAL_SPELL
                 await self.broadcast(room_id, {
-                    "type": "vertical_final_ready", "spell_words": session.spell_words,
+                    "type": "vertical_final_ready",
+                    "required_clues": len(session.spell_words),
+                    "progression": session.vertical_round.to_dict(),
                 })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
@@ -879,6 +979,12 @@ class ConnectionManager:
             previous, float(x), float(z), max_speed, checked_at
         ):
             return False
+        if previous and not has_clear_catch_line(
+            (previous.x, previous.z),
+            (float(x), float(z)),
+            actor.position.floor.value,
+        ):
+            return False
         actor.position.x = float(x)
         actor.position.z = float(z)
         session.position_samples[actor.player_id] = MovementSample(
@@ -891,6 +997,24 @@ class ConnectionManager:
     ) -> None:
         session = session_manager.get_or_create(room_id)
         player.eliminate()
+
+        vertical_escape = (
+            session.vertical_progression_enabled
+            and session.vertical_round.phase == VerticalRoundPhase.ESCAPE_OPEN
+            and session.state.phase == GamePhase.ESCAPE
+        )
+        if vertical_escape:
+            await self.broadcast(room_id, {
+                "type": "eliminated",
+                "player_id": player_id,
+                "reason": "caught_by_seeker",
+            })
+            await self._finish_vertical_escape_if_resolved(room_id, player_id)
+            logger.info(
+                "ELIMINATED: room=%s player=%s reason=caught_by_seeker",
+                room_id, player_id,
+            )
+            return
 
         # 멀티: 모든 인간이 행동 불능인지 확인
         all_humans_down = all(
@@ -914,11 +1038,67 @@ class ConnectionManager:
             await self.broadcast(room_id, {
                 "type": "game_over",
                 "reason": "caught_by_seeker",
+                **session.result_payload(),
             })
         logger.info(
             "ELIMINATED: room=%s player=%s reason=caught_by_seeker",
             room_id, player_id,
         )
+
+    async def _finish_vertical_escape_if_resolved(
+        self,
+        room_id: str,
+        last_actor_id: str,
+    ) -> bool:
+        """선택된 파이널 출구에서 도망자의 개별 결과가 정해진 뒤 한 번만 정산한다."""
+        session = session_manager.get_or_create(room_id)
+        if (
+            not session.vertical_progression_enabled
+            or session.vertical_round.phase != VerticalRoundPhase.ESCAPE_OPEN
+            or session.state.phase != GamePhase.ESCAPE
+        ):
+            return False
+        runners = [
+            player for player in session.state.players.values()
+            if player.role != PlayerRole.SEEKER
+        ]
+        if any(
+            player.status in {PlayerStatus.ALIVE, PlayerStatus.FROZEN}
+            for player in runners
+        ):
+            return False
+
+        escaped = [
+            player for player in runners if player.status == PlayerStatus.ESCAPED
+        ]
+        human_escaped = any(
+            player.role == PlayerRole.HUMAN for player in escaped
+        )
+        if not escaped:
+            result_phase = VerticalRoundPhase.DEFEAT
+            event_type = "game_over"
+            reason = "vertical_team_eliminated"
+        elif len(escaped) == len(runners):
+            result_phase = VerticalRoundPhase.VICTORY
+            event_type = "game_won" if human_escaped else "game_over"
+            reason = "vertical_school_escape"
+        else:
+            result_phase = VerticalRoundPhase.PARTIAL_RESULT
+            event_type = "game_won" if human_escaped else "game_over"
+            reason = "vertical_partial_escape"
+
+        session.vertical_round.finish(result_phase)
+        session.state.phase = GamePhase.RESULT
+        self._cancel_room_freeze_timeouts(room_id)
+        await self.broadcast(room_id, {
+            "type": event_type,
+            "player_id": last_actor_id,
+            "reason": reason,
+            "gate_id": f"{session.vertical_round.final_route.value}_final_exit",
+            "progression": session.vertical_round.to_dict(),
+            **session.result_payload(),
+        })
+        return True
 
     async def _handle_actor_move(
         self,
@@ -1207,6 +1387,14 @@ class ConnectionManager:
             room_id, player_id,
         )
 
+        if (
+            session.vertical_progression_enabled
+            and session.vertical_round.phase == VerticalRoundPhase.ESCAPE_OPEN
+            and session.state.phase == GamePhase.ESCAPE
+        ):
+            await self._finish_vertical_escape_if_resolved(room_id, player_id)
+            return
+
         # 멀티: 모든 인간이 탈락/빙결/탈출이면 게임 종료
         if player.role == PlayerRole.HUMAN:
             all_humans_down = all(
@@ -1220,6 +1408,7 @@ class ConnectionManager:
                 await self.broadcast(room_id, {
                     "type": "game_over",
                     "reason": "all_humans_eliminated",
+                    **session.result_payload(),
                 })
                 return
 
@@ -1229,6 +1418,7 @@ class ConnectionManager:
             await self.broadcast(room_id, {
                 "type": "game_over",
                 "reason": "all_frozen_or_eliminated",
+                **session.result_payload(),
             })
 
     def _cancel_freeze_timeout(self, room_id: str, player_id: str) -> None:
@@ -1249,35 +1439,113 @@ class ConnectionManager:
         if self._freeze_tasks.get(key) is completed:
             self._freeze_tasks.pop(key, None)
 
-    async def _handle_onboarding(
-        self, room_id: str, player_id: str, payload: dict
+    def _record_dynamic_forbidden_utterance(
+        self,
+        room_id: str,
+        session,
+        transcript: str,
     ) -> None:
-        answers = payload.get("answers", [])
-        forbidden_words = await asyncio.to_thread(generate_forbidden_words, answers, 3)
+        """현재 판정이 끝난 인간 확정 발화를 비동기 분석 큐에 넣는다."""
+        profile = session.dynamic_forbidden
+        if profile.locked or session.state.phase != GamePhase.PLAYING:
+            return
+        if session.vertical_round.phase in {
+            VerticalRoundPhase.FINAL_ROUTE_REVEAL,
+            VerticalRoundPhase.FIELD_FINAL,
+            VerticalRoundPhase.BASEMENT_FINAL,
+            VerticalRoundPhase.ESCAPE_OPEN,
+            VerticalRoundPhase.VICTORY,
+            VerticalRoundPhase.PARTIAL_RESULT,
+            VerticalRoundPhase.DEFEAT,
+        }:
+            profile.lock()
+            return
+        if not profile.record_human_utterance(transcript) or not profile.should_refresh():
+            return
 
-        # 금기어 채집 결과를 클라이언트에 전달
+        profile.analysis_pending = True
+        analyzed_through = profile.total_utterances
+        utterances = list(profile.recent_utterances)
+        current_words = list(profile.current_words)
+        task = asyncio.create_task(self._refresh_dynamic_forbidden(
+            room_id,
+            session,
+            profile,
+            utterances,
+            current_words,
+            analyzed_through,
+        ))
+        self._forbidden_tasks[room_id] = task
+        task.add_done_callback(
+            lambda completed, target_room=room_id: self._forget_forbidden_task(
+                target_room, completed,
+            )
+        )
+
+    async def _refresh_dynamic_forbidden(
+        self,
+        room_id: str,
+        session,
+        profile,
+        utterances: list[str],
+        current_words: list[str],
+        analyzed_through: int,
+    ) -> None:
+        try:
+            words, reason = await asyncio.to_thread(
+                analyze_dynamic_forbidden_words,
+                utterances,
+                current_words,
+            )
+            # 방이 닫히거나 새 게임이 시작된 동안 끝난 오래된 분석은 폐기한다.
+            if (
+                session_manager.sessions.get(room_id) is not session
+                or session.dynamic_forbidden is not profile
+                or not session.dynamic_forbidden_enabled
+                or profile.locked
+            ):
+                return
+            changed = profile.apply(
+                words,
+                analyzed_through=analyzed_through,
+                reason=reason,
+            )
+            if not changed:
+                return
+            session.state.forbidden_words = list(profile.current_words)
+            session.engine.update_words(profile.current_words)
+            await self.broadcast(room_id, {
+                "type": "forbidden_profile_shifted",
+                "forbidden_profile": profile.public_state(shifted=True),
+            })
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("dynamic forbidden analysis failed: room=%s", room_id)
+        finally:
+            profile.analysis_pending = False
+
+    def _forget_forbidden_task(
+        self,
+        room_id: str,
+        completed: asyncio.Task[None],
+    ) -> None:
+        if self._forbidden_tasks.get(room_id) is completed:
+            self._forbidden_tasks.pop(room_id, None)
+        if not completed.cancelled() and completed.exception():
+            logger.error(
+                "dynamic forbidden task failed: room=%s error=%s",
+                room_id,
+                completed.exception(),
+            )
+
+    async def _lock_dynamic_forbidden(self, room_id: str, session) -> None:
+        if not session.dynamic_forbidden_enabled or session.dynamic_forbidden.locked:
+            return
+        session.dynamic_forbidden.lock()
         await self.broadcast(room_id, {
-            "type": "forbidden_words_ready",
-            "forbidden_words": forbidden_words,
-            "source_answers": answers,
-        })
-
-        # 라운드 데이터 생성 (프롭 배치, 미션)
-        round_data = generate_round(forbidden_words)
-
-        # 게임 시작
-        session = session_manager.get_or_create(room_id)
-        session.setup_game(forbidden_words)
-        if not session.vertical_progression_enabled:
-            session.setup_round(round_data)
-        self._ensure_hunter_task(room_id)
-        self._ensure_companion_task(room_id)
-        await self.broadcast(room_id, {
-            "type": "game_started",
-            "state": session.state_payload(),
-            "round": round_to_dict(round_data),
-            "active_gate": session.active_gate_payload(),
-            "active_traps": session.active_traps_payload(),
+            "type": "forbidden_profile_locked",
+            "forbidden_profile": session.dynamic_forbidden.public_state(),
         })
 
     async def _handle_spell(
@@ -1294,7 +1562,10 @@ class ConnectionManager:
 
         vertical_final = (
             session.vertical_progression_enabled
-            and session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL
+            and session.vertical_round.phase in {
+                VerticalRoundPhase.FIELD_FINAL,
+                VerticalRoundPhase.BASEMENT_FINAL,
+            }
         )
         valid_position = (
             player_id in session.final_station_actor_ids
@@ -1460,12 +1731,19 @@ class ConnectionManager:
                 "type": "game_starting", **game_info,
             })
 
-        # 기존 게임 시작 로직 (forbidden_words 등)
+        # v5 클라이언트는 빈 비공개 프로필로 바로 시작한다. 명시적인
+        # forbidden_words는 기존 테스트/개발 시나리오 호환 경로다.
+        dynamic_forbidden = bool(payload.get("dynamic_forbidden", False))
         requested_words = payload.get("forbidden_words")
-        forbidden_words = requested_words or DEFAULT_FORBIDDEN_WORDS
-        session.setup_game(forbidden_words)
+        forbidden_words = [] if dynamic_forbidden else (
+            requested_words or DEFAULT_FORBIDDEN_WORDS
+        )
+        session.setup_game(
+            forbidden_words,
+            dynamic_forbidden=dynamic_forbidden,
+        )
         round_data = None
-        if not requested_words:
+        if not dynamic_forbidden and not requested_words:
             round_data = generate_round(forbidden_words)
             if not session.vertical_progression_enabled:
                 session.setup_round(round_data)
@@ -1656,7 +1934,9 @@ class ConnectionManager:
                 "speech_intent": SpeechIntent.DECLARE_ACTION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
-            if delivered and phase != VerticalRoundPhase.FLOOR_3.value:
+            # 옥상은 인간이 직접 첫 장치를 작동해야 한다. AI의 자동 완료는
+            # 운동장 파이널에서 각자 맡은 스테이션을 활성화할 때만 허용한다.
+            if delivered and phase == VerticalRoundPhase.FIELD_FINAL.value:
                 await self._handle_action(
                     room_id, companion_id, {"action_type": "interact_stage_mission"},
                 )
@@ -1768,6 +2048,15 @@ class ConnectionManager:
 
         result = session.engine.check(text)
         if result.is_forbidden and partner and partner.status == PlayerStatus.ALIVE:
+            # v5에서 AI는 비공개 단어를 알고 피하는 조력자다. 회피 후에도
+            # 남은 위험 표현은 발화를 폐기하며 AI 빙결이나 단어 공개로 쓰지 않는다.
+            if session.dynamic_forbidden_enabled:
+                logger.info(
+                    "suppressed unsafe companion speech: room=%s companion=%s",
+                    room_id,
+                    companion_id,
+                )
+                return False
             partner.freeze()
             record_hunter_signal(
                 session, partner.player_id,
@@ -1789,45 +2078,82 @@ class ConnectionManager:
 
     async def _finish_if_team_frozen(self, room_id: str) -> bool:
         session = session_manager.get_or_create(room_id)
+        if (
+            session.vertical_progression_enabled
+            and session.vertical_round.phase == VerticalRoundPhase.ESCAPE_OPEN
+            and session.state.phase == GamePhase.ESCAPE
+        ):
+            # 열린 출구 구간의 빙결자는 아직 구조 가능하다. 개별 타이머가
+            # 탈락으로 확정된 뒤에만 부분 탈출 결과를 정산한다.
+            return False
         if not session.state.all_non_seeker_frozen_or_eliminated():
             return False
         session.state.phase = GamePhase.RESULT
         self._cancel_room_freeze_timeouts(room_id)
-        await self.broadcast(room_id, {"type": "game_over", "reason": "all_frozen"})
+        await self.broadcast(room_id, {
+            "type": "game_over",
+            "reason": "all_frozen",
+            **session.result_payload(),
+        })
         return True
 
     async def _complete_companion_escape(self, room_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)
         partner = session.state.get_player(companion_id)
-        seeker = session.state.get_player("seeker")
         if (
             session.state.phase != GamePhase.ESCAPE or not partner
             or partner.status != PlayerStatus.ALIVE
         ):
             return
-        escape_position = session.active_gate_escape_position()
+        vertical_escape = (
+            session.vertical_progression_enabled
+            and session.vertical_round.phase == VerticalRoundPhase.ESCAPE_OPEN
+            and session.vertical_round.final_route in {
+                FinalRoute.FIELD, FinalRoute.BASEMENT,
+            }
+        )
+        if vertical_escape:
+            escape_slot = final_escape_slot(session)
+            exit_x, _, exit_z = escape_slot["position"]
+            escape_position = {"x": exit_x, "z": exit_z}
+            if partner.position.floor != WorldFloor(escape_slot["floor"]):
+                return
+        else:
+            escape_position = session.active_gate_escape_position()
         if math.hypot(
             partner.position.x - escape_position["x"],
             partner.position.z - escape_position["z"],
         ) > float(COMPANION_CONTRACT["arrivalDistance"]) + 0.15:
             return
-        if (
-            seeker and seeker.status == PlayerStatus.ALIVE
-            and self._players_within(seeker, partner, 1.5)
-            and has_clear_catch_line(
-                (seeker.position.x, seeker.position.z),
-                (partner.position.x, partner.position.z),
-                seeker.position.floor.value,
-            )
-        ):
-            await self._finish_seeker_catch(room_id, partner.player_id, partner)
-            return
+        for seeker_id in ("seeker", "seeker-2"):
+            seeker = session.state.get_player(seeker_id)
+            if (
+                seeker and seeker.status == PlayerStatus.ALIVE
+                and seeker.shares_floor_with(partner)
+                and self._players_within(seeker, partner, 1.5)
+                and has_clear_catch_line(
+                    (seeker.position.x, seeker.position.z),
+                    (partner.position.x, partner.position.z),
+                    seeker.position.floor.value,
+                )
+            ):
+                await self._finish_seeker_catch(
+                    room_id, partner.player_id, partner,
+                )
+                return
         partner.escape()
         session.escaped_player_ids.add(partner.player_id)
         await self.broadcast(room_id, {
             "type": "runner_escaped", "player_id": partner.player_id,
-            "gate_id": session.active_gate_id,
+            "gate_id": (
+                f"{session.vertical_round.final_route.value}_final_exit"
+                if vertical_escape else session.active_gate_id
+            ),
         })
+        if vertical_escape:
+            await self._finish_vertical_escape_if_resolved(
+                room_id, partner.player_id,
+            )
 
     def _forget_companion_task(self, room_id: str, completed: asyncio.Task[None]) -> None:
         if self._companion_tasks.get(room_id) is completed:

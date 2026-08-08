@@ -1,7 +1,7 @@
 """층별 고유 미션 메커니즘.
 
 각 층은 다른 게임플레이를 요구한다:
-- 옥상: 조작 튜토리얼 (신호 장치 가동)
+- 옥상: 중앙→동쪽→서쪽 삼점 신호 동기화
 - 3층: 방송 미션 (음성으로 의미 전달) -- 이미 vertical_flow.py에 구현됨
 - 2층: 인터폰 협동 (AI가 기호를 읽고 플레이어가 입력)
 - 1층: 동시 조작 (AI와 플레이어가 제한시간 내 동시 장치 작동)
@@ -16,6 +16,56 @@ import time
 from dataclasses import dataclass, field
 
 from app.ai.speech import avoid_forbidden_words
+
+
+# ---------------------------------------------------------------------------
+# 옥상 삼점 신호 미션
+# ---------------------------------------------------------------------------
+
+ROOFTOP_SIGNAL_SLOT_BY_ID = {
+    "center": "ROOF_SIGNAL_CENTER",
+    "east": "ROOF_SIGNAL_EAST",
+    "west": "ROOF_SIGNAL_WEST",
+}
+
+
+@dataclass
+class RooftopSignalMission:
+    """옥상 전체를 한 바퀴 읽게 만드는 짧은 이동·상호작용 튜토리얼."""
+
+    sequence: list[str] = field(default_factory=lambda: ["center", "east", "west"])
+    activated_signal_ids: list[str] = field(default_factory=list)
+    completed: bool = False
+
+    @property
+    def next_signal_id(self) -> str | None:
+        if len(self.activated_signal_ids) >= len(self.sequence):
+            return None
+        return self.sequence[len(self.activated_signal_ids)]
+
+    def activate(self, signal_id: str) -> dict:
+        if self.completed:
+            return self.public_state()
+        expected = self.next_signal_id
+        if signal_id != expected:
+            return {
+                **self.public_state(),
+                "success": False,
+                "reason": "already_active" if signal_id in self.activated_signal_ids else "wrong_order",
+                "expected_signal_id": expected,
+            }
+        self.activated_signal_ids.append(signal_id)
+        self.completed = len(self.activated_signal_ids) == len(self.sequence)
+        return {**self.public_state(), "success": True, "signal_id": signal_id}
+
+    def public_state(self) -> dict:
+        return {
+            "activated_signal_ids": list(self.activated_signal_ids),
+            "next_signal_id": self.next_signal_id,
+            "progress": len(self.activated_signal_ids),
+            "total": len(self.sequence),
+            "completed": self.completed,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -70,27 +120,38 @@ class IntercomMission:
         self.attempts += 1
         normalized = transcript.strip().lower()
         matched_items: list[dict] = []
+        pair_positions: list[int] = []
         for item in self.sequence:
-            shape_found = item["shape"] in normalized
-            color_found = item["color"] in normalized
+            shape_position = normalized.find(item["shape"])
+            color_position = normalized.find(item["color"])
+            shape_found = shape_position >= 0
+            color_found = color_position >= 0
+            pair_position = min(shape_position, color_position) if shape_found and color_found else -1
+            pair_positions.append(pair_position)
             matched_items.append({
                 "shape": item["shape"],
                 "color": item["color"],
                 "shape_matched": shape_found,
                 "color_matched": color_found,
             })
-        all_correct = all(
+        all_present = all(
             m["shape_matched"] and m["color_matched"]
             for m in matched_items
         )
-        if all_correct:
+        order_valid = all_present and all(
+            previous < current
+            for previous, current in zip(pair_positions, pair_positions[1:])
+        )
+        success = all_present and order_valid
+        if success:
             self.completed = True
         return {
-            "success": all_correct,
+            "success": success,
             "matched_items": matched_items,
+            "order_valid": order_valid,
             "attempts": self.attempts,
             "max_attempts": self.max_attempts,
-            "exhausted": self.attempts >= self.max_attempts and not all_correct,
+            "exhausted": self.attempts >= self.max_attempts and not success,
         }
 
 
@@ -223,7 +284,21 @@ class BasementFinalMission:
         device = next((d for d in self.devices if d.device_id == device_id), None)
         if not device:
             return None
-        return {"device_id": device.device_id, "name": device.name, "state": device.state}
+        next_device_id = (
+            self.correct_order[len(self.activated_order)]
+            if len(self.activated_order) < len(self.correct_order)
+            else None
+        )
+        visible_state = (
+            "active" if device.state == "active"
+            else "standby" if device.device_id == next_device_id
+            else "off"
+        )
+        return {
+            "device_id": device.device_id,
+            "name": device.name,
+            "state": visible_state,
+        }
 
 
 def create_basement_mission(seed: int = 0) -> BasementFinalMission:
@@ -247,6 +322,7 @@ def create_basement_mission(seed: int = 0) -> BasementFinalMission:
 class VerticalMissions:
     """층별 미션을 묶는 컨테이너."""
 
+    rooftop: RooftopSignalMission = field(default_factory=RooftopSignalMission)
     intercom: IntercomMission = field(default_factory=IntercomMission)
     simultaneous: SimultaneousMission = field(default_factory=SimultaneousMission)
     basement: BasementFinalMission = field(default_factory=BasementFinalMission)

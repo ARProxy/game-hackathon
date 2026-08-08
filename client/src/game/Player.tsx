@@ -219,6 +219,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
         position={[position[0], position[1] - COLLIDER_BOTTOM_Y, position[2]]}
         lockRotations
         colliders={false}
+        ccd
         mass={1}
         linearDamping={0.5}
         gravityScale={2.2}

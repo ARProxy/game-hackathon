@@ -16,8 +16,6 @@ import VerticalObjectives from './game/VerticalObjectives'
 import Fog from './game/Fog'
 import HUD from './components/HUD'
 import MiniMap from './components/MiniMap'
-import Onboarding from './components/Onboarding'
-import ForbiddenReveal from './components/ForbiddenReveal'
 import ResultScreen from './components/ResultScreen'
 import SoundController from './components/SoundController'
 import StartFlow, { type EntryScreen } from './components/StartFlow'
@@ -295,25 +293,21 @@ function Scene({
 
 /* ─────────────────────────────────────────────
  * GameController
- * - 서버 연결, 온보딩, PTT, 게임 흐름 제어
- * - UI 렌더링 (온보딩, 금기어 발표)
+ * - 서버 연결, PTT, 비공개 동적 금기어 게임 시작
  * ───────────────────────────────────────────── */
-function GameController({ quickStart }: { quickStart: boolean }) {
+function GameController() {
   const { connect, send, disconnect } = useWebSocket()
   const phase = useGameStore((state) => state.phase)
   const connected = useGameStore((state) => state.connected)
-  const forbiddenWords = useGameStore((state) => state.forbiddenWords)
-  const roundStartedAt = useGameStore((state) => state.roundStartedAt)
   const isPaused = useGameStore((state) => state.isPaused)
   const setRoom = useGameStore((state) => state.setRoom)
-  const setPhase = useGameStore((state) => state.setPhase)
   const playerStatus = useGameStore((state) => state.players[state.playerId]?.status)
   const [speechFallbackReason, setSpeechFallbackReason] = useState<string | null>(null)
-  const speechEnabled = !isPaused && (phase === 'onboarding' || (
+  const speechEnabled = !isPaused && (
     (phase === 'playing' || phase === 'final_spell')
     && playerStatus !== 'frozen'
     && playerStatus !== 'eliminated'
-  ))
+  )
 
   /* 서버 자동 연결 */
   useEffect(() => {
@@ -329,29 +323,12 @@ function GameController({ quickStart }: { quickStart: boolean }) {
     }
   }, [connect, disconnect, setRoom])
 
-  /* 연결 → 일반 온보딩 또는 테스트 빠른 시작 */
+  /* 질문이나 금기어 공개 없이 바로 관찰형 라운드를 시작한다. */
   useEffect(() => {
     if (connected && phase === 'lobby') {
-      if (quickStart) {
-        send({ type: 'start_game', payload: {} })
-      } else {
-        send({ type: 'request_onboarding_questions' })
-        setPhase('onboarding')
-      }
+      send({ type: 'start_game', payload: { dynamic_forbidden: true } })
     }
-  }, [connected, phase, quickStart, send, setPhase])
-
-  useEffect(() => {
-    if (quickStart && phase === 'lobby' && roundStartedAt !== null) {
-      setPhase('playing')
-    }
-  }, [phase, quickStart, roundStartedAt, setPhase])
-
-  /* 온보딩 완료 → 서버에 답변 전송 */
-  const handleOnboardingComplete = useCallback((answers: string[]) => {
-    useGameStore.getState().setSourceAnswers(answers)
-    send({ type: 'onboarding_complete', payload: { answers } })
-  }, [send])
+  }, [connected, phase, send])
 
   /* Q키 Push-to-Talk */
   useSpeech({
@@ -384,16 +361,12 @@ function GameController({ quickStart }: { quickStart: boolean }) {
     },
   })
 
-  const handleRevealComplete = useCallback(() => setPhase('playing'), [setPhase])
-
   return (
     <>
-      {phase === 'onboarding' && <Onboarding onComplete={handleOnboardingComplete} />}
-      {phase === 'reveal' && <ForbiddenReveal words={forbiddenWords} onComplete={handleRevealComplete} />}
       {speechFallbackReason && phase !== 'result' && (
         <div role="alert" className="speech-fallback-alert">
           <strong>{speechFallbackReason}</strong>
-          <span>{phase === 'onboarding' ? '아래 입력창에 답변하세요.' : 'Enter를 눌러 텍스트로 말할 수 있습니다.'}</span>
+          <span>Enter를 눌러 텍스트로 말할 수 있습니다.</span>
           <button type="button" onClick={() => setSpeechFallbackReason(null)} aria-label="음성 입력 안내 닫기">×</button>
         </div>
       )}
@@ -410,7 +383,6 @@ function App() {
   const [entryScreen, setEntryScreen] = useState<EntryScreen>('title')
   const [playerCharacterId, setPlayerCharacterId] = useState(runnerIds[0] ?? 'R01')
   const [isGameRunning, setGameRunning] = useState(false)
-  const [quickStart, setQuickStart] = useState(false)
   const [cameraMode, setCameraMode] = useState<CameraMode>('3d')
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
@@ -419,7 +391,6 @@ function App() {
   // 게임에서는 전체 학교 외형을 유지하고, 개발용 원본 비교 모드에서만 층을 숨긴다.
   const renderedFloors = DEV_TOOLS_ENABLED && cameraMode === 'reference' ? visibleFloors : undefined
   const startSolo = useCallback((characterId: string) => {
-    setQuickStart(false)
     setPlayerCharacterId(characterId)
     useGameStore.getState().reset()
     useGameStore.getState().setSelectedCharacter(characterId)
@@ -427,7 +398,6 @@ function App() {
   }, [])
   const startQuickGame = useCallback(() => {
     const characterId = runnerIds[0] ?? 'R01'
-    setQuickStart(true)
     setPlayerCharacterId(characterId)
     useGameStore.getState().reset()
     useGameStore.getState().setSelectedCharacter(characterId)
@@ -436,7 +406,6 @@ function App() {
   const returnToMainMenu = useCallback(() => {
     useGameStore.getState().reset()
     setEntryScreen('title')
-    setQuickStart(false)
     setGameRunning(false)
     setSceneKey((key) => key + 1)
   }, [])
@@ -481,7 +450,7 @@ function App() {
         onMainMenu={returnToMainMenu}
       >
       <SoundController />
-      <GameController quickStart={quickStart} />
+      <GameController />
 
       <Canvas
         key={sceneKey}

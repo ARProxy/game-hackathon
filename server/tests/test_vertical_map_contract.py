@@ -9,7 +9,8 @@ from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots, get_map
 
 REQUIRED_SLOT_IDS = {
     "ROOF_RUNNER_SPAWN_A", "ROOF_RUNNER_SPAWN_B", "ROOF_RUNNER_SPAWN_C",
-    "ROOF_INTRO_MISSION", "ROOF_TO_F3_FIRE_DOOR",
+    "ROOF_INTRO_MISSION", "ROOF_SIGNAL_CENTER", "ROOF_SIGNAL_EAST",
+    "ROOF_SIGNAL_WEST", "ROOF_TO_F3_FIRE_DOOR",
     "F3_MISSION_ROOM_POOL", "F3_SEEKER_REVEAL_ENTRY",
     "F3_TO_F2_STAIR_WEST", "F3_TO_F2_STAIR_EAST",
     "F2_MISSION_ROOM_POOL", "F2_INTERCOM_A", "F2_INTERCOM_B",
@@ -26,8 +27,7 @@ REQUIRED_SLOT_IDS = {
 
 
 def test_contract_is_seeded_and_active() -> None:
-    assert VERTICAL_MAP_CONTRACT["source"] == "campusV4Data.js"
-    assert VERTICAL_MAP_CONTRACT["sourceSeed"] == 0
+    assert VERTICAL_MAP_CONTRACT["source"] == "compactSchoolData.js"
     assert VERTICAL_MAP_CONTRACT["enabled"] is True
 
 
@@ -95,9 +95,9 @@ def test_missing_slot_fails_loudly() -> None:
         get_map_slot("UNKNOWN_SLOT")
 
 
-def test_unmodelled_rooftop_door_is_not_disguised_as_an_authored_door() -> None:
+def test_rooftop_transition_uses_the_authored_fire_door() -> None:
     roof_lock = get_map_slot("ROOF_TO_F3_FIRE_DOOR")
 
     assert roof_lock["kind"] == "transition_lock"
-    assert roof_lock["authoredDoorIds"] == []
-    assert "전용 문 메시가 없어" in roof_lock["note"]
+    assert roof_lock["authoredDoorIds"] == ["roof_to_f3"]
+    assert "실제 방화문" in roof_lock["note"]

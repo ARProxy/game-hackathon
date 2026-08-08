@@ -4,11 +4,6 @@ import { actorSpawnPosition } from './spawnContract'
 
 type Emit = (message: Record<string, unknown>) => void
 
-const QUESTIONS = [
-  '어두운 교실에서 발견하고 싶은 물건은 무엇인가요?',
-  '비 오는 날 꼭 챙기는 물건을 말해 주세요.',
-  '가장 먼저 떠오르는 색과 음료는 무엇인가요?',
-]
 const CLUES = [
   { word: '별', order: 2, total: 3 },
   { word: '달', order: 1, total: 3 },
@@ -36,17 +31,23 @@ const ROOFTOP_PROGRESSION = {
   fw_rage_tier: 'calm',
   fw_speed_multiplier: 1,
 }
+const ROOFTOP_SIGNALS = ['center', 'east', 'west'] as const
 
 export default class DemoTransport {
   private playerId: string
   private emit: Emit
   private phase = 'lobby'
   private missionIndex = 0
+  private rooftopSignalIndex = 0
   private gateArrived = false
   private playerPosition = actorSpawnPosition('human')
   private seekerPosition = actorSpawnPosition('seeker')
   private pendingInspection = false
   private paused = false
+  private observedUtterances: string[] = []
+  private activeForbidden: string[] = []
+  private appliedThrough = 0
+  private lastShiftAt = 0
   private timers = new Set<number>()
   private selected = [...PROP_POOL].sort(() => Math.random() - 0.5).slice(0, 3).map((item, index) => ({
     ...item,
@@ -66,11 +67,7 @@ export default class DemoTransport {
 
   handle(message: any): boolean {
     const payload = message?.payload ?? {}
-    if (message?.type === 'onboarding_complete') this.start(false)
-    if (message?.type === 'start_game') this.start(true)
-    if (message?.type === 'request_onboarding_questions') {
-      this.send({ type: 'onboarding_questions', questions: QUESTIONS })
-    }
+    if (message?.type === 'start_game') this.start()
     if (message?.type === 'speech') this.speech(String(payload.transcript ?? ''))
     if (message?.type === 'spell') this.spell(String(payload.spell_text ?? ''))
     if (message?.type === 'action') this.action(payload)
@@ -93,16 +90,20 @@ export default class DemoTransport {
     this.timers.add(timer)
   }
 
-  private start(skipReveal: boolean) {
+  private start() {
     this.phase = 'playing'
+    this.observedUtterances = []
+    this.activeForbidden = []
+    this.appliedThrough = 0
+    this.lastShiftAt = 0
     this.playerPosition = actorSpawnPosition('human')
     this.seekerPosition = actorSpawnPosition('seeker')
-    const words = this.selected.map((item) => item.word)
-    if (!skipReveal) this.send({ type: 'forbidden_words_ready', forbidden_words: words })
+    this.rooftopSignalIndex = 0
     this.send({
       type: 'game_started',
       state: {
-        forbidden_words: words,
+        forbidden_words: [],
+        forbidden_profile: { status: 'observing' },
         players: {
           [this.playerId]: { role: 'human', status: 'alive', position: this.playerPosition },
           partner: { role: 'ai_partner', status: 'alive', position: actorSpawnPosition('partner') },
@@ -111,11 +112,10 @@ export default class DemoTransport {
           'seeker-2': { role: 'seeker', status: 'alive', position: actorSpawnPosition('seeker-2') },
         },
         vertical_progression: ROOFTOP_PROGRESSION,
-      },
-      round: {
-        missions: words.map((forbidden_word, mission_id) => ({ mission_id, forbidden_word })),
-        props: this.selected,
-        total_clues: CLUES.length,
+        rooftop_signal: {
+          activated_signal_ids: [], next_signal_id: 'center',
+          progress: 0, total: ROOFTOP_SIGNALS.length, completed: false,
+        },
       },
       active_gate: GATE,
       active_traps: [],
@@ -125,11 +125,13 @@ export default class DemoTransport {
   private speech(transcript: string) {
     if (this.phase !== 'playing' || !transcript.trim()) return
     this.send({ type: 'sound_ping', player_id: this.playerId, position: this.playerPosition })
-    const forbidden = this.selected.map((item) => item.word).find((word) => transcript.includes(word))
+    // 현재 세대로 먼저 판정한 뒤에만 이 발화를 관찰한다(소급 판정 금지).
+    const forbidden = this.activeForbidden.find((word) => transcript.includes(word))
+    this.observeSpeech(transcript)
     if (forbidden) {
       this.send({
-        type: 'freeze', player_id: this.playerId, matched_word: forbidden,
-        matched_stage: 'exact', confidence: 1, position: this.playerPosition,
+        type: 'freeze', player_id: this.playerId,
+        position: this.playerPosition,
         remaining_seconds: 30,
       })
       this.later(() => this.send({ type: 'rescued', rescuer_id: 'partner', target_id: this.playerId }), 1800)
@@ -157,6 +159,33 @@ export default class DemoTransport {
         ...(allComplete ? { active_gate: GATE } : {}),
       })
     }, 900)
+  }
+
+  private observeSpeech(transcript: string) {
+    this.observedUtterances.push(transcript)
+    const total = this.observedUtterances.length
+    const initialReady = this.activeForbidden.length === 0 && total >= 3
+    const rotationReady = this.activeForbidden.length > 0
+      && total - this.appliedThrough >= 5
+      && Date.now() - this.lastShiftAt >= 45_000
+    if (!initialReady && !rotationReady) return
+
+    const protectedWords = new Set(['얼음', '땡', '술래', '동료', '탈출', '주문', '여기', '저기'])
+    const counts = new Map<string, number>()
+    this.observedUtterances.slice(-20).forEach((utterance) => {
+      for (const word of utterance.match(/[가-힣A-Za-z]{2,}/g) ?? []) {
+        if (!protectedWords.has(word)) counts.set(word, (counts.get(word) ?? 0) + 1)
+      }
+    })
+    const ranked = [...counts].sort((left, right) => right[1] - left[1]).map(([word]) => word)
+    if (ranked.length === 0) return
+    const retained = this.activeForbidden[0]
+    this.activeForbidden = retained
+      ? [retained, ...ranked.filter((word) => word !== retained).slice(0, 2)]
+      : ranked.slice(0, 3)
+    this.appliedThrough = total
+    this.lastShiftAt = Date.now()
+    this.send({ type: 'forbidden_profile_shifted', forbidden_profile: { status: 'shifted' } })
   }
 
   private spell(text: string) {
@@ -188,6 +217,26 @@ export default class DemoTransport {
     if (this.paused) return
     if (action === 'move') {
       this.playerPosition = { ...this.playerPosition, x: Number(payload.x), z: Number(payload.z) }
+    } else if (action === 'interact_stage_mission' && this.rooftopSignalIndex < ROOFTOP_SIGNALS.length) {
+      const expected = ROOFTOP_SIGNALS[this.rooftopSignalIndex]
+      if (payload.signal_id !== expected) return
+      this.rooftopSignalIndex += 1
+      const completed = this.rooftopSignalIndex === ROOFTOP_SIGNALS.length
+      this.send({
+        type: 'rooftop_signal_progress', actor_id: this.playerId,
+        signal_id: expected,
+        activated_signal_ids: ROOFTOP_SIGNALS.slice(0, this.rooftopSignalIndex),
+        next_signal_id: completed ? null : ROOFTOP_SIGNALS[this.rooftopSignalIndex],
+        progress: this.rooftopSignalIndex, total: ROOFTOP_SIGNALS.length, completed,
+      })
+      if (completed) this.send({
+        type: 'vertical_stage_advanced', actor_id: this.playerId,
+        completed_phase: 'rooftop_intro', next_phase: 'floor_3', clue: null,
+        progression: {
+          ...ROOFTOP_PROGRESSION,
+          phase: 'floor_3', active_floor: 'F3', accessible_floors: ['ROOF', 'F3'], seeker_count: 1,
+        },
+      })
     } else if (action === 'seeker_think') {
       const playerDistance = Math.hypot(
         this.playerPosition.x - this.seekerPosition.x,

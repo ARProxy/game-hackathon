@@ -43,7 +43,7 @@ export interface PartnerTarget {
 
 export interface PartnerDecision {
   decision: 'act' | 'clarify' | 'uncertain'
-  confidence: number
+  confidence?: number
   reply: string
   candidates: { propId: string; zone: string; score: number; cues: string[] }[]
 }
@@ -75,15 +75,33 @@ export interface VerticalProgressionState {
   fw_speed_multiplier: number
 }
 
+export interface RooftopSignalState {
+  activatedSignalIds: string[]
+  nextSignalId: 'center' | 'east' | 'west' | null
+  progress: number
+  total: number
+  completed: boolean
+}
+
 export interface FreezeEvent {
   playerId: string
-  matchedWord: string
-  matchedStage: string
+  matchedWord?: string
+  matchedStage?: string
   confidence: number
   position: { x: number; z: number }
   timestamp: number
   remainingSeconds?: number
   danger?: { seekerLastSeen?: { position?: { x: number; z: number } } | null }
+}
+
+export interface ForbiddenProfileState {
+  status: 'observing' | 'active' | 'shifted' | 'locked'
+}
+
+export interface ForbiddenProfileHistoryEntry {
+  generation: number
+  words: string[]
+  reason: string
 }
 
 export interface SoundEvent {
@@ -130,12 +148,15 @@ interface GameStore {
   isPaused: boolean
   currentFloor: MapFloor
   forbiddenWords: string[]
+  forbiddenProfile: ForbiddenProfileState | null
+  forbiddenProfileHistory: ForbiddenProfileHistoryEntry[]
   sourceAnswers: string[]
   onboardingQuestions: string[]
   freezeCount: number
   roundStartedAt: number | null
   elapsedSeconds: number | null
   verticalProgression: VerticalProgressionState | null
+  rooftopSignal: RooftopSignalState | null
   players: Record<string, PlayerState>
 
   // 라운드 데이터 (미션, 프롭)
@@ -180,10 +201,13 @@ interface GameStore {
   startRound: () => void
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
+  setForbiddenProfile: (profile: ForbiddenProfileState | null) => void
+  setForbiddenProfileHistory: (history: ForbiddenProfileHistoryEntry[]) => void
   setSourceAnswers: (answers: string[]) => void
   setOnboardingQuestions: (questions: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   setVerticalProgression: (progression: VerticalProgressionState) => void
+  setRooftopSignal: (signal: RooftopSignalState) => void
   hydratePlayers: (players: Record<string, Omit<PlayerState, 'playerId'>>) => void
   setActiveGate: (gate: ActiveGate) => void
   setActiveTraps: (trapIds: string[]) => void
@@ -225,12 +249,15 @@ const initialState = {
   isPaused: false,
   currentFloor: 'OUT' as const,
   forbiddenWords: [],
+  forbiddenProfile: null as ForbiddenProfileState | null,
+  forbiddenProfileHistory: [] as ForbiddenProfileHistoryEntry[],
   sourceAnswers: [] as string[],
   onboardingQuestions: [] as string[],
   freezeCount: 0,
   roundStartedAt: null as number | null,
   elapsedSeconds: null as number | null,
   verticalProgression: null as VerticalProgressionState | null,
+  rooftopSignal: null as RooftopSignalState | null,
   props: [] as PropData[],
   missions: [] as MissionData[],
   totalClues: 0,
@@ -313,6 +340,10 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setForbiddenWords: (words) => set({ forbiddenWords: words }),
 
+  setForbiddenProfile: (forbiddenProfile) => set({ forbiddenProfile }),
+
+  setForbiddenProfileHistory: (forbiddenProfileHistory) => set({ forbiddenProfileHistory }),
+
   setSourceAnswers: (sourceAnswers) => set({ sourceAnswers }),
 
   setOnboardingQuestions: (onboardingQuestions) => set({ onboardingQuestions }),
@@ -332,6 +363,7 @@ export const useGameStore = create<GameStore>((set) => ({
     }),
 
   setVerticalProgression: (verticalProgression) => set({ verticalProgression }),
+  setRooftopSignal: (rooftopSignal) => set({ rooftopSignal }),
 
   hydratePlayers: (players) => set((state) => {
     const hydratedPlayers = Object.fromEntries(
@@ -356,7 +388,10 @@ export const useGameStore = create<GameStore>((set) => ({
 
   acquireClue: (clue) =>
     set((state) => ({
-      acquiredClues: [...state.acquiredClues, clue],
+      acquiredClues: state.acquiredClues.some((entry) => entry.order === clue.order)
+        ? state.acquiredClues
+        : [...state.acquiredClues, clue],
+      totalClues: Math.max(state.totalClues, clue.total),
     })),
 
   setCurrentMissionIndex: (currentMissionIndex) => set({ currentMissionIndex }),

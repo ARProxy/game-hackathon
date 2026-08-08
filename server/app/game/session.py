@@ -15,11 +15,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.ai.forbidden import ForbiddenWordEngine
+from app.ai.dynamic_forbidden import DynamicForbiddenProfile
 from app.ai.mission import Mission, RoundData
 from app.ai.speech import SpeechHistory
 from app.game.authority import MovementSample
 from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots
-from app.game.progression import FORBIDDEN_RAGE_POLICIES, ForbiddenRageTier, VerticalRoundState, WorldFloor
+from app.game.progression import FinalRoute, FORBIDDEN_RAGE_POLICIES, ForbiddenRageTier, VerticalRoundState, WorldFloor
 from app.game.state import GamePhase, GameState, PlayerRole
 
 logger = logging.getLogger(__name__)
@@ -81,10 +82,14 @@ class GameSession:
     def __init__(self, room_id: str) -> None:
         self.state = GameState(room_id=room_id)
         self.vertical_round = VerticalRoundState()
+        self.final_route_choice = FinalRoute.FIELD
         self.vertical_progression_enabled = bool(VERTICAL_MAP_CONTRACT["enabled"])
         self.broadcast_mission_actor_id: str | None = None
+        self.intercom_mission_actor_id: str | None = None
         self.final_station_actor_ids: set[str] = set()
         self.engine = ForbiddenWordEngine(DEFAULT_FORBIDDEN_WORDS)
+        self.dynamic_forbidden_enabled = False
+        self.dynamic_forbidden = DynamicForbiddenProfile()
         self.spell_words: list[str] = []
         self.round_data: RoundData | None = None
         self.current_mission_index = 0
@@ -132,11 +137,22 @@ class GameSession:
             runtime.last_tick = now
         return True
 
-    def setup_game(self, forbidden_words: list[str] | None = None) -> None:
+    def setup_game(
+        self,
+        forbidden_words: list[str] | None = None,
+        *,
+        dynamic_forbidden: bool = False,
+    ) -> None:
         """금기어를 설정하고 게임 준비."""
-        words = forbidden_words or DEFAULT_FORBIDDEN_WORDS
+        words = DEFAULT_FORBIDDEN_WORDS if forbidden_words is None else forbidden_words
+        self.dynamic_forbidden_enabled = dynamic_forbidden
+        # 진행 중이던 비동기 분석 결과가 새 판에 섞이지 않도록 프로필 객체도
+        # 새로 만든다. 작업 완료 시 manager의 객체 동일성 검사에서 폐기된다.
+        self.dynamic_forbidden = DynamicForbiddenProfile()
         self.vertical_round = VerticalRoundState()
+        self.final_route_choice = random.choice(tuple(FinalRoute))
         self.broadcast_mission_actor_id = None
+        self.intercom_mission_actor_id = None
         self.final_station_actor_ids.clear()
         self.round_data = None
         self.spell_words = []
@@ -208,14 +224,26 @@ class GameSession:
 
     def state_payload(self) -> dict:
         """기존 상태와 기획 4 진행 계약을 함께 내보내는 호환 페이로드."""
+        state = self.state.to_dict()
+        if self.dynamic_forbidden_enabled:
+            # 인간 클라이언트는 현재 단어·개수·교체 시각을 알 수 없다.
+            state["forbidden_words"] = []
         return {
-            **self.state.to_dict(),
+            **state,
+            "forbidden_profile": (
+                self.dynamic_forbidden.public_state()
+                if self.dynamic_forbidden_enabled else None
+            ),
             "vertical_progression": {
                 # actor 층 좌표와 문 계약이 연결되기 전에는 클라이언트가 이
                 # 상태만 보고 옥상 스폰이나 층 잠금을 적용하지 않는다.
                 "enabled": self.vertical_progression_enabled,
                 **self.vertical_round.to_dict(),
             },
+            "rooftop_signal": (
+                self.vertical_missions.rooftop.public_state()
+                if self.vertical_missions is not None else None
+            ),
         }
 
     # 기존 단일 동료 테스트와 호출부가 점진적으로 이행할 수 있는 호환 프로퍼티.
@@ -352,6 +380,10 @@ class GameSession:
                 )
                 for actor_id in DEFAULT_AI_PARTNER_IDS
             },
+            "forbidden_profile_history": (
+                self.dynamic_forbidden.result_history()
+                if self.dynamic_forbidden_enabled else []
+            ),
         }
 
     def is_near_active_gate(self, player_id: str, radius: float = 2.75) -> bool:

@@ -145,21 +145,23 @@ export default function useWebSocket() {
 
   const handleMessage = useCallback((data: any) => {
     switch (data.type) {
-      case 'onboarding_questions':
-        useGameStore.getState().setOnboardingQuestions(data.questions)
-        break
-
-      case 'forbidden_words_ready':
-        setForbiddenWords(data.forbidden_words)
-        setPhase('reveal')
-        break
-
       case 'game_started':
         startRound()
-        setForbiddenWords(data.state.forbidden_words)
+        setForbiddenWords(data.state.forbidden_words ?? [])
+        useGameStore.getState().setForbiddenProfile(data.state.forbidden_profile ?? null)
+        setPhase('playing')
         if (data.state.players) hydratePlayers(data.state.players)
         if (data.state.vertical_progression) {
           useGameStore.getState().setVerticalProgression(data.state.vertical_progression)
+        }
+        if (data.state.rooftop_signal) {
+          useGameStore.getState().setRooftopSignal({
+            activatedSignalIds: data.state.rooftop_signal.activated_signal_ids ?? [],
+            nextSignalId: data.state.rooftop_signal.next_signal_id ?? null,
+            progress: data.state.rooftop_signal.progress ?? 0,
+            total: data.state.rooftop_signal.total ?? 3,
+            completed: Boolean(data.state.rooftop_signal.completed),
+          })
         }
         if (data.round) {
           setRoundData(data.round.props, data.round.missions, data.round.total_clues)
@@ -173,20 +175,71 @@ export default function useWebSocket() {
         if (data.active_traps) useGameStore.getState().setActiveTraps(data.active_traps)
         break
 
+      case 'forbidden_profile_shifted':
+        useGameStore.getState().setForbiddenProfile(data.forbidden_profile)
+        addSubtitle('system', '학교의 감시등이 잠시 흔들렸습니다.')
+        break
+
+      case 'forbidden_profile_locked':
+        useGameStore.getState().setForbiddenProfile(data.forbidden_profile)
+        addSubtitle('system', '말의 흔적이 봉인되었습니다.')
+        break
+
       case 'vertical_stage_advanced':
         useGameStore.getState().setVerticalProgression({
           enabled: true,
           ...data.progression,
         })
+        if (data.clue) {
+          acquireClue(data.clue)
+          addSubtitle('system', `주문 조각 “${data.clue.word}”을 확보했습니다.`)
+        }
         addSubtitle('system', `${data.completed_phase} 완료 — 다음 구역이 열렸습니다.`)
         break
 
+      case 'rooftop_signal_progress':
+        useGameStore.getState().setRooftopSignal({
+          activatedSignalIds: data.activated_signal_ids ?? [],
+          nextSignalId: data.next_signal_id ?? null,
+          progress: data.progress ?? 0,
+          total: data.total ?? 3,
+          completed: Boolean(data.completed),
+        })
+        addSubtitle('system', data.completed
+          ? '삼점 신호 동기화 완료. 북서 계단실 방화문이 열립니다.'
+          : `옥상 신호 ${data.progress ?? 0}/${data.total ?? 3} 동기화 — 다음 점등 장치로 이동하세요.`)
+        break
+
       case 'vertical_mission_started':
-        addSubtitle('system', data.prompt)
+        addSubtitle('system', data.prompt ?? '장치가 활성화되었습니다.')
         break
 
       case 'vertical_mission_feedback':
         addSubtitle('system', '의미가 부족합니다. 도구·출입구·개방 행동을 모두 표현하세요.')
+        break
+
+      case 'intercom_result':
+        addSubtitle('system', data.success
+          ? '인터폰 전달 성공. 1층 방화문이 열립니다.'
+          : data.order_valid === false
+            ? `기호의 순서가 다릅니다. 남은 시도 ${Math.max(0, data.max_attempts - data.attempts)}회.`
+            : `기호가 빠졌습니다. 남은 시도 ${Math.max(0, data.max_attempts - data.attempts)}회.`)
+        break
+
+      case 'device_activated':
+        addSubtitle('system', data.success
+          ? '두 장치가 동시에 작동했습니다.'
+          : data.reason === 'waiting_for_other'
+            ? 'A 장치 유지 중 — AI 동료가 B 장치에 도착하면 다시 E를 누르세요.'
+            : '동시 조작 시간이 어긋났습니다. 다시 맞춰 보세요.')
+        break
+
+      case 'basement_device_activated':
+        addSubtitle('system', data.completed
+          ? '지하 설비 복구 완료. 모은 주문 조각을 준비하세요.'
+          : data.reset
+            ? '잘못된 순서입니다. 모든 장치가 꺼지고 큰 기계음이 울렸습니다.'
+            : `장치 복구 ${data.progress ?? 0}/3 — AI의 다음 대기 상태 보고를 확인하세요.`)
         break
 
       case 'actor_floor_changed':
@@ -347,12 +400,14 @@ export default function useWebSocket() {
         break
 
       case 'final_station_activated':
+        if (data.actor_id === useGameStore.getState().playerId) setGateArrived(true)
         addSubtitle('system', `파이널 장치 활성화 ${data.ready_count}/${data.required_count}`)
         break
 
       case 'vertical_final_ready':
         setPhase('final_spell')
-        addSubtitle('system', `전원 준비 완료. Q를 눌러 “${data.spell_words.join(' ')}”를 순서대로 외치세요!`)
+        setGateArrived(true)
+        addSubtitle('system', `전원 준비 완료. 모은 ${data.required_clues ?? 3}개 조각을 표식 순서로 조합해 외치세요!`)
         break
 
       case 'action_rejected':
@@ -363,6 +418,11 @@ export default function useWebSocket() {
           addSubtitle('system', '선택된 탈출 게이트에 더 가까이 이동하세요.')
         } else if (data.action_type === 'rescue') {
           addSubtitle('partner', '조금만 기다려, 더 가까이 가서 다시 구조할게!')
+        } else if (data.action_type === 'interact_stage_mission'
+          || data.action_type === 'intercom_submit'
+          || data.action_type === 'activate_device'
+          || data.action_type === 'activate_basement_device') {
+          addSubtitle('system', data.reason ?? '현재 위치에서는 장치를 사용할 수 없습니다.')
         }
         break
 
@@ -385,11 +445,17 @@ export default function useWebSocket() {
         break
 
       case 'game_over':
+        if (data.forbidden_profile_history) {
+          useGameStore.getState().setForbiddenProfileHistory(data.forbidden_profile_history)
+        }
         finishGame('lose', data.reason ?? 'game_over')
         break
 
       case 'game_won':
         if (data.partner_status) useGameStore.getState().setPartnerResultStatus(data.partner_status)
+        if (data.forbidden_profile_history) {
+          useGameStore.getState().setForbiddenProfileHistory(data.forbidden_profile_history)
+        }
         finishGame('win', data.reason ?? 'escaped')
         break
 

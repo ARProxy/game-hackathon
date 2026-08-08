@@ -14,7 +14,12 @@ from pathlib import Path
 from typing import Any
 
 from app.ai.speech import SPEECH_MODE_RADIUS, SpeechMode
-from app.game.authority import WALL_RECTS_BY_FLOOR, has_clear_catch_line, segment_intersects_rect
+from app.game.authority import (
+    NAVIGATION_NODES_BY_FLOOR,
+    WALL_RECTS_BY_FLOOR,
+    has_clear_catch_line,
+    segment_intersects_rect,
+)
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
 from app.game.progression import VerticalRoundPhase
 
@@ -162,7 +167,15 @@ def decide_hunter_intent(session: Any) -> dict:
         return {"state": "HUNT", "target_id": None, "target": {"x": 0.0, "z": 0.0}, "reason": "no_seeker"}
 
     if session.state.phase == GamePhase.ESCAPE and session.active_gate_id:
-        gate = session.active_gate_payload()["position"]
+        if (
+            session.vertical_progression_enabled
+            and session.vertical_round.phase == VerticalRoundPhase.ESCAPE_OPEN
+        ):
+            from app.game.vertical_flow import final_escape_position
+            gate_x, _, gate_z = final_escape_position(session)
+            gate = {"x": gate_x, "z": gate_z}
+        else:
+            gate = session.active_gate_payload()["position"]
         return {"state": "RUSH_GATE", "target_id": None, "target": gate, "reason": "gate_open"}
 
     forward_x = session.hunter_forward["x"]
@@ -250,9 +263,13 @@ def decide_hunter_intent(session: Any) -> dict:
     if mission:
         hunt_targets = [prop.position for prop in [mission.real_prop, *mission.decoy_props]]
     if not hunt_targets:
+        floor_nodes = NAVIGATION_NODES_BY_FLOOR.get(seeker.position.floor.value, ())
         hunt_targets = [
-            {"x": -9.0, "z": -5.0}, {"x": 6.0, "z": -6.0},
-            {"x": -6.0, "z": 6.0}, {"x": 6.0, "z": 6.0},
+            {"x": node["position"][0], "z": node["position"][1]}
+            for node in floor_nodes
+        ] or [
+            {"x": -38.0, "z": -38.0}, {"x": -24.0, "z": -38.0},
+            {"x": -10.0, "z": -28.0}, {"x": -24.0, "z": -18.0},
         ]
     index = int(now / 8.0) % len(hunt_targets)
     return {
@@ -405,6 +422,21 @@ def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
                 "reason": "frozen_guard",
                 "role": SeekerRole.BLOCKER.value,
             }
+
+    if (
+        session.state.phase == GamePhase.ESCAPE
+        and session.vertical_progression_enabled
+        and session.vertical_round.phase == VerticalRoundPhase.ESCAPE_OPEN
+    ):
+        from app.game.vertical_flow import final_escape_position
+        gate_x, _, gate_z = final_escape_position(session)
+        return {
+            "state": "BLOCK",
+            "target_id": None,
+            "target": {"x": gate_x, "z": gate_z - 3.0},
+            "reason": "final_exit_blockade",
+            "role": SeekerRole.BLOCKER.value,
+        }
 
     # 추격자와 같은 목표를 추격하지 않도록 다른 구역 순찰
     primary_target = primary_intent.get("target", {"x": 0, "z": 0})

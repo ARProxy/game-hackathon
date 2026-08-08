@@ -26,6 +26,19 @@ def client():
 
 
 class TestWebSocketConnection:
+    def test_dynamic_start_hides_forbidden_profile(self, client):
+        with client.websocket_connect("/ws/dynamic-start/player1") as ws:
+            ws.send_json({
+                "type": "start_game",
+                "payload": {"dynamic_forbidden": True},
+            })
+            data = ws.receive_json()
+
+            assert data["type"] == "game_started"
+            assert data["state"]["forbidden_words"] == []
+            assert data["state"]["forbidden_profile"] == {"status": "observing"}
+            assert "round" not in data
+
     def test_quick_start_uses_default_words_and_creates_round(self, client):
         with client.websocket_connect("/ws/quick-start/player1") as ws:
             ws.send_json({"type": "start_game", "payload": {}})
@@ -72,6 +85,8 @@ class TestSpeechJudgment:
         ws.receive_json()  # game_started 소비
 
     def test_safe_speech(self, client):
+        from app.game.map_slots import get_map_slot
+
         with client.websocket_connect("/ws/room2/player1") as ws:
             self._start_game(ws)
             ws.send_json({
@@ -81,9 +96,37 @@ class TestSpeechJudgment:
             ping = ws.receive_json()
             data = ws.receive_json()
             assert ping["type"] == "sound_ping"
-            assert ping["position"] == {"x": -27, "z": -52}
+            spawn = get_map_slot("ROOF_RUNNER_SPAWN_A")["position"]
+            assert ping["position"] == {"x": spawn[0], "z": spawn[2]}
             assert data["type"] == "speech_safe"
             assert data["transcript"] == "반짝이는 물건 확인해줘"
+
+    def test_dynamic_freeze_does_not_reveal_matched_word(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/dynamic-freeze/player1") as ws:
+            ws.send_json({
+                "type": "start_game",
+                "payload": {"dynamic_forbidden": True},
+            })
+            ws.receive_json()
+            session = session_manager.get_or_create("dynamic-freeze")
+            session.dynamic_forbidden.apply(
+                ["마이크"], analyzed_through=3, now=100.0, reason="test",
+            )
+            session.state.forbidden_words = ["마이크"]
+            session.engine.update_words(["마이크"])
+
+            ws.send_json({
+                "type": "speech",
+                "payload": {"transcript": "마이크를 확인해", "is_final": True},
+            })
+            assert ws.receive_json()["type"] == "sound_ping"
+            freeze = ws.receive_json()
+            assert freeze["type"] == "freeze"
+            assert "matched_word" not in freeze
+            assert "matched_stage" not in freeze
+            assert "confidence" not in freeze
 
 
 class TestVerticalStageInteraction:
@@ -111,9 +154,9 @@ class TestVerticalStageInteraction:
             assert "아직 활성화" in rejected["reason"]
 
     def test_server_advances_rooftop_stage_from_authoritative_position(self, client):
+        from app.game.map_slots import get_map_slot
         from app.game.progression import WorldFloor
         from app.game.session import session_manager
-        from app.game.vertical_flow import mission_interaction_position
 
         with client.websocket_connect("/ws/vertical-enabled/player1") as ws:
             ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
@@ -121,14 +164,26 @@ class TestVerticalStageInteraction:
             session = session_manager.get_or_create("vertical-enabled")
             session.vertical_progression_enabled = True
             player = session.state.get_player("player1")
-            x, y, z = mission_interaction_position(session.vertical_round.phase)
-            player.position.x, player.position.y, player.position.z = x, y, z
             player.position.floor = WorldFloor.ROOF
 
-            ws.send_json({
-                "type": "action",
-                "payload": {"action_type": "interact_stage_mission"},
-            })
+            for signal_id, slot_id in [
+                ("center", "ROOF_SIGNAL_CENTER"),
+                ("east", "ROOF_SIGNAL_EAST"),
+                ("west", "ROOF_SIGNAL_WEST"),
+            ]:
+                slot = get_map_slot(slot_id)
+                player.position.x, player.position.y, player.position.z = slot["interactionPosition"]
+                ws.send_json({
+                    "type": "action",
+                    "payload": {
+                        "action_type": "interact_stage_mission",
+                        "signal_id": signal_id,
+                    },
+                })
+                progress = ws.receive_json()
+                assert progress["type"] == "rooftop_signal_progress"
+
+            assert progress["completed"]
             advanced = ws.receive_json()
 
             assert advanced["type"] == "vertical_stage_advanced"
@@ -136,12 +191,177 @@ class TestVerticalStageInteraction:
             assert advanced["next_phase"] == "floor_3"
             assert advanced["progression"]["active_floor"] == "F3"
 
+    def test_intercom_speech_advances_floor_two_with_ordered_clue(self, client):
+        from app.game.progression import WorldFloor
+        from app.game.session import session_manager
+        from app.game.vertical_flow import mission_interaction_position
+
+        with client.websocket_connect("/ws/vertical-intercom/player1") as ws:
+            ws.send_json({
+                "type": "start_game",
+                "payload": {"forbidden_words": ["열쇠"]},
+            })
+            ws.receive_json()
+            session = session_manager.get_or_create("vertical-intercom")
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+            player = session.state.get_player("player1")
+            x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_2)
+            player.position.x, player.position.y, player.position.z = x, y, z
+            player.position.floor = WorldFloor.F2
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+            assert ws.receive_json()["type"] == "vertical_mission_started"
+            session.vertical_missions.intercom.ai_arrived = True
+            answer = ", ".join(
+                f"{item['color']} {item['shape']}"
+                for item in session.vertical_missions.intercom.sequence
+            )
+            ws.send_json({
+                "type": "speech",
+                "payload": {"transcript": answer, "is_final": True},
+            })
+
+            assert ws.receive_json()["type"] == "sound_ping"
+            assert ws.receive_json()["type"] == "speech_safe"
+            assert ws.receive_json()["type"] == "intercom_result"
+            advanced = ws.receive_json()
+            assert advanced["type"] == "vertical_stage_advanced"
+            assert advanced["next_phase"] == "floor_1"
+            assert advanced["clue"] == {"word": "교정", "order": 2, "total": 3}
+
+    def test_simultaneous_device_advances_floor_one(self, client):
+        from app.game.map_slots import get_map_slot
+        from app.game.progression import WorldFloor
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/vertical-simultaneous/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("vertical-simultaneous")
+            from app.game.progression import FinalRoute
+            session.final_route_choice = FinalRoute.FIELD
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
+            human = session.state.get_player("player1")
+            partner = session.state.get_player("partner")
+            human.position.x, human.position.y, human.position.z = get_map_slot("F1_DEVICE_A")["position"]
+            human.position.floor = WorldFloor.F1
+            partner.position.x, partner.position.y, partner.position.z = get_map_slot("F1_DEVICE_B")["position"]
+            partner.position.floor = WorldFloor.F1
+            session.vertical_missions.simultaneous.ai_ready = True
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+            activated = ws.receive_json()
+            advanced = ws.receive_json()
+            assert activated["type"] == "device_activated"
+            assert activated["success"]
+            assert advanced["type"] == "vertical_stage_advanced"
+            assert advanced["next_phase"] == "field_final"
+            assert advanced["clue"] == {"word": "탈출", "order": 3, "total": 3}
+
+    def test_field_final_ready_never_sends_completed_spell(self, client):
+        from app.game.progression import WorldFloor
+        from app.game.session import session_manager
+        from app.game.vertical_flow import activate_final_station, final_station_position
+
+        with client.websocket_connect("/ws/vertical-final-ready/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("vertical-final-ready")
+            session.vertical_round.phase = VerticalRoundPhase.FIELD_FINAL
+            for actor_id in ("player1", "partner", "partner-2"):
+                actor = session.state.get_player(actor_id)
+                actor.position.x, actor.position.y, actor.position.z = final_station_position(actor_id)
+                actor.position.floor = WorldFloor.FIELD
+            activate_final_station(session, "partner")
+            activate_final_station(session, "partner-2")
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+            station = ws.receive_json()
+            ready = ws.receive_json()
+            assert station["type"] == "final_station_activated"
+            assert station["all_ready"]
+            assert ready["type"] == "vertical_final_ready"
+            assert ready["required_clues"] == 3
+            assert "spell_words" not in ready
+            assert "달빛" not in str(ready)
+
+    def test_basement_devices_spell_and_exit_form_closed_loop(self, client):
+        from app.game.map_slots import get_map_slot
+        from app.game.progression import FinalRoute, WorldFloor
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/vertical-basement-loop/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("vertical-basement-loop")
+            session.final_route_choice = FinalRoute.BASEMENT
+            session.vertical_round.final_route = FinalRoute.BASEMENT
+            session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+            human = session.state.get_player("player1")
+            mission = session.vertical_missions.basement
+
+            for index, device_id in enumerate(mission.correct_order):
+                device = next(item for item in mission.devices if item.device_id == device_id)
+                human.position.x, human.position.y, human.position.z = get_map_slot(
+                    device.slot_id
+                )["position"]
+                human.position.floor = WorldFloor.B1
+                ws.send_json({
+                    "type": "action",
+                    "payload": {
+                        "action_type": "activate_basement_device",
+                        "device_id": device_id,
+                    },
+                })
+                activated = ws.receive_json()
+                assert activated["type"] == "basement_device_activated"
+                assert activated["success"]
+                if index < 2:
+                    assert activated["progress"] == index + 1
+
+            ready = ws.receive_json()
+            assert ready["type"] == "vertical_final_ready"
+            assert "spell_words" not in ready
+            assert session.state.phase == GamePhase.FINAL_SPELL
+
+            ws.send_json({
+                "type": "spell",
+                "payload": {"spell_text": "달빛 교정 탈출"},
+            })
+            spell = ws.receive_json()
+            assert spell["type"] == "spell_success"
+            assert spell["progression"]["phase"] == "escape_open"
+
+            session.state.get_player("partner").eliminate()
+            session.state.get_player("partner-2").eliminate()
+            human.position.x, human.position.y, human.position.z = get_map_slot(
+                "BASEMENT_ESCAPE_GATE"
+            )["position"]
+            human.position.floor = WorldFloor.B1
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "vertical_escape"},
+            })
+            escaped = ws.receive_json()
+            won = ws.receive_json()
+            assert escaped["type"] == "runner_escaped"
+            assert escaped["gate_id"] == "basement_final_exit"
+            assert won["type"] == "game_won"
+            assert won["reason"] == "vertical_partial_escape"
+            assert won["final_route"] == "basement"
+
     def test_sound_ping_precedes_judgment_at_latest_position(self, client):
         with client.websocket_connect("/ws/room11/player1") as ws:
             self._start_game(ws)
             ws.send_json({
                 "type": "action",
-                "payload": {"action_type": "move", "x": -26.8, "z": -51.8},
+                "payload": {"action_type": "move", "x": -26.8, "z": -37.2},
             })
             ws.send_json({
                 "type": "speech",
@@ -153,7 +373,7 @@ class TestVerticalStageInteraction:
             assert ping == {
                 "type": "sound_ping",
                 "player_id": "player1",
-                "position": {"x": -26.8, "z": -51.8},
+                "position": {"x": -26.8, "z": -37.2},
             }
             assert judgment["type"] == "speech_safe"
 
@@ -226,6 +446,7 @@ class TestActions:
 
     def test_move_rejects_instant_teleport_and_keeps_server_position(self, client):
         from app.game.session import session_manager
+        from app.game.map_slots import get_map_slot
 
         with client.websocket_connect("/ws/move-speed/player1") as ws:
             self._start_game(ws)
@@ -242,7 +463,8 @@ class TestActions:
                 "action_type": "move",
                 "reason": "implausible_movement",
             }
-            assert (player.position.x, player.position.z) == (-27, -52)
+            spawn = get_map_slot("ROOF_RUNNER_SPAWN_A")["position"]
+            assert (player.position.x, player.position.z) == (spawn[0], spawn[2])
 
     def test_ai_partner_can_rescue_human(self, client):
         from app.game.session import session_manager
@@ -377,10 +599,10 @@ class TestActions:
                 "player_id": "player1",
                 "reason": "caught_by_seeker",
             }
-            assert game_over == {
-                "type": "game_over",
-                "reason": "caught_by_seeker",
-            }
+            assert game_over["type"] == "game_over"
+            assert game_over["reason"] == "caught_by_seeker"
+            assert game_over["escaped_player_ids"] == []
+            assert "companion_statuses" in game_over
             state = session_manager.get_or_create("room10").state
             assert state.get_player("player1").status.value == "eliminated"
             assert state.phase.value == "result"
@@ -561,7 +783,9 @@ class TestActiveHunterFlow:
                 ws.receive_json()
             assert ((seeker.position.x - start[0]) ** 2 + (seeker.position.z - start[1]) ** 2) ** 0.5 < 0.2
             before_idle = (seeker.position.x, seeker.position.z)
-            time.sleep(0.35)
+            # 새 F3 스폰은 플레이어를 근거리 감지하므로 첫 틱은 DETECTED 정지 연출이다.
+            # 다음 CHASE 틱까지 기다려 서버 시간 기반 이동을 확인한다.
+            time.sleep(0.65)
             assert (seeker.position.x, seeker.position.z) != before_idle
 
 
@@ -579,16 +803,10 @@ class TestEscapeFlow:
             session.spell_words = ["파란", "하늘", "별"]
             session.state.phase = GamePhase.FINAL_SPELL
             gate = session.active_gate_payload()
-            allow_elapsed_movement(session, "player1")
-
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "move",
-                    "x": gate["position"]["x"],
-                    "z": gate["position"]["z"],
-                },
-            })
+            player = session.state.get_player("player1")
+            assert player is not None
+            player.position.x = gate["position"]["x"]
+            player.position.z = gate["position"]["z"]
             ws.send_json({
                 "type": "action",
                 "payload": {"action_type": "gate_arrived", "gate_id": gate["gate_id"]},
@@ -673,10 +891,11 @@ class TestEscapeFlow:
                 "player_id": "player1",
                 "reason": "caught_by_seeker",
             }
-            assert ws.receive_json() == {
-                "type": "game_over",
-                "reason": "caught_by_seeker",
-            }
+            game_over = ws.receive_json()
+            assert game_over["type"] == "game_over"
+            assert game_over["reason"] == "caught_by_seeker"
+            assert game_over["escaped_player_ids"] == []
+            assert "companion_statuses" in game_over
             assert player.status.value == "eliminated"
             assert session.state.phase.value == "result"
 
@@ -729,24 +948,16 @@ class TestEscapeFlow:
             session.spell_words = ["별"]
             session.state.phase = GamePhase.FINAL_SPELL
             gate = started["active_gate"]
-            allow_elapsed_movement(session, "player1")
-
-            ws.send_json({
-                "type": "action",
-                "payload": {
-                    "action_type": "move",
-                    "x": gate["position"]["x"],
-                    "z": gate["position"]["z"],
-                },
-            })
+            player = session.state.get_player("player1")
+            assert player is not None
+            player.position.x = gate["position"]["x"]
+            player.position.z = gate["position"]["z"]
             ws.send_json({
                 "type": "action",
                 "payload": {"action_type": "gate_arrived", "gate_id": gate["gate_id"]},
             })
             assert ws.receive_json()["type"] == "gate_arrived"
 
-            player = session.state.get_player("player1")
-            assert player is not None
             player.freeze()
             ws.send_json({"type": "spell", "payload": {"spell_text": "별"}})
             assert ws.receive_json()["type"] == "spell_rejected"

@@ -7,15 +7,17 @@ import pytest
 from app.ai.vertical_missions import (
     BasementFinalMission,
     IntercomMission,
+    RooftopSignalMission,
     SimultaneousMission,
     VerticalMissions,
     create_basement_mission,
     create_vertical_missions,
 )
-from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFloor
+from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.session import GameSession
 from app.game.state import PlayerRole
 from app.game.vertical_flow import (
+    activate_basement_device,
     activate_simultaneous_device,
     complete_current_stage,
     mission_interaction_position,
@@ -33,6 +35,7 @@ def active_session() -> tuple[GameSession, object]:
     human = session.state.add_player("human", PlayerRole.HUMAN)
     session.setup_game(["열쇠"])
     session.vertical_progression_enabled = True
+    session.final_route_choice = FinalRoute.FIELD
     return session, human
 
 
@@ -56,11 +59,32 @@ def advance_to_floor(session: GameSession, human, target_phase: VerticalRoundPha
         place_at_current_mission(session, human)
         # 2층/1층 미션은 먼저 완료해야 advance 가능
         if session.vertical_missions is not None:
-            if phase == VerticalRoundPhase.FLOOR_2:
+            if phase == VerticalRoundPhase.ROOFTOP_INTRO:
+                session.vertical_missions.rooftop.completed = True
+            elif phase == VerticalRoundPhase.FLOOR_2:
                 session.vertical_missions.intercom.completed = True
             elif phase == VerticalRoundPhase.FLOOR_1:
                 session.vertical_missions.simultaneous.completed = True
         complete_current_stage(session, "human")
+
+
+# ---------------------------------------------------------------------------
+# RooftopSignalMission 단위 테스트
+# ---------------------------------------------------------------------------
+
+class TestRooftopSignalMission:
+    def test_requires_center_east_west_order(self) -> None:
+        mission = RooftopSignalMission()
+        wrong = mission.activate("east")
+        assert not wrong["success"]
+        assert wrong["expected_signal_id"] == "center"
+        assert mission.activated_signal_ids == []
+
+        assert mission.activate("center")["progress"] == 1
+        assert mission.activate("east")["progress"] == 2
+        result = mission.activate("west")
+        assert result["completed"]
+        assert result["next_signal_id"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +138,18 @@ class TestIntercomMission:
         r2 = mission.check_answer("초록 별")
         assert r2["attempts"] == 2
         assert r2["exhausted"]
+
+    def test_check_answer_requires_sequence_order(self) -> None:
+        mission = IntercomMission(
+            sequence=[
+                {"shape": "삼각형", "color": "빨간"},
+                {"shape": "원", "color": "파란"},
+                {"shape": "네모", "color": "초록"},
+            ],
+        )
+        result = mission.check_answer("초록 네모, 빨간 삼각형, 파란 원")
+        assert not result["success"]
+        assert not result["order_valid"]
 
     def test_describe_for_ai_avoids_forbidden_words(self) -> None:
         mission = IntercomMission(
@@ -186,6 +222,7 @@ class TestSessionVerticalMissions:
         session, _ = active_session()
         assert session.vertical_missions is not None
         vm: VerticalMissions = session.vertical_missions
+        assert not vm.rooftop.completed
         assert len(vm.intercom.sequence) == 3
         assert not vm.simultaneous.completed
 
@@ -252,6 +289,8 @@ class TestIntercomFlow:
         human.position.floor = WorldFloor.F2
 
         vm: VerticalMissions = session.vertical_missions
+        start_intercom_mission(session)
+        vm.intercom.ai_arrived = True
         # 시퀀스를 알고 있으므로 정확히 입력
         text_parts = [f"{item['color']} {item['shape']}" for item in vm.intercom.sequence]
         transcript = ", ".join(text_parts)
@@ -263,8 +302,23 @@ class TestIntercomFlow:
         advance_to_floor(session, human, VerticalRoundPhase.FLOOR_2)
         human.position.x, human.position.z = 0.0, 0.0
         human.position.floor = WorldFloor.F2
+        start_intercom_mission(session)
+        session.vertical_missions.intercom.ai_arrived = True
 
         with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
+            submit_intercom_answer(session, "human", "아무 말")
+
+    def test_submit_intercom_waits_for_ai_report(self) -> None:
+        session, human = active_session()
+        advance_to_floor(session, human, VerticalRoundPhase.FLOOR_2)
+        start_intercom_mission(session)
+
+        from app.game.map_slots import get_map_slot
+        slot = get_map_slot("F2_INTERCOM_B")
+        human.position.x, human.position.y, human.position.z = slot["position"]
+        human.position.floor = WorldFloor.F2
+
+        with pytest.raises(InvalidProgression, match="AI 동료의 기호 보고"):
             submit_intercom_answer(session, "human", "아무 말")
 
 
@@ -372,7 +426,13 @@ class TestBasementFinalMission:
         assert status is not None
         assert status["device_id"] == "panel"
         assert status["name"] == "배전반"
-        assert status["state"] == "off"
+        expected = "standby" if bm.correct_order[0] == "panel" else "off"
+        assert status["state"] == expected
+        states = {
+            device.device_id: bm.get_device_status(device.device_id)["state"]
+            for device in bm.devices
+        }
+        assert list(states.values()).count("standby") == 1
 
         # 존재하지 않는 장치
         assert bm.get_device_status("unknown") is None
@@ -390,6 +450,28 @@ class TestBasementFinalMission:
         result = bm.activate_device("nonexistent", "human")
         assert not result["success"]
         assert result["reason"] == "unknown_device"
+
+    def test_server_requires_actor_at_matching_basement_device(self) -> None:
+        from app.game.map_slots import get_map_slot
+
+        session, human = active_session()
+        session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+        human.position.floor = WorldFloor.B1
+        human.position.x, human.position.z = 0.0, 0.0
+        first_id = session.vertical_missions.basement.correct_order[0]
+
+        with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
+            activate_basement_device(session, human.player_id, first_id)
+
+        device = next(
+            item for item in session.vertical_missions.basement.devices
+            if item.device_id == first_id
+        )
+        human.position.x, human.position.y, human.position.z = get_map_slot(
+            device.slot_id
+        )["position"]
+        result = activate_basement_device(session, human.player_id, first_id)
+        assert result["success"]
 
 
 # ---------------------------------------------------------------------------
