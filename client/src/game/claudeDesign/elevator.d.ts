@@ -22,4 +22,7 @@ export function buildElevatorRig(three: typeof THREE, options: {
   copBtns: Record<string, THREE.Mesh>
   copInd: THREE.Object3D
   PANEL_W: number
+  DOOR_W: number
+  DOOR_H: number
+  CAR_H: number
 }

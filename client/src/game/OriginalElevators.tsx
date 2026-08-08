@@ -1,6 +1,7 @@
 /** Claude Design ZIP의 elevator.js 리그를 원형 그대로 R3F 장면에 탑재한다. */
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
+import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { EVS, FLOOR_Y, type CampusFloor } from './campusV4Data.js'
@@ -50,6 +51,7 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
     at: 'F1', y: FLOOR_Y.F1, mode: 'idle', target: null,
     door: 0, wait: 0, previousY: FLOOR_Y.F1,
   })))
+  const physicsBodies = useRef(new Map<string, RapierRigidBody>())
   const playerFloor = useGameStore((state) => state.players[state.playerId]?.position.floor)
   const accessibleFloors = useGameStore((state) => state.verticalProgression?.accessible_floors ?? ['F1'])
   const [nearElevator, setNearElevator] = useState<number | null>(null)
@@ -148,10 +150,16 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
       for (const door of rig.carDoors) door.m.position.x = door.home + door.sd * slide
       for (const floor of ORDER) {
         const open = floor === runtime.at && runtime.mode !== 'moving' ? runtime.door : 0
-        for (const door of rig.landing[floor] ?? []) {
+        for (const [doorIndex, door] of (rig.landing[floor] ?? []).entries()) {
           door.position.x = door.userData.home + door.userData.sd * open * (rig.PANEL_W - 0.02)
+          physicsBodies.current.get(`landing-${index}-${floor}-${doorIndex}`)?.setNextKinematicTranslation({
+            x: door.position.x,
+            y: FLOOR_Y[floor as CampusFloor] + rig.DOOR_H / 2,
+            z: EVS[index].z[1] - 0.03,
+          })
         }
       }
+      syncCarPhysics(physicsBodies.current, index, EVS[index], rig, runtime.y, slide)
     })
   })
 
@@ -159,6 +167,15 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
   const promptElevator = promptIndex === null ? null : EVS[promptIndex]
   return <>
     {result.roots.map((rig, index) => <primitive key={EVS[index].id} object={rig.root} />)}
+    {result.roots.map((rig, index) => (
+      <ElevatorPhysics
+        key={`physics-${EVS[index].id}`}
+        index={index}
+        rig={rig}
+        visibleFloors={visibleFloors}
+        bodies={physicsBodies}
+      />
+    ))}
     {promptElevator && playerFloor && (
       <Html position={[(promptElevator.x[0] + promptElevator.x[1]) / 2, FLOOR_Y[playerFloor as CampusFloor] + 2.4, promptElevator.z[1] + 0.8]} center>
         <div style={{ width: 'max-content', padding: '7px 11px', borderRadius: 7, color: '#ffe1aa', background: 'rgba(8,12,16,.9)', border: '1px solid #b79a68', fontSize: 12, fontWeight: 800 }}>
@@ -169,4 +186,95 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
       </Html>
     )}
   </>
+}
+
+type ElevatorRig = ReturnType<typeof buildElevatorRig>
+
+function registerBody(
+  bodies: React.RefObject<Map<string, RapierRigidBody>>,
+  key: string,
+  body: RapierRigidBody | null,
+) {
+  if (body) bodies.current.set(key, body)
+  else bodies.current.delete(key)
+}
+
+function ElevatorPhysics({ index, rig, visibleFloors, bodies }: {
+  index: number
+  rig: ElevatorRig
+  visibleFloors?: CampusFloor[]
+  bodies: React.RefObject<Map<string, RapierRigidBody>>
+}) {
+  const elevator = EVS[index]
+  const visible = new Set(visibleFloors)
+  const centerX = (elevator.x[0] + elevator.x[1]) / 2
+  const centerZ = (elevator.z[0] + elevator.z[1]) / 2
+  const carWidth = Math.min(elevator.x[1] - elevator.x[0] - 0.42, 2)
+  const carDepth = Math.min(elevator.z[1] - elevator.z[0] - 0.95, 1.95)
+  const carHalfWidth = carWidth / 2
+  const carHalfDepth = carDepth / 2
+
+  return <>
+    {ORDER.filter((floor) => !visibleFloors || visible.has(floor as CampusFloor)).flatMap((floor) => (
+      [-1, 1].map((side, doorIndex) => (
+        <RigidBody
+          key={`${floor}-${side}`}
+          ref={(body) => registerBody(bodies, `landing-${index}-${floor}-${doorIndex}`, body)}
+          type="kinematicPosition"
+          colliders={false}
+          position={[
+            centerX + side * rig.PANEL_W / 2,
+            FLOOR_Y[floor as CampusFloor] + rig.DOOR_H / 2,
+            elevator.z[1] - 0.03,
+          ]}
+        >
+          <CuboidCollider args={[rig.PANEL_W / 2, rig.DOOR_H / 2, 0.023]} />
+        </RigidBody>
+      ))
+    ))}
+    <RigidBody ref={(body) => registerBody(bodies, `car-floor-${index}`, body)} type="kinematicPosition" colliders={false} position={[centerX, FLOOR_Y.F1 + 0.04, centerZ]}>
+      <CuboidCollider args={[carHalfWidth, 0.04, carHalfDepth]} />
+    </RigidBody>
+    <RigidBody ref={(body) => registerBody(bodies, `car-back-${index}`, body)} type="kinematicPosition" colliders={false} position={[centerX, FLOOR_Y.F1 + rig.CAR_H / 2, centerZ - carHalfDepth + 0.02]}>
+      <CuboidCollider args={[carHalfWidth, rig.CAR_H / 2, 0.02]} />
+    </RigidBody>
+    {[-1, 1].map((side) => (
+      <RigidBody key={`side-${side}`} ref={(body) => registerBody(bodies, `car-side-${index}-${side}`, body)} type="kinematicPosition" colliders={false} position={[centerX + side * (carHalfWidth - 0.02), FLOOR_Y.F1 + rig.CAR_H / 2, centerZ]}>
+        <CuboidCollider args={[0.02, rig.CAR_H / 2, carHalfDepth]} />
+      </RigidBody>
+    ))}
+    {[-1, 1].map((side, doorIndex) => (
+      <RigidBody key={`door-${side}`} ref={(body) => registerBody(bodies, `car-door-${index}-${doorIndex}`, body)} type="kinematicPosition" colliders={false} position={[centerX + side * rig.PANEL_W / 2, FLOOR_Y.F1 + rig.DOOR_H / 2, centerZ + carHalfDepth - 0.03]}>
+        <CuboidCollider args={[rig.PANEL_W / 2, rig.DOOR_H / 2, 0.023]} />
+      </RigidBody>
+    ))}
+  </>
+}
+
+function syncCarPhysics(
+  bodies: Map<string, RapierRigidBody>,
+  index: number,
+  elevator: (typeof EVS)[number],
+  rig: ElevatorRig,
+  y: number,
+  slide: number,
+) {
+  const centerX = (elevator.x[0] + elevator.x[1]) / 2
+  const centerZ = (elevator.z[0] + elevator.z[1]) / 2
+  const carWidth = Math.min(elevator.x[1] - elevator.x[0] - 0.42, 2)
+  const carDepth = Math.min(elevator.z[1] - elevator.z[0] - 0.95, 1.95)
+  const halfWidth = carWidth / 2
+  const halfDepth = carDepth / 2
+  bodies.get(`car-floor-${index}`)?.setNextKinematicTranslation({ x: centerX, y: y + 0.04, z: centerZ })
+  bodies.get(`car-back-${index}`)?.setNextKinematicTranslation({ x: centerX, y: y + rig.CAR_H / 2, z: centerZ - halfDepth + 0.02 })
+  for (const side of [-1, 1]) {
+    bodies.get(`car-side-${index}-${side}`)?.setNextKinematicTranslation({ x: centerX + side * (halfWidth - 0.02), y: y + rig.CAR_H / 2, z: centerZ })
+  }
+  for (const [doorIndex, side] of [-1, 1].entries()) {
+    bodies.get(`car-door-${index}-${doorIndex}`)?.setNextKinematicTranslation({
+      x: centerX + side * (rig.PANEL_W / 2 + slide),
+      y: y + rig.DOOR_H / 2,
+      z: centerZ + halfDepth - 0.03,
+    })
+  }
 }

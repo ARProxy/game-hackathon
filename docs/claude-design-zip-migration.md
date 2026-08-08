@@ -16,7 +16,7 @@
 | `campus.js` | `client/src/game/campusV4Data.js` | 린트 주석 외 원본 동일 |
 | `textures.js` | `client/src/game/textures.ts` | 재질 생성 함수와 재질군 전체 포팅 |
 | `elevator.js` | `client/src/game/claudeDesign/elevator.js` | 433줄 원본 보존, R3F 장면에서 직접 호출 |
-| Canvas 승강기 상태기계 | `client/src/game/OriginalElevators.tsx` | 호출·문·카 이동·탑승자 이동·서버 층 승인 연결 |
+| Canvas 승강기 상태기계 | `client/src/game/OriginalElevators.tsx` | 호출·문·카 이동·탑승자 이동·서버 층 승인·동적 물리 연결 |
 | Canvas 문 렌더 | `client/src/game/OriginalDoors.tsx` | 122개 문, 원본 경첩·치수·색·근접 개폐·동적 충돌 연결 |
 | Canvas 야간 환경 | `client/src/game/Fog.tsx`, `client/src/App.tsx` | ACES 노출, 안개, 환경 반사, 달빛·반구광 복원 |
 | Canvas 형상 렌더 | `client/src/game/SchoolCampusV4.tsx` | 원본 `solids`, `visuals`, `plates`, `cyls`, `fixtures` 전부 연결 |
@@ -38,10 +38,13 @@ seed 0 기준 고정 계약은 다음과 같다.
 
 `npm run verify:campus`가 위 수량과 발광 기구·계단 경사·교실 문 존재를 검사한다. 따라서 인테리어 생성이나 렌더 입력이 빠지면 빌드 전 검증에서 바로 드러난다.
 
+## 승강기 물리 계약
+
+원본 `elevator.js`는 승강장 문을 `onSolid`로 넘기지만, 초기 이식에서는 해당 콜백이 렌더 전용으로 비어 있었다. 현재는 원본 문짝 치수와 개폐량을 따르는 키네마틱 충돌체를 별도로 동기화한다. 카 바닥, 후면, 양 측벽, 카 문도 실제 카 높이와 함께 이동한다. 따라서 닫힌 문 통과, 운행 중 카 이탈, 바닥 관통을 물리 엔진이 차단한다.
+
 ## 남은 시각 QA
 
 - 원본 ZIP 기준 구도와 실제 게임 플레이 구도의 스크린샷 비교
-- 닫힌 승강장 문과 카 내부의 물리 차단 확인
 - 교실·복도·계단·옥상에서 노출과 안개 농도 비교
 - 플레이어 눈높이에서 가구 크기와 문 통과 폭 확인
 
