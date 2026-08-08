@@ -28,9 +28,11 @@ function resolveWebSocketBaseUrl(): string {
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const hostname = window.location.hostname.replace(/^\[|\]$/g, '')
-  const isLocal = ['localhost', '127.0.0.1', '::1'].includes(hostname)
   const localHostname = hostname.includes(':') ? `[${hostname}]` : hostname
-  const host = isLocal ? `${localHostname}:8000` : window.location.host
+  // Vite 개발 서버는 LAN에서도 5173, API 서버는 8000을 사용한다.
+  // 같은 origin을 쓰면 5173의 Vite에 WebSocket을 요청한 뒤 구형 데모로
+  // 조용히 폴백해 서버의 옥상 스폰/수직 진행 계약이 전부 사라진다.
+  const host = import.meta.env.DEV ? `${localHostname}:8000` : window.location.host
   return `${protocol}//${host}/ws`
 }
 

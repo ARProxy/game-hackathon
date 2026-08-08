@@ -467,6 +467,23 @@ for (const gate of gameplayGateContract.gates) {
   assert.equal(embedded, false, `${gate.id} is embedded in a v4 structural wall`)
 }
 const generatedDeviceById = Object.fromEntries(campus.devices.map((device) => [device.id, device]))
+const actorSpawnSlots = {
+  human: 'ROOF_RUNNER_SPAWN_A',
+  partner: 'ROOF_RUNNER_SPAWN_B',
+  'partner-2': 'ROOF_RUNNER_SPAWN_C',
+  seeker: 'F3_SEEKER_REVEAL_ENTRY',
+  'seeker-2': 'F1_BLOCKER_SPAWN_ENTRY',
+}
+for (const [actorId, slotId] of Object.entries(actorSpawnSlots)) {
+  const slot = verticalMapContract.slots[slotId]
+  assert.equal(slot?.kind, 'spawn', `${actorId} references a non-spawn slot`)
+  assert.equal(slot.position?.length, 3, `${actorId} spawn is not a 3D position`)
+  assert.equal(slot.position[1], verticalMapContract.floorY[slot.floor], `${actorId} feet are not on ${slot.floor}`)
+}
+assert.ok(
+  ['human', 'partner', 'partner-2'].every((actorId) => verticalMapContract.slots[actorSpawnSlots[actorId]].floor === 'ROOF'),
+  'All three runners must begin on the rooftop',
+)
 for (const [slotId, slot] of Object.entries(verticalMapContract.slots).filter(([, item]) => item.kind === 'device')) {
   const device = generatedDeviceById[slot.deviceId]
   assert.ok(device, `${slotId} references missing generated device ${slot.deviceId}`)

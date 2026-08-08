@@ -1,5 +1,7 @@
 /** 서버를 실행할 수 없는 심사 환경용 결정적 로컬 게임 transport. */
 
+import { actorSpawnPosition } from './spawnContract'
+
 type Emit = (message: Record<string, unknown>) => void
 
 const QUESTIONS = [
@@ -20,6 +22,20 @@ const PROP_POOL = [
   { word: '책', prop_id: 'demo-book', name: '낡은 책', color: '#6d5038', mesh: 'box', scale: 0.4 },
 ]
 const GATE = { gate_id: 'gate_back', position: { x: -58, z: -56 } }
+const ROOFTOP_PROGRESSION = {
+  enabled: true,
+  phase: 'rooftop_intro',
+  mission_complete: false,
+  final_route: null,
+  active_floor: 'ROOF',
+  accessible_floors: ['ROOF'],
+  seeker_count: 0,
+  seeker_threat: 'inactive',
+  time_escalation_enabled: true,
+  forbidden_word_violations: 0,
+  fw_rage_tier: 'calm',
+  fw_speed_multiplier: 1,
+}
 
 export default class DemoTransport {
   private playerId: string
@@ -27,8 +43,8 @@ export default class DemoTransport {
   private phase = 'lobby'
   private missionIndex = 0
   private gateArrived = false
-  private playerPosition = { x: -9.8, z: -22 }
-  private seekerPosition = { x: 26, z: -27 }
+  private playerPosition = actorSpawnPosition('human')
+  private seekerPosition = actorSpawnPosition('seeker')
   private pendingInspection = false
   private paused = false
   private timers = new Set<number>()
@@ -79,6 +95,8 @@ export default class DemoTransport {
 
   private start(skipReveal: boolean) {
     this.phase = 'playing'
+    this.playerPosition = actorSpawnPosition('human')
+    this.seekerPosition = actorSpawnPosition('seeker')
     const words = this.selected.map((item) => item.word)
     if (!skipReveal) this.send({ type: 'forbidden_words_ready', forbidden_words: words })
     this.send({
@@ -87,10 +105,12 @@ export default class DemoTransport {
         forbidden_words: words,
         players: {
           [this.playerId]: { role: 'human', status: 'alive', position: this.playerPosition },
-          partner: { role: 'ai_partner', status: 'alive', position: { x: -16, z: -2 } },
-          'partner-2': { role: 'ai_partner', status: 'alive', position: { x: -12.5, z: -2 } },
+          partner: { role: 'ai_partner', status: 'alive', position: actorSpawnPosition('partner') },
+          'partner-2': { role: 'ai_partner', status: 'alive', position: actorSpawnPosition('partner-2') },
           seeker: { role: 'seeker', status: 'alive', position: this.seekerPosition },
+          'seeker-2': { role: 'seeker', status: 'alive', position: actorSpawnPosition('seeker-2') },
         },
+        vertical_progression: ROOFTOP_PROGRESSION,
       },
       round: {
         missions: words.map((forbidden_word, mission_id) => ({ mission_id, forbidden_word })),
@@ -167,7 +187,7 @@ export default class DemoTransport {
     }
     if (this.paused) return
     if (action === 'move') {
-      this.playerPosition = { x: Number(payload.x), z: Number(payload.z) }
+      this.playerPosition = { ...this.playerPosition, x: Number(payload.x), z: Number(payload.z) }
     } else if (action === 'seeker_think') {
       const playerDistance = Math.hypot(
         this.playerPosition.x - this.seekerPosition.x,
@@ -185,6 +205,7 @@ export default class DemoTransport {
       if (distance > 0.01) {
         const step = Math.min(this.phase === 'escape' ? 0.65 : chasing ? 0.48 : 0.3, distance)
         this.seekerPosition = {
+          ...this.seekerPosition,
           x: this.seekerPosition.x + dx / distance * step,
           z: this.seekerPosition.z + dz / distance * step,
         }
@@ -199,12 +220,12 @@ export default class DemoTransport {
       this.send({
         type: 'companion_intent', companion_id: 'partner', state: this.phase === 'escape' ? 'MOVE_TO_GATE' : 'EXPLORE_ZONE',
         target_id: null, target: this.phase === 'escape' ? GATE.position : { x: -9, z: -5 },
-        partner_position: { x: -16, z: -2 }, reason: 'demo_script',
+        partner_position: actorSpawnPosition('partner'), reason: 'demo_script',
       })
       this.send({
         type: 'companion_intent', companion_id: 'partner-2', state: this.phase === 'escape' ? 'MOVE_TO_GATE' : 'EXPLORE_ZONE',
         target_id: null, target: this.phase === 'escape' ? GATE.position : { x: 13, z: 8 },
-        partner_position: { x: -12.5, z: -2 }, reason: 'demo_script',
+        partner_position: actorSpawnPosition('partner-2'), reason: 'demo_script',
       })
     } else if (action === 'gate_arrived' && this.phase === 'final_spell') {
       this.gateArrived = true

@@ -33,7 +33,7 @@ def actor_spawn_slots() -> dict[str, dict]:
         "partner": get_map_slot("ROOF_RUNNER_SPAWN_B"),
         "partner-2": get_map_slot("ROOF_RUNNER_SPAWN_C"),
         "seeker": get_map_slot("F3_SEEKER_REVEAL_ENTRY"),
-        "seeker-2": get_map_slot("F1_STAIR_ARRIVAL_WEST"),
+        "seeker-2": get_map_slot("F1_BLOCKER_SPAWN_ENTRY"),
     }
 
 
@@ -43,4 +43,4 @@ def seeker_reveal_slot() -> dict:
 
 def secondary_seeker_slot() -> dict:
     """1층 협공 술래가 반대편 계단에서 등장하는 슬롯."""
-    return get_map_slot("F1_STAIR_ARRIVAL_WEST")
+    return get_map_slot("F1_BLOCKER_SPAWN_ENTRY")

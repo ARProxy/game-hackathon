@@ -9,8 +9,8 @@ import {
   GATE_SENSOR_LOCAL_Z,
   GATE_SLOTS,
 } from './gateContract'
-import actorContract from './actorContract.json'
 import trapContract from './trapContract.json'
+import { ACTOR_SPAWNS } from './spawnContract'
 
 export { GATE_SLOTS } from './gateContract'
 
@@ -97,10 +97,11 @@ export const LAMPS: { p: V2; h: number; c: string; tone: LampTone }[] = [
 
 /** 스폰 */
 export const SPAWNS = {
-  player: actorContract.spawns.human as V2,   // 본관 현관 앞
-  ai: actorContract.spawns.partner as V2,     // 조회대 옆
-  ai2: actorContract.spawns.partner2 as V2,   // 조회대 반대편
-  seeker: actorContract.spawns.seeker as V2,  // 체육관
+  player: ACTOR_SPAWNS.human.position,
+  ai: ACTOR_SPAWNS.partner.position,
+  ai2: ACTOR_SPAWNS['partner-2'].position,
+  seeker: ACTOR_SPAWNS.seeker.position,
+  seeker2: ACTOR_SPAWNS['seeker-2'].position,
 }
 
 /** ══ T1 미션 (열쇠 찾기) ══

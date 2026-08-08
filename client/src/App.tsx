@@ -27,6 +27,7 @@ import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
 import { sendGameMessage } from './hooks/useWebSocket'
+import { floorHeight } from './game/spawnContract'
 import './App.css'
 
 /* ─────────────────────────────────────────────
@@ -89,17 +90,17 @@ function Scene({
   const isPaused = useGameStore((state) => state.isPaused)
   const playerId = useGameStore((state) => state.playerId)
   const players = useGameStore((state) => state.players)
-  const actorPosition = (actorId: string, fallback: readonly [number, number]): [number, number, number] => {
+  const actorPosition = (actorId: string, fallback: readonly [number, number, number]): [number, number, number] => {
     const position = players[actorId]?.position
     return position
-      ? [position.x, position.y ?? 0, position.z]
-      : [fallback[0], 0, fallback[1]]
+      ? [position.x, position.y ?? floorHeight(position.floor), position.z]
+      : [...fallback]
   }
   const playerSpawn = actorPosition(playerId, SPAWNS.player)
   const partnerSpawn = actorPosition('partner', SPAWNS.ai)
   const partnerTwoSpawn = actorPosition('partner-2', SPAWNS.ai2)
   const seekerSpawn = actorPosition('seeker', SPAWNS.seeker)
-  const secondarySeekerSpawn = actorPosition('seeker-2', SPAWNS.seeker)
+  const secondarySeekerSpawn = actorPosition('seeker-2', SPAWNS.seeker2)
   const seekerCount = useGameStore((state) => state.verticalProgression?.seeker_count ?? 1)
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */

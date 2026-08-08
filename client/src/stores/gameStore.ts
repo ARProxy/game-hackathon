@@ -333,10 +333,15 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setVerticalProgression: (verticalProgression) => set({ verticalProgression }),
 
-  hydratePlayers: (players) => set({
-    players: Object.fromEntries(
+  hydratePlayers: (players) => set((state) => {
+    const hydratedPlayers = Object.fromEntries(
       Object.entries(players).map(([playerId, player]) => [playerId, { playerId, ...player }]),
-    ),
+    ) as Record<string, PlayerState>
+    const playerFloor = hydratedPlayers[state.playerId]?.position.floor
+    return {
+      players: hydratedPlayers,
+      currentFloor: playerFloor ?? state.currentFloor,
+    }
   }),
 
   setActiveGate: (activeGate) => set({ activeGate, gateArrived: false }),
