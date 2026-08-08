@@ -108,7 +108,7 @@ class GameState:
 
     def all_non_seeker_frozen_or_eliminated(self) -> bool:
         return all(
-            p.status in (PlayerStatus.FROZEN, PlayerStatus.ELIMINATED)
+            p.status in (PlayerStatus.FROZEN, PlayerStatus.ELIMINATED, PlayerStatus.ESCAPED)
             for p in self.players.values()
             if p.role != PlayerRole.SEEKER
         )

@@ -272,12 +272,13 @@ export function Lamp({ position, h, color, dynamicLight = true }: {
 }
 
 /**
- * v4 절차형 학교가 월드 지오메트리를 담당하고 기존 라운드 계약 컴포넌트는
- * 서버 좌표 마이그레이션이 끝날 때까지 그대로 유지한다.
+ * v4 절차형 학교가 월드 지오메트리를 담당하고 게임 모드에서만
+ * 서버 권위 트랩·게이트 계약을 그 위에 합성한다.
  */
-export default function SchoolCampus({ playerRef, visibleFloors, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape }: {
+export default function SchoolCampus({ playerRef, visibleFloors, referenceMode = false, activeTraps, gateId, gateOpen = false, onTrapEnter, onGateArrive, onGateEscape }: {
   playerRef: React.RefObject<PlayerHandle | null>
   visibleFloors?: FloorKey[]
+  referenceMode?: boolean
   activeTraps?: string[]
   gateId?: string
   gateOpen?: boolean
@@ -286,20 +287,22 @@ export default function SchoolCampus({ playerRef, visibleFloors, activeTraps, ga
   onGateEscape?: (id: string) => void
   elevatorY?: number
 }) {
-  const show = (floor: FloorKey) => !visibleFloors || visibleFloors.includes(floor)
   return (
     <group>
       <SchoolCampusV4 visibleFloors={visibleFloors} playerRef={playerRef} />
-      {TRAP_SLOTS.filter((trap) => show(trap.floor)).map((trap) => (
-        <TrapPlate key={trap.id} id={trap.id} position={trap.p} floor={trap.floor}
-          active={!activeTraps || activeTraps.includes(trap.id)} onTriggered={onTrapEnter} />
-      ))}
-      {GATE_SLOTS.map((gate) => (
-        <GateFrame key={gate.id} position={gate.p} rotationY={gate.ry} selected={gate.id === gateId}
-          open={gate.id === gateId && gateOpen}
-          onArrived={() => onGateArrive?.(gate.id)}
-          onEscaped={() => onGateEscape?.(gate.id)} />
-      ))}
+      {/* 원본 비교 시 메시만 숨기고 물리 객체의 생명주기는 그대로 유지한다. */}
+      <group visible={!referenceMode}>
+        {TRAP_SLOTS.map((trap) => (
+          <TrapPlate key={trap.id} id={trap.id} position={trap.p} floor={trap.floor}
+            active={!activeTraps || activeTraps.includes(trap.id)} onTriggered={onTrapEnter} />
+        ))}
+        {GATE_SLOTS.map((gate) => (
+          <GateFrame key={gate.id} position={gate.p} rotationY={gate.ry} selected={gate.id === gateId}
+            open={gate.id === gateId && gateOpen}
+            onArrived={() => onGateArrive?.(gate.id)}
+            onEscaped={() => onGateEscape?.(gate.id)} />
+        ))}
+      </group>
     </group>
   )
 }

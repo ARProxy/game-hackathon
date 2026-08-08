@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useState } from 'react'
 import { CHARACTERS } from '../game/Characters'
 import { useSettingsStore } from '../stores/settingsStore'
 
@@ -89,7 +89,7 @@ export default function StartFlow({ screen, onScreenChange, onStartSolo, onQuick
           <div className="character-grid">
             {runners.map((character) => (
               <button key={character.id} className={`character-card ${selectedCharacter === character.id ? 'selected' : ''}`} onClick={() => setSelectedCharacter(character.id)}>
-                <i style={{ '--character-color': character.c, '--character-glow': character.glow } as CSSProperties}><span /></i>
+                <i className={`character-portrait character-${character.id.toLowerCase()}`} aria-hidden="true"><span className="face" /><span className="detail" /></i>
                 <b>{character.name}</b><span>NO. {character.tag}</span><small>{character.accessory}</small>
               </button>
             ))}

@@ -290,6 +290,7 @@ interface FamilyDef {
   metal: number
   nrm: number
   env?: number
+  nrmScale?: number
 }
 
 const FAMILIES: Record<string, FamilyDef> = {
@@ -335,6 +336,7 @@ export interface BakedFamily {
   metalness: number
   roughness: number
   env: number
+  nrmScale: number
 }
 
 let CACHE: Record<string, BakedFamily> | null = null
@@ -356,7 +358,11 @@ export function bakeFamilies(): Record<string, BakedFamily> {
       t.needsUpdate = true
     }
     if (THREE.SRGBColorSpace) map.colorSpace = THREE.SRGBColorSpace
-    CACHE[name] = { map, normalMap, roughnessMap, uvScale: 1 / f.cover, metalness: f.metal, roughness: f.rough, env: f.env ?? 0.42 }
+    CACHE[name] = {
+      map, normalMap, roughnessMap, uvScale: 1 / f.cover,
+      metalness: f.metal, roughness: f.rough, env: f.env ?? 0.42,
+      nrmScale: f.nrmScale ?? (f.env ? 0.24 : 0.34),
+    }
   }
   return CACHE
 }

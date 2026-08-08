@@ -5,9 +5,11 @@ import time
 import pytest
 
 from app.ai.vertical_missions import (
+    BasementFinalMission,
     IntercomMission,
     SimultaneousMission,
     VerticalMissions,
+    create_basement_mission,
     create_vertical_missions,
 )
 from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFloor
@@ -307,3 +309,98 @@ class TestSimultaneousFlow:
 
         with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
             activate_simultaneous_device(session, "human", "A")
+
+
+# ---------------------------------------------------------------------------
+# BasementFinalMission 단위 테스트
+# ---------------------------------------------------------------------------
+
+class TestBasementFinalMission:
+    def test_create_basement_mission(self) -> None:
+        bm = create_basement_mission(seed=42)
+        assert len(bm.devices) == 3
+        assert len(bm.correct_order) == 3
+        assert set(bm.correct_order) == {"panel", "valve", "generator"}
+        assert not bm.completed
+        assert bm.reset_count == 0
+
+    def test_create_basement_mission_deterministic(self) -> None:
+        a = create_basement_mission(seed=123)
+        b = create_basement_mission(seed=123)
+        assert a.correct_order == b.correct_order
+
+    def test_basement_correct_order_completes(self) -> None:
+        bm = create_basement_mission(seed=7)
+        order = bm.correct_order
+
+        r1 = bm.activate_device(order[0], "human")
+        assert r1["success"]
+        assert not r1.get("completed", False)
+        assert r1["progress"] == 1
+
+        r2 = bm.activate_device(order[1], "partner")
+        assert r2["success"]
+        assert not r2.get("completed", False)
+        assert r2["progress"] == 2
+
+        r3 = bm.activate_device(order[2], "partner-2")
+        assert r3["success"]
+        assert r3["completed"]
+        assert bm.completed
+
+    def test_basement_wrong_order_resets(self) -> None:
+        bm = create_basement_mission(seed=7)
+        order = bm.correct_order
+        # 올바른 첫 번째 장치가 아닌 다른 장치를 먼저 활성화
+        wrong_first = [d for d in ["panel", "valve", "generator"] if d != order[0]][0]
+
+        result = bm.activate_device(wrong_first, "human")
+        assert not result["success"]
+        assert result["reason"] == "wrong_order"
+        assert result["reset"]
+        assert bm.reset_count == 1
+        # 모든 장치가 리셋되어야 한다
+        for device in bm.devices:
+            assert device.state == "off"
+            assert device.activated_by is None
+        assert len(bm.activated_order) == 0
+
+    def test_basement_device_status(self) -> None:
+        bm = create_basement_mission(seed=0)
+
+        status = bm.get_device_status("panel")
+        assert status is not None
+        assert status["device_id"] == "panel"
+        assert status["name"] == "배전반"
+        assert status["state"] == "off"
+
+        # 존재하지 않는 장치
+        assert bm.get_device_status("unknown") is None
+
+    def test_basement_already_active_rejected(self) -> None:
+        bm = create_basement_mission(seed=7)
+        order = bm.correct_order
+        bm.activate_device(order[0], "human")
+        result = bm.activate_device(order[0], "human")
+        assert not result["success"]
+        assert result["reason"] == "already_active"
+
+    def test_basement_unknown_device_rejected(self) -> None:
+        bm = create_basement_mission(seed=0)
+        result = bm.activate_device("nonexistent", "human")
+        assert not result["success"]
+        assert result["reason"] == "unknown_device"
+
+
+# ---------------------------------------------------------------------------
+# create_vertical_missions에 basement 포함 확인
+# ---------------------------------------------------------------------------
+
+class TestVerticalMissionsWithBasement:
+    def test_creates_all_three_missions(self) -> None:
+        vm = create_vertical_missions(["열쇠"], seed=42)
+        assert isinstance(vm.intercom, IntercomMission)
+        assert isinstance(vm.simultaneous, SimultaneousMission)
+        assert isinstance(vm.basement, BasementFinalMission)
+        assert len(vm.basement.devices) == 3
+        assert len(vm.basement.correct_order) == 3

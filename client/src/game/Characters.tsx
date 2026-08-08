@@ -1,16 +1,8 @@
 /**
- * 『얼음, 땡!』 캐릭터 세트 v3 — 어몽어스형 콩 실루엣 6종
- * character-data.js에서 자동 생성. 수정은 데이터 쪽에서.
+ * 『얼음, 땡!』 캐릭터 세트 v4 — 원화 기반 괴물 술래 3종 + 동물 도망자 5종
  *
- * 형태 원칙:
- *   · 머리를 따로 만들지 않는다 — 몸 전체가 하나의 둥근 콩(캡슐)
- *   · 눈 두 개를 만들지 않는다 — 가로로 넓은 단일 바이저 하나
- *   · 팔을 만들지 않는다 — 짧은 다리 두 개 + 통통한 신발
- *   · 등에 둥근 백팩 (런닝맨 번호 배지가 붙는 자리)
- *   · 각진 box는 쓰지 않는다 — 구·캡슐·토러스·원판·원뿔만
- *
- * 공통 실루엣: 콩 몸통·바이저·백팩·다리는 6종 전부 동일 치수
- * 구분 축 3개: ① 색·발광  ② 머리 장식  ③ 신발
+ * 형태 원칙: 도망자는 짧고 둥근 동물 인형, 술래는 길고 비정상적인 인간 실루엣.
+ * 첨부 원화와 docs/assets/character-roster-concept-v1.png를 시각 정본으로 사용한다.
  *
  * 규격: 키 1.7m · 콜라이더 캡슐 r0.4 halfHeight 0.35 (offsetY 0.85)
  * 상태: 기본 / 빙결(얼음 껍질) / 위장(술래 전용)
@@ -68,69 +60,59 @@ export type Character = {
 }
 
 export const HEIGHT = 1.7
-export const SILHOUETTE = '머리 없는 콩 + 단일 바이저 (어몽어스형)'
+export const SILHOUETTE = '동물 인형 도망자 + 비정상적으로 긴 인간형 술래'
 export const COLLIDER = { halfHeight: 0.35, radius: 0.4, offsetY: 0.85 }
 /** 술래 위장 — 정지 3초 후 발동, 이동 시 해제 */
 export const CAMO = { color: '#1A2530', opacity: 0.26 }
 
 export const CHARACTERS: Character[] = [
   {
-    id: 'R00', tag: '00', name: '술래', role: 'seeker',
-    c: '#E23B2E', glow: '#FF7A3C', accessory: '돔 헬멧 + 발광 링 + 안테나', shoes: '통통한 부츠',
-    note: '유일하게 위장 능력 보유 — 정지 3초 후 배경색으로 흐려진다',
+    id: 'R00', tag: 'S1', name: '굽은 등', role: 'seeker',
+    c: '#6E443C', glow: '#B85C4B', accessory: '등이 머리보다 높은 장신', shoes: '맨발',
+    note: '청각 특화 추격자',
     parts: [
-      { t: 'cap', p: [-0.17, 0.17, 0], r: 0.112, h: 0.08, c: '#88231c', part: 'leg' },
-      { t: 'cap', p: [0.17, 0.17, 0], r: 0.112, h: 0.08, c: '#88231c', part: 'leg' },
-      { t: 'cap', p: [0, 0.97, 0], r: 0.4, h: 0.54, s: [1, 1, 0.86], c: '#E23B2E', part: 'body' },
-      { t: 'cap', p: [0, 1.06, -0.4], r: 0.155, h: 0.26, s: [0.9, 1, 1], c: '#c23328', part: 'pack' },
-      { t: 'tor', p: [0, 1.19, -0.4], r: 0.152, tb: 0.028, c: '#681b15', rot: [1.5708, 0, 0], part: 'pack' },
-      { t: 'disc', p: [0, 1.05, -0.558], r: 0.108, c: '#F6F3E7', tag: true, part: 'nametag' },
-      { t: 'tor', p: [0, 1.05, -0.556], r: 0.113, tb: 0.019, c: '#681b15', part: 'nametag' },
-      { t: 'sph', p: [0, 1.21, 0.29], r: 0.3, s: [1.02, 0.6, 0.36], c: '#2B4F62', part: 'visorback' },
-      { t: 'sph', p: [0, 1.21, 0.335], r: 0.29, s: [1, 0.56, 0.3], c: '#8FD3E8', em: 0.22, part: 'visor' },
-      { t: 'tor', p: [0, 1.21, 0.343], r: 0.295, tb: 0.042, s: [1, 0.6, 1], c: '#c23328', part: 'visorrim' },
-      { t: 'sph', p: [-0.13, 1.28, 0.39], r: 0.06, s: [1.5, 0.5, 0.3], c: '#FFFFFF', part: 'glint' },
-      { t: 'sph', p: [0, 0.86, 0.31], r: 0.05, s: [1.5, 0.75, 0.6], c: '#FF7A3C', em: 1, part: 'lamp' },
-      { t: 'tor', p: [0, 0.6, 0], r: 0.352, tb: 0.036, s: [1, 1, 0.9], c: '#F2EAD3', rot: [1.5708, 0, 0], part: 'belt' },
-      { t: 'sph', p: [0, 1.44, -0.01], r: 0.415, s: [1, 0.72, 0.9], c: '#8c251d', part: 'hat' },
-      { t: 'tor', p: [0, 1.42, 0], r: 0.408, tb: 0.04, s: [1, 1, 0.9], c: '#681b15', rot: [1.5708, 0, 0], part: 'hat' },
-      { t: 'tor', p: [0, 1.62, 0], r: 0.29, tb: 0.03, s: [1, 1, 0.9], c: '#FF7A3C', em: 0.7, rot: [1.5708, 0, 0], part: 'hat' },
-      { t: 'cyl', p: [0.2, 1.85, -0.09], r: 0.017, h: 0.26, c: '#8F979E', rot: [0, 0, -0.16], part: 'hat' },
-      { t: 'sph', p: [0.225, 1.99, -0.09], r: 0.05, c: '#FF7A3C', em: 1.5, part: 'hat' },
-      { t: 'sph', p: [-0.17, 0.1, 0.035], r: 0.155, s: [1, 0.82, 1.3], c: '#5a1812', part: 'shoe' },
-      { t: 'sph', p: [0.17, 0.1, 0.035], r: 0.155, s: [1, 0.82, 1.3], c: '#5a1812', part: 'shoe' },
-      { t: 'tor', p: [-0.17, 0.23, 0], r: 0.118, tb: 0.04, c: '#44120e', rot: [1.5708, 0, 0], part: 'shoe' },
-      { t: 'tor', p: [0.17, 0.23, 0], r: 0.118, tb: 0.04, c: '#44120e', rot: [1.5708, 0, 0], part: 'shoe' },
-      { t: 'sph', p: [-0.17, 0.04, 0.045], r: 0.16, s: [1, 0.3, 1.32], c: '#252C34', part: 'shoe' },
-      { t: 'sph', p: [0.17, 0.04, 0.045], r: 0.16, s: [1, 0.3, 1.32], c: '#252C34', part: 'shoe' },
+      { t: 'cap', p: [-0.16, 0.48, 0], r: 0.1, h: 0.75, c: '#56342F', part: 'leg' },
+      { t: 'cap', p: [0.16, 0.48, 0], r: 0.1, h: 0.75, c: '#56342F', part: 'leg' },
+      { t: 'cap', p: [0, 1.35, 0], r: 0.27, h: 0.55, s: [1.15, 1, 0.72], c: '#70443C', part: 'body' },
+      { t: 'sph', p: [-0.28, 1.76, -0.03], r: 0.29, s: [1.2, 0.95, 0.9], c: '#815047', part: 'body' },
+      { t: 'sph', p: [-0.48, 1.67, 0.06], r: 0.18, s: [0.8, 1.05, 0.8], c: '#4A2B29', part: 'head' },
+      { t: 'cap', p: [-0.45, 0.92, 0], r: 0.065, h: 1.25, c: '#684039', rot: [0, 0, -0.08], part: 'arm' },
+      { t: 'cap', p: [0.4, 0.95, 0], r: 0.065, h: 1.2, c: '#684039', rot: [0, 0, 0.08], part: 'arm' },
+      { t: 'sph', p: [-0.16, 0.04, 0.08], r: 0.14, s: [1.4, 0.35, 1.5], c: '#3D2523', part: 'shoe' },
+      { t: 'sph', p: [0.16, 0.04, 0.08], r: 0.14, s: [1.4, 0.35, 1.5], c: '#3D2523', part: 'shoe' },
     ],
   },
   {
-    id: 'R01', tag: '01', name: '캡', role: 'runner',
-    c: '#FFA928', glow: '#FFD98A', accessory: '둥근 야구모자', shoes: '운동화',
+    id: 'S02', tag: 'S2', name: '접힌 사람', role: 'seeker', c: '#65403B', glow: '#9D5149', accessory: '거미처럼 접힌 네 팔다리', shoes: '손발', note: '시야 특화 차단자',
     parts: [
-      { t: 'cap', p: [-0.17, 0.17, 0], r: 0.112, h: 0.08, c: '#996518', part: 'leg' },
-      { t: 'cap', p: [0.17, 0.17, 0], r: 0.112, h: 0.08, c: '#996518', part: 'leg' },
-      { t: 'cap', p: [0, 0.97, 0], r: 0.4, h: 0.54, s: [1, 1, 0.86], c: '#FFA928', part: 'body' },
-      { t: 'cap', p: [0, 1.06, -0.4], r: 0.155, h: 0.26, s: [0.9, 1, 1], c: '#db9122', part: 'pack' },
-      { t: 'tor', p: [0, 1.19, -0.4], r: 0.152, tb: 0.028, c: '#754e12', rot: [1.5708, 0, 0], part: 'pack' },
-      { t: 'disc', p: [0, 1.05, -0.558], r: 0.108, c: '#F6F3E7', tag: true, part: 'nametag' },
-      { t: 'tor', p: [0, 1.05, -0.556], r: 0.113, tb: 0.019, c: '#754e12', part: 'nametag' },
-      { t: 'sph', p: [0, 1.21, 0.29], r: 0.3, s: [1.02, 0.6, 0.36], c: '#2B4F62', part: 'visorback' },
-      { t: 'sph', p: [0, 1.21, 0.335], r: 0.29, s: [1, 0.56, 0.3], c: '#8FD3E8', em: 0.22, part: 'visor' },
-      { t: 'tor', p: [0, 1.21, 0.343], r: 0.295, tb: 0.042, s: [1, 0.6, 1], c: '#db9122', part: 'visorrim' },
-      { t: 'sph', p: [-0.13, 1.28, 0.39], r: 0.06, s: [1.5, 0.5, 0.3], c: '#FFFFFF', part: 'glint' },
-      { t: 'sph', p: [0, 0.86, 0.31], r: 0.05, s: [1.5, 0.75, 0.6], c: '#FFD98A', em: 1, part: 'lamp' },
-      { t: 'tor', p: [0, 0.6, 0], r: 0.352, tb: 0.036, s: [1, 1, 0.9], c: '#F2EAD3', rot: [1.5708, 0, 0], part: 'belt' },
-      { t: 'sph', p: [0, 1.5, -0.03], r: 0.4, s: [1, 0.62, 0.88], c: '#946217', part: 'hat' },
-      { t: 'sph', p: [0, 1.6, 0.28], r: 0.3, s: [1, 0.14, 0.6], c: '#754e12', part: 'hat' },
-      { t: 'sph', p: [0, 1.79, -0.03], r: 0.05, c: '#F2EAD3', part: 'hat' },
-      { t: 'sph', p: [-0.17, 0.095, 0.04], r: 0.145, s: [1, 0.78, 1.36], c: '#2E353E', part: 'shoe' },
-      { t: 'sph', p: [0.17, 0.095, 0.04], r: 0.145, s: [1, 0.78, 1.36], c: '#2E353E', part: 'shoe' },
-      { t: 'sph', p: [-0.17, 0.035, 0.045], r: 0.15, s: [1, 0.28, 1.38], c: '#E3DCC6', part: 'shoe' },
-      { t: 'sph', p: [0.17, 0.035, 0.045], r: 0.15, s: [1, 0.28, 1.38], c: '#E3DCC6', part: 'shoe' },
-      { t: 'tor', p: [-0.17, 0.125, 0.005], r: 0.105, tb: 0.024, c: '#F2EAD3', rot: [1.5708, 0, 0], part: 'shoe' },
-      { t: 'tor', p: [0.17, 0.125, 0.005], r: 0.105, tb: 0.024, c: '#F2EAD3', rot: [1.5708, 0, 0], part: 'shoe' },
+      { t: 'cap', p: [0, 0.83, 0], r: 0.22, h: 0.75, s: [1, 1, 1.6], c: '#68423C', rot: [0, 0, 1.5708], part: 'body' },
+      { t: 'sph', p: [-0.48, 0.7, 0.1], r: 0.16, c: '#3B2626', part: 'head' },
+      { t: 'cap', p: [-0.58, 0.5, 0], r: 0.055, h: 0.95, c: '#5D3935', rot: [0, 0, -0.75], part: 'arm' },
+      { t: 'cap', p: [0.56, 0.54, 0], r: 0.055, h: 1.05, c: '#5D3935', rot: [0, 0, 0.78], part: 'arm' },
+      { t: 'cap', p: [-0.38, 0.52, -0.08], r: 0.06, h: 1.0, c: '#724740', rot: [0.2, 0, 0.5], part: 'leg' },
+      { t: 'cap', p: [0.38, 0.52, -0.08], r: 0.06, h: 1.0, c: '#724740', rot: [-0.2, 0, -0.5], part: 'leg' },
+    ],
+  },
+  {
+    id: 'S03', tag: 'S3', name: '긴 그림자', role: 'seeker', c: '#392C32', glow: '#70505D', accessory: '납작한 실루엣과 긴 팔', shoes: '그림자 발', note: '파이널 압박형',
+    parts: [
+      { t: 'cap', p: [-0.11, 0.55, 0], r: 0.07, h: 0.95, c: '#30252B', part: 'leg' },
+      { t: 'cap', p: [0.11, 0.55, 0], r: 0.07, h: 0.95, c: '#30252B', part: 'leg' },
+      { t: 'cap', p: [0, 1.45, 0], r: 0.19, h: 0.85, s: [0.8, 1, 0.42], c: '#3D2D34', part: 'body' },
+      { t: 'sph', p: [0, 2.08, 0], r: 0.16, s: [0.9, 1.15, 0.72], c: '#241C22', part: 'head' },
+      { t: 'cap', p: [-0.29, 1.05, 0], r: 0.048, h: 1.65, c: '#31242B', part: 'arm' },
+      { t: 'cap', p: [0.29, 1.05, 0], r: 0.048, h: 1.65, c: '#31242B', part: 'arm' },
+      { t: 'sph', p: [0, 2.09, 0.13], r: 0.025, s: [3, 0.4, 0.4], c: '#8D6675', em: 0.12, part: 'face' },
+    ],
+  },
+  {
+    id: 'R01', tag: 'R1', name: '토끼 후드', role: 'runner', c: '#E9E2D2', glow: '#A8D9F0', accessory: '늘어진 귀 · 작은 가방', shoes: '폭신한 발',
+    parts: [
+      { t: 'sph', p: [0, 0.92, 0], r: 0.43, s: [0.9, 1.25, 0.78], c: '#E9E2D2', part: 'body' },
+      { t: 'sph', p: [0, 1.27, 0.27], r: 0.29, s: [1, 0.75, 0.35], c: '#182634', part: 'face' },
+      { t: 'sph', p: [-0.1, 1.3, 0.37], r: 0.04, c: '#DDF6FF', em: 0.4, part: 'eye' }, { t: 'sph', p: [0.1, 1.3, 0.37], r: 0.04, c: '#DDF6FF', em: 0.4, part: 'eye' },
+      { t: 'cap', p: [-0.2, 1.73, 0], r: 0.065, h: 0.42, c: '#D8D2C7', rot: [0, 0, -0.18], part: 'ear' }, { t: 'cap', p: [0.2, 1.73, 0], r: 0.065, h: 0.42, c: '#D8D2C7', rot: [0, 0, 0.18], part: 'ear' },
+      { t: 'sph', p: [-0.17, 0.15, 0.06], r: 0.16, s: [1, 0.65, 1.2], c: '#F3EEE4', part: 'shoe' }, { t: 'sph', p: [0.17, 0.15, 0.06], r: 0.16, s: [1, 0.65, 1.2], c: '#F3EEE4', part: 'shoe' },
     ],
   },
   {
@@ -259,6 +241,45 @@ export const CHARACTERS: Character[] = [
   },
 
 ]
+
+const animalParts = (kind: 'bear' | 'chick' | 'cat' | 'frog', body: string, accent: string): Part[] => {
+  const shared: Part[] = [
+    { t: 'sph', p: [0, 0.86, 0], r: 0.43, s: [0.94, 1.18, 0.82], c: body, part: 'body' },
+    { t: 'sph', p: [-0.14, 1.08, 0.35], r: 0.052, c: '#17202A', part: 'eye' },
+    { t: 'sph', p: [0.14, 1.08, 0.35], r: 0.052, c: '#17202A', part: 'eye' },
+    { t: 'sph', p: [-0.18, 0.13, 0.06], r: 0.16, s: [1, 0.62, 1.2], c: accent, part: 'shoe' },
+    { t: 'sph', p: [0.18, 0.13, 0.06], r: 0.16, s: [1, 0.62, 1.2], c: accent, part: 'shoe' },
+  ]
+  if (kind === 'bear') return [...shared,
+    { t: 'sph', p: [-0.29, 1.35, 0], r: 0.14, c: '#7D5538', part: 'ear' }, { t: 'sph', p: [0.29, 1.35, 0], r: 0.14, c: '#7D5538', part: 'ear' },
+    { t: 'sph', p: [0, 0.96, 0.38], r: 0.17, s: [1, 0.75, 0.45], c: '#D9B98D', part: 'muzzle' }, { t: 'sph', p: [0, 1.04, 0.47], r: 0.055, c: '#2D201B', part: 'nose' },
+  ]
+  if (kind === 'chick') return [...shared,
+    { t: 'cone', p: [0, 0.98, 0.48], r: 0.1, h: 0.2, c: '#E98424', rot: [1.5708, 0, 0], part: 'beak' },
+    { t: 'cap', p: [-0.09, 1.5, 0], r: 0.025, h: 0.24, c: '#E9A919', rot: [0, 0, -0.22], part: 'feather' }, { t: 'cap', p: [0, 1.53, 0], r: 0.025, h: 0.28, c: '#E9A919', part: 'feather' }, { t: 'cap', p: [0.09, 1.5, 0], r: 0.025, h: 0.24, c: '#E9A919', rot: [0, 0, 0.22], part: 'feather' },
+  ]
+  if (kind === 'cat') return [...shared,
+    { t: 'cone', p: [-0.26, 1.43, 0], r: 0.17, h: 0.32, c: '#7E8995', rot: [0, 0, -0.08], part: 'ear' }, { t: 'cone', p: [0.26, 1.43, 0], r: 0.17, h: 0.32, c: '#7E8995', rot: [0, 0, 0.08], part: 'ear' },
+    { t: 'sph', p: [0, 0.94, 0.44], r: 0.04, c: '#E9A0A5', part: 'nose' }, { t: 'cap', p: [0.42, 0.68, -0.2], r: 0.055, h: 0.65, c: '#697784', rot: [0.35, 0, -0.4], part: 'tail' },
+  ]
+  return [...shared,
+    { t: 'sph', p: [-0.22, 1.45, 0], r: 0.16, c: '#DDF4D4', part: 'eye' }, { t: 'sph', p: [0.22, 1.45, 0], r: 0.16, c: '#DDF4D4', part: 'eye' },
+    { t: 'sph', p: [-0.22, 1.47, 0.12], r: 0.07, c: '#17251B', part: 'pupil' }, { t: 'sph', p: [0.22, 1.47, 0.12], r: 0.07, c: '#17251B', part: 'pupil' },
+    { t: 'sph', p: [0, 0.67, 0.38], r: 0.23, s: [1.1, 1.1, 0.32], c: '#B8DDA7', part: 'belly' },
+  ]
+}
+
+const runnerOverrides: Record<string, Partial<Character>> = {
+  R02: { tag: 'R2', name: '곰', c: '#A97850', glow: '#D9B98D', accessory: '주둥이가 크다', shoes: '둥근 발', parts: animalParts('bear', '#A97850', '#7D5538') },
+  R03: { tag: 'R3', name: '병아리', c: '#F3C642', glow: '#FFE38A', accessory: '말 많음 · 가는 다리', shoes: '새 발', parts: animalParts('chick', '#F3C642', '#E98424') },
+  R04: { tag: 'R4', name: '고양이', c: '#8995A1', glow: '#CAD4DC', accessory: '꼬리로 방향을 알린다', shoes: '고양이 발', parts: animalParts('cat', '#8995A1', '#65727E') },
+  R05: { tag: 'R5', name: '개구리', c: '#79B873', glow: '#BDE8B4', accessory: '눈이 머리 위', shoes: '물갈퀴 발', parts: animalParts('frog', '#79B873', '#579653') },
+}
+
+for (const character of CHARACTERS) {
+  const override = runnerOverrides[character.id]
+  if (override) Object.assign(character, override)
+}
 
 /**
  * 빙결 얼음 껍질 — 실루엣이 공통이므로 한 세트로 전 캐릭터 커버.

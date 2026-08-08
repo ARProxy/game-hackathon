@@ -196,6 +196,26 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                     "reason": "simultaneous_ai_position",
                 }
 
+        # 지하 파이널 미션: AI가 배정된 장치 방으로 이동하여 상태를 보고
+        if (
+            session.vertical_round.phase == VerticalRoundPhase.BASEMENT_FINAL
+            and session.vertical_missions is not None
+        ):
+            bm = session.vertical_missions.basement
+            # 각 AI 동료를 장치에 배정 (partner → 첫 번째 장치, partner-2 → 두 번째)
+            from app.game.session import DEFAULT_AI_PARTNER_IDS as _PARTNER_IDS
+            companion_index = _PARTNER_IDS.index(companion_id) if companion_id in _PARTNER_IDS else 0
+            if companion_index < len(bm.devices):
+                device = bm.devices[companion_index]
+                device_slot = _get_map_slot(device.slot_id)
+                dx, _, dz = device_slot["position"]
+                return {
+                    "state": "EXPLORE_ZONE",
+                    "target_id": f"basement_{device.device_id}",
+                    "target": {"x": dx, "z": dz},
+                    "reason": "basement_device_assignment",
+                }
+
         x, _, z = (
             final_station_position(companion_id)
             if session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL
@@ -355,6 +375,19 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
                     "type": "simultaneous_ready",
                     "phase": session.vertical_round.phase.value,
                 }
+            # 지하 파이널: AI가 장치에 도착하면 상태 보고
+            elif (
+                intent["target_id"] and intent["target_id"].startswith("basement_")
+                and session.vertical_missions is not None
+            ):
+                device_id = intent["target_id"].removeprefix("basement_")
+                status = session.vertical_missions.basement.get_device_status(device_id)
+                action = {
+                    "type": "basement_device_report",
+                    "phase": session.vertical_round.phase.value,
+                    "device_id": device_id,
+                    "device_status": status,
+                }
             else:
                 action = {
                     "type": "vertical_objective",
@@ -431,6 +464,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
     "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),
     "simultaneous_ready": (SpeechIntent.DECLARE_ACTION, "준비됐어! 동시에 작동하자!"),
+    "basement_device_report": (SpeechIntent.REPORT_OBSERVATION, "장치 상태를 확인했어!"),
 }
 
 

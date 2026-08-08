@@ -170,7 +170,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
 
   return (
     <group ref={groupRef} position={spawn}>
-      <CharacterModel id="R00" camo={false} />
+      <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} />
       {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />
       )}

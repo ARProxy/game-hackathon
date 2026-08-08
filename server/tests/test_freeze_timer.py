@@ -59,7 +59,7 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(eliminated[0]["reason"], "freeze_timeout")
         self.assertEqual(self.websocket.messages[-1], {
             "type": "game_over",
-            "reason": "human_eliminated",
+            "reason": "all_humans_eliminated",
         })
         self.assertNotIn(
             (self.room_id, self.player_id), self.manager._freeze_tasks
@@ -76,7 +76,7 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message_types[-2:], ["eliminated", "game_over"])
         self.assertEqual(
             self.websocket.messages[-1]["reason"],
-            "human_eliminated",
+            "all_humans_eliminated",
         )
         self.assertEqual(partner.status.value, "alive")  # type: ignore[union-attr]
 

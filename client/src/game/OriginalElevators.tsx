@@ -177,7 +177,6 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
         key={`physics-${EVS[index].id}`}
         index={index}
         rig={rig}
-        visibleFloors={visibleFloors}
         bodies={physicsBodies}
       />
     ))}
@@ -204,14 +203,12 @@ function registerBody(
   else bodies.current.delete(key)
 }
 
-function ElevatorPhysics({ index, rig, visibleFloors, bodies }: {
+function ElevatorPhysics({ index, rig, bodies }: {
   index: number
   rig: ElevatorRig
-  visibleFloors?: CampusFloor[]
   bodies: React.RefObject<Map<string, RapierRigidBody>>
 }) {
   const elevator = EVS[index]
-  const visible = new Set(visibleFloors)
   const centerX = (elevator.x[0] + elevator.x[1]) / 2
   const centerZ = (elevator.z[0] + elevator.z[1]) / 2
   const carWidth = Math.min(elevator.x[1] - elevator.x[0] - 0.42, 2)
@@ -220,7 +217,7 @@ function ElevatorPhysics({ index, rig, visibleFloors, bodies }: {
   const carHalfDepth = carDepth / 2
 
   return <>
-    {ORDER.filter((floor) => !visibleFloors || visible.has(floor as CampusFloor)).flatMap((floor) => (
+    {ORDER.flatMap((floor) => (
       [-1, 1].map((side, doorIndex) => (
         <RigidBody
           key={`${floor}-${side}`}

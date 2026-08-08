@@ -19,7 +19,8 @@
 | Canvas 승강기 상태기계 | `client/src/game/OriginalElevators.tsx` | 호출·문·카 이동·탑승자 이동·서버 층 승인·동적 물리 연결 |
 | Canvas 문 렌더 | `client/src/game/OriginalDoors.tsx` | 122개 문, 원본 경첩·치수·색·근접 개폐·동적 충돌 연결 |
 | Canvas 야간 환경 | `client/src/game/Fog.tsx`, `client/src/App.tsx` | ACES 노출, 안개, 환경 반사, 달빛·반구광 복원 |
-| Canvas 형상 렌더 | `client/src/game/SchoolCampusV4.tsx` | 원본 `solids`, `visuals`, `plates`, `cyls`, `fixtures` 전부 연결 |
+| Canvas 형상 렌더 | `client/src/game/SchoolCampusV4.tsx` | 원본 `solids`, `visuals`, `plates`, `cyls` 전부 연결 |
+| Canvas 동적 실내광 | `client/src/game/SchoolCampusV4.tsx` | `fixtures`를 형상이 아닌 카메라 인접 16개 광원 후보로 연결 |
 
 ## 인테리어·소품 검증
 

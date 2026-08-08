@@ -73,8 +73,9 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
   }))
 
   const playerId = useGameStore((s) => s.playerId)
-  const authoritativePosition = useGameStore((s) => s.players[playerId]?.position)
+  const authoritativeFloor = useGameStore((s) => s.players[playerId]?.position.floor)
   useEffect(() => {
+    const authoritativePosition = useGameStore.getState().players[playerId]?.position
     if (
       !rigidBodyRef.current
       || !authoritativePosition?.floor
@@ -87,7 +88,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     }, true)
     rigidBodyRef.current.setLinvel({ x: 0, y: 0, z: 0 }, true)
     lastAuthorityFloor.current = authoritativePosition.floor
-  }, [authoritativePosition])
+  }, [authoritativeFloor, playerId])
 
   useFrame(({ clock }, delta) => {
     if (!rigidBodyRef.current || !visualRef.current) return

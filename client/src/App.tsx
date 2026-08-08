@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Physics } from '@react-three/rapier'
 import * as THREE from 'three'
@@ -32,17 +32,17 @@ import './App.css'
 
 /* ─────────────────────────────────────────────
  * 카메라 모드
- * - cctv: 개발용. OrbitControls로 자유 이동. 층별 필터 가능
+ * - reference: Claude Design ZIP의 원본 오빗 구도. 층별 필터 가능
  * - 3d: 게임용. 3인칭 카메라. 플레이어 추종
  * Tab으로 전환
  * ───────────────────────────────────────────── */
-type CameraMode = 'cctv' | '3d'
+type CameraMode = 'reference' | '3d'
 
-/** CCTV와 층 필터는 개발 서버에서만 사용할 수 있다. */
+/** Claude 원본 비교와 층 필터는 개발 서버에서만 사용할 수 있다. */
 const DEV_TOOLS_ENABLED = import.meta.env.DEV
 
 /* ─────────────────────────────────────────────
- * 층 필터 (CCTV 모드에서 숫자키로 전환)
+ * 층 필터 (원본 비교 모드에서 숫자키로 전환)
  * 1: 외부+1층  2: 2층  3: 3층  4: 옥상  0: 전체
  * ───────────────────────────────────────────── */
 const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
@@ -55,23 +55,117 @@ const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
 
 const runnerIds = CHARACTERS.filter((character) => character.role === 'runner').map((character) => character.id)
 
-/** 개발용 전경 확인 모드는 공포용 암부와 독립된 판독 가능한 노출을 쓴다. */
-function CCTVVisuals() {
-  const { gl, scene } = useThree()
+const CLAUDE_ORBIT = {
+  target: new THREE.Vector3(-24, 2, -30),
+  distance: 118,
+  yaw: 0.72,
+  pitch: 0.62,
+}
+
+/** ZIP Canvas.dc.html의 기본 오빗 카메라를 동일한 좌표와 FOV로 복원한다. */
+function ClaudeReferenceCamera() {
+  const { camera } = useThree()
 
   useEffect(() => {
-    const previousExposure = gl.toneMappingExposure
-    const previousBackground = scene.background
-    gl.toneMappingExposure = 1.35
-    scene.background = new THREE.Color('#263443')
+    const horizontalDistance = Math.cos(CLAUDE_ORBIT.pitch) * CLAUDE_ORBIT.distance
+    camera.position.set(
+      CLAUDE_ORBIT.target.x + Math.sin(CLAUDE_ORBIT.yaw) * horizontalDistance,
+      CLAUDE_ORBIT.target.y + Math.sin(CLAUDE_ORBIT.pitch) * CLAUDE_ORBIT.distance,
+      CLAUDE_ORBIT.target.z + Math.cos(CLAUDE_ORBIT.yaw) * horizontalDistance,
+    )
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.fov = 58
+      camera.updateProjectionMatrix()
+    }
+    camera.lookAt(CLAUDE_ORBIT.target)
 
     return () => {
-      gl.toneMappingExposure = previousExposure
-      scene.background = previousBackground
+      if (camera instanceof THREE.PerspectiveCamera) {
+        camera.fov = 60
+        camera.updateProjectionMatrix()
+      }
     }
-  }, [gl, scene])
+  }, [camera])
 
-  return null
+  return (
+    <OrbitControls
+      target={CLAUDE_ORBIT.target}
+      maxPolarAngle={Math.PI / 2.1}
+      enablePan
+      panSpeed={1.5}
+      zoomSpeed={1.2}
+      minDistance={6}
+      maxDistance={300}
+    />
+  )
+}
+
+/** 원본처럼 달빛 그림자 범위를 현재 카메라 주변으로 이동시킨다. */
+function CameraRelativeMoon() {
+  const { camera } = useThree()
+  const lightRef = useRef<THREE.DirectionalLight>(null)
+  const targetRef = useRef<THREE.Object3D>(null)
+
+  useEffect(() => {
+    if (lightRef.current && targetRef.current) lightRef.current.target = targetRef.current
+  }, [])
+
+  useFrame(() => {
+    if (!lightRef.current || !targetRef.current) return
+    targetRef.current.position.set(camera.position.x, 0, camera.position.z)
+    lightRef.current.position.set(camera.position.x + 70, 110, camera.position.z + 50)
+  })
+
+  return <>
+    <directionalLight
+      ref={lightRef}
+      intensity={1.05}
+      color="#a8c6e4"
+      castShadow
+      shadow-mapSize-width={2048}
+      shadow-mapSize-height={2048}
+      shadow-camera-left={-90}
+      shadow-camera-right={90}
+      shadow-camera-top={90}
+      shadow-camera-bottom={-90}
+      shadow-camera-near={20}
+      shadow-camera-far={320}
+      shadow-bias={-0.0009}
+      shadow-normalBias={0.035}
+    />
+    <object3D ref={targetRef} />
+  </>
+}
+
+/** 원본 Canvas의 블룸·필름 그레인·비네트를 월드 캔버스 위에만 적용한다. */
+function WorldPostEffects() {
+  const [grainTexture, setGrainTexture] = useState<string>()
+
+  useEffect(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 160
+    canvas.height = 160
+    const context = canvas.getContext('2d')
+    if (!context) return
+    const image = context.createImageData(canvas.width, canvas.height)
+    for (let index = 0; index < image.data.length; index += 4) {
+      const value = 70 + Math.floor(Math.random() * 120)
+      image.data[index] = value
+      image.data[index + 1] = value
+      image.data[index + 2] = value
+      image.data[index + 3] = 82
+    }
+    context.putImageData(image, 0, 0)
+    setGrainTexture(canvas.toDataURL())
+  }, [])
+
+  return (
+    <div className="world-post-effects" aria-hidden="true">
+      <i className="world-bloom" />
+      <i className="world-grain" style={grainTexture ? { backgroundImage: `url(${grainTexture})` } : undefined} />
+      <i className="world-vignette" />
+    </div>
+  )
 }
 
 function Scene({
@@ -113,28 +207,17 @@ function Scene({
   return (
     <>
       {/* ── 조명 ── */}
-      <ambientLight color={cameraMode === 'cctv' ? '#ffffff' : '#16202b'} intensity={cameraMode === 'cctv' ? 1.4 : 0.42} />
-      <directionalLight
-        position={cameraMode === 'cctv' ? [10, 30, 10] : [70, 110, 50]}
-        intensity={cameraMode === 'cctv' ? 2.4 : 1.05}
-        color={cameraMode === 'cctv' ? '#f2f7ff' : '#a8c6e4'}
-        castShadow={cameraMode === '3d'}
-      />
-      {cameraMode === 'cctv' && (
-        <>
-          <hemisphereLight args={['#dbeeff', '#59636d', 1.6]} />
-          <directionalLight position={[-35, 18, -25]} intensity={1.1} color="#b9d8ff" />
-          <CCTVVisuals />
-        </>
-      )}
-      {cameraMode === '3d' && <hemisphereLight args={['#2b3b4a', '#0b0f13', 0.56]} />}
-      {cameraMode === '3d' && <Fog />}
+      <ambientLight color="#16202b" intensity={0.42} />
+      <CameraRelativeMoon />
+      <hemisphereLight args={['#2b3b4a', '#0b0f13', 0.56]} />
+      <Fog />
 
       {/* ── 물리 월드 ── */}
       <Physics gravity={[0, -9.81, 0]} paused={isPaused}>
         <SchoolCampus
           playerRef={playerRef}
           visibleFloors={visibleFloors}
+          referenceMode={cameraMode === 'reference'}
           activeTraps={activeTrapIds}
           gateId={phase === 'final_spell' || phase === 'escape' ? activeGate?.gateId : undefined}
           gateOpen={phase === 'escape'}
@@ -164,36 +247,34 @@ function Scene({
             }
           }}
         />
-        <Props />
-        <VerticalObjectives playerRef={playerGroupRef} />
-        <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={playerSpawn} characterId={playerCharacterId} />
-        <Partner
-          playerRef={playerGroupRef}
-          playerId="partner"
-          characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
-          spawn={partnerSpawn}
-          requestsThink
-        />
-        <Partner
-          playerRef={playerGroupRef}
-          playerId="partner-2"
-          characterId={runnerIds.filter((id) => id !== playerCharacterId)[1] ?? 'R06'}
-          spawn={partnerTwoSpawn}
-        />
-        {seekerCount >= 1 && (
-          <Seeker
+        {/* 비교 모드는 렌더링만 숨긴다. Rapier 객체를 제거/재생성하지 않는다. */}
+        <group visible={cameraMode === '3d'}>
+          <Props />
+          <VerticalObjectives playerRef={playerGroupRef} />
+          <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={playerSpawn} characterId={playerCharacterId} />
+          <Partner
             playerRef={playerGroupRef}
-            spawn={seekerSpawn}
+            playerId="partner"
+            characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
+            spawn={partnerSpawn}
+            requestsThink
           />
-        )}
-        {seekerCount >= 2 && (
-          <Seeker
+          <Partner
             playerRef={playerGroupRef}
-            spawn={secondarySeekerSpawn}
-            seekerId="seeker-2"
-            requestsThink={false}
+            playerId="partner-2"
+            characterId={runnerIds.filter((id) => id !== playerCharacterId)[1] ?? 'R06'}
+            spawn={partnerTwoSpawn}
           />
-        )}
+          {seekerCount >= 1 && <Seeker playerRef={playerGroupRef} spawn={seekerSpawn} />}
+          {seekerCount >= 2 && (
+            <Seeker
+              playerRef={playerGroupRef}
+              spawn={secondarySeekerSpawn}
+              seekerId="seeker-2"
+              requestsThink={false}
+            />
+          )}
+        </group>
 
         {/* 카메라 충돌 ray cast는 Rapier 컨텍스트 안에서 실행해야 한다. */}
         <ThirdPersonCamera
@@ -207,18 +288,7 @@ function Scene({
       <ThreatFeedback playerRef={playerGroupRef} enabled={cameraMode === '3d' && !isPaused} />
 
       {/* ── 카메라 ── */}
-      {/* CCTV 모드: OrbitControls — 마우스로 자유 이동/회전/줌 */}
-      {cameraMode === 'cctv' && (
-        <OrbitControls
-          target={[0, 2, 0]}
-          maxPolarAngle={Math.PI / 2.1} /* 바닥 아래로 못 내려가게 */
-          enablePan={true}              /* 우클릭 드래그로 이동 */
-          panSpeed={1.5}                /* 이동 속도 */
-          zoomSpeed={1.2}               /* 줌 속도 */
-          minDistance={5}               /* 최소 줌 거리 */
-          maxDistance={200}             /* 최대 줌 거리 */
-        />
-      )}
+      {cameraMode === 'reference' && <ClaudeReferenceCamera />}
     </>
   )
 }
@@ -333,8 +403,8 @@ function GameController({ quickStart }: { quickStart: boolean }) {
 
 /* ─────────────────────────────────────────────
  * App — 루트
- * Tab: CCTV ↔ 3D 전환
- * 숫자키 1~4, 0: 층별 필터 (CCTV 모드에서만)
+ * Tab: Claude 원본 비교 ↔ 3D 전환
+ * 숫자키 1~4, 0: 층별 필터 (원본 비교 모드에서만)
  * ───────────────────────────────────────────── */
 function App() {
   const [entryScreen, setEntryScreen] = useState<EntryScreen>('title')
@@ -345,6 +415,9 @@ function App() {
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
   const [sceneKey, setSceneKey] = useState(0)
+  // 접근 가능 층은 서버의 문·이동 권한 계약이고 렌더 가시성 계약이 아니다.
+  // 게임에서는 전체 학교 외형을 유지하고, 개발용 원본 비교 모드에서만 층을 숨긴다.
+  const renderedFloors = DEV_TOOLS_ENABLED && cameraMode === 'reference' ? visibleFloors : undefined
   const startSolo = useCallback((characterId: string) => {
     setQuickStart(false)
     setPlayerCharacterId(characterId)
@@ -375,11 +448,11 @@ function App() {
       /* Tab: 카메라 모드 전환 */
       if (e.code === 'Tab') {
         e.preventDefault()
-        setCameraMode((prev) => prev === 'cctv' ? '3d' : 'cctv')
+        setCameraMode((prev) => prev === 'reference' ? '3d' : 'reference')
         return
       }
 
-      /* 숫자키: 층 필터 (CCTV 모드에서만) */
+      /* 숫자키: 층 필터 (원본 비교 모드에서만) */
       if (FLOOR_PRESETS[e.code] !== undefined || e.code === 'Digit0') {
         const preset = FLOOR_PRESETS[e.code]
         setVisibleFloors(preset)
@@ -413,6 +486,7 @@ function App() {
       <Canvas
         key={sceneKey}
         dpr={[1, 1.5]}
+        shadows="soft"
         fallback={(
           <div role="alert" style={{
             display: 'grid',
@@ -432,19 +506,22 @@ function App() {
           far: 1000,
         }}
       >
-        <Scene cameraMode={cameraMode} visibleFloors={visibleFloors} playerCharacterId={playerCharacterId} />
+        <Scene cameraMode={cameraMode} visibleFloors={renderedFloors} playerCharacterId={playerCharacterId} />
       </Canvas>
 
-      <HUD />
-      <MiniMap />
-      <div className="chase-feedback" aria-hidden="true">
-        <i className="chase-feedback-left" />
-        <i className="chase-feedback-right" />
-      </div>
-      <ResultScreen />
-      <PauseMenu onMainMenu={returnToMainMenu} />
+      <WorldPostEffects />
+      {cameraMode === '3d' && <>
+        <HUD />
+        <MiniMap />
+        <div className="chase-feedback" aria-hidden="true">
+          <i className="chase-feedback-left" />
+          <i className="chase-feedback-right" />
+        </div>
+        <ResultScreen />
+        <PauseMenu onMainMenu={returnToMainMenu} />
+      </>}
 
-      {/* ── 개발 서버 전용 CCTV/층 필터 패널 ── */}
+      {/* ── 개발 서버 전용 Claude 원본 비교/층 필터 패널 ── */}
       {DEV_TOOLS_ENABLED && <div style={{
         position: 'fixed',
         top: 16,
@@ -461,14 +538,14 @@ function App() {
         gap: 4,
       }}>
         <div>
-          {cameraMode === 'cctv' ? '📹 CCTV' : '🎮 3D'}
+          {cameraMode === 'reference' ? '🎞 Claude 원본 비교' : '🎮 3D 게임'}
           <span style={{ opacity: 0.4, marginLeft: 8 }}>Tab</span>
         </div>
         <div>
           🏢 {floorLabel}
           <span style={{ opacity: 0.4, marginLeft: 8 }}>1~4, 0</span>
         </div>
-        {cameraMode === 'cctv' && (
+        {cameraMode === 'reference' && (
           <div style={{ opacity: 0.4, marginTop: 4, fontSize: 10 }}>
             드래그: 회전 | 스크롤: 줌 | 우클릭: 이동
           </div>

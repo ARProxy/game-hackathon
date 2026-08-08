@@ -269,6 +269,37 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# 지하 파이널 핸들러
+# ---------------------------------------------------------------------------
+
+
+def activate_basement_device(session: Any, actor_id: str, device_id: str) -> dict:
+    """지하 파이널에서 장치를 활성화한다."""
+    if session.vertical_round.phase != VerticalRoundPhase.BASEMENT_FINAL:
+        raise InvalidProgression("지하 파이널 단계가 아니다")
+    actor = session.state.get_player(actor_id)
+    if not actor or actor.status != PlayerStatus.ALIVE:
+        raise InvalidProgression("살아 있는 도망자만 장치를 활성화할 수 있다")
+    if not session.vertical_missions:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+
+    bm = session.vertical_missions.basement
+    result = bm.activate_device(device_id, actor_id)
+    return {"actor_id": actor_id, "device_id": device_id, **result}
+
+
+def get_basement_device_status(session: Any, actor_id: str, device_id: str) -> dict:
+    """장치 앞에 있는 actor만 장치 상태를 확인할 수 있다."""
+    # 위치 검증은 호출 측에서 처리
+    if not session.vertical_missions:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+    status = session.vertical_missions.basement.get_device_status(device_id)
+    if not status:
+        raise InvalidProgression("존재하지 않는 장치다")
+    return status
+
+
 ELEVATOR_SOUND_PING_RADIUS = 25.0  # A5: 엘리베이터 도착 소리 핑 반경
 
 

@@ -44,6 +44,11 @@ export default function PlayerLight({ targetRef }: PlayerLightProps) {
         penumbra={0.62}
         color="#d9ecff"
         decay={1.5}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-bias={-0.0012}
+        shadow-normalBias={0.03}
       />
       <pointLight ref={fillRef} intensity={4.5} distance={5} decay={1.8} color="#a9c6d8" />
       <object3D ref={aimRef} />

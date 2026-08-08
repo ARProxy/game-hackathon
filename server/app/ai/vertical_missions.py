@@ -6,6 +6,7 @@
 - 2층: 인터폰 협동 (AI가 기호를 읽고 플레이어가 입력)
 - 1층: 동시 조작 (AI와 플레이어가 제한시간 내 동시 장치 작동)
 - 파이널: 3명 스테이션 도달 + 주문 -- 이미 구현됨
+- 지하: 배전반/급수 밸브/발전기 3개 장치를 올바른 순서로 활성화
 """
 
 from __future__ import annotations
@@ -158,6 +159,87 @@ class SimultaneousMission:
 
 
 # ---------------------------------------------------------------------------
+# 지하 파이널 미션
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BasementDevice:
+    """지하 파이널의 개별 장치."""
+
+    device_id: str        # "panel", "valve", "generator"
+    name: str             # "배전반", "급수 밸브", "발전기"
+    slot_id: str          # 맵 슬롯 ID
+    state: str = "off"    # "off" | "standby" | "active"
+    activated_by: str | None = None
+
+
+@dataclass
+class BasementFinalMission:
+    """지하 파이널 미션.
+
+    배전반, 급수 밸브, 발전기 3개 장치를 올바른 순서로 활성화해야 한다.
+    각 장치의 상태는 해당 장치 앞에 있는 actor만 확인 가능하고,
+    잘못된 순서로 활성화하면 전체 리셋 + 술래에게 소리 핑이 발생한다.
+    """
+
+    devices: list[BasementDevice] = field(default_factory=list)
+    correct_order: list[str] = field(default_factory=list)
+    activated_order: list[str] = field(default_factory=list)
+    completed: bool = False
+    reset_count: int = 0
+
+    def activate_device(self, device_id: str, actor_id: str) -> dict:
+        device = next((d for d in self.devices if d.device_id == device_id), None)
+        if not device:
+            return {"success": False, "reason": "unknown_device"}
+        if device.state == "active":
+            return {"success": False, "reason": "already_active"}
+
+        device.state = "active"
+        device.activated_by = actor_id
+        self.activated_order.append(device_id)
+
+        # 순서 검증
+        expected_so_far = self.correct_order[:len(self.activated_order)]
+        if self.activated_order != expected_so_far:
+            # 잘못된 순서 → 전체 리셋
+            self._reset_all()
+            return {"success": False, "reason": "wrong_order", "reset": True}
+
+        if len(self.activated_order) == len(self.correct_order):
+            self.completed = True
+            return {"success": True, "completed": True}
+
+        return {"success": True, "completed": False, "progress": len(self.activated_order)}
+
+    def _reset_all(self) -> None:
+        for d in self.devices:
+            d.state = "off"
+            d.activated_by = None
+        self.activated_order.clear()
+        self.reset_count += 1
+
+    def get_device_status(self, device_id: str) -> dict | None:
+        device = next((d for d in self.devices if d.device_id == device_id), None)
+        if not device:
+            return None
+        return {"device_id": device.device_id, "name": device.name, "state": device.state}
+
+
+def create_basement_mission(seed: int = 0) -> BasementFinalMission:
+    """시드를 기반으로 지하 파이널 미션을 생성한다."""
+    rng = random.Random(seed)
+    devices = [
+        BasementDevice("panel", "배전반", "BASEMENT_DEVICE_PANEL"),
+        BasementDevice("valve", "급수 밸브", "BASEMENT_DEVICE_VALVE"),
+        BasementDevice("generator", "발전기", "BASEMENT_DEVICE_GENERATOR"),
+    ]
+    order = [d.device_id for d in devices]
+    rng.shuffle(order)
+    return BasementFinalMission(devices=devices, correct_order=order)
+
+
+# ---------------------------------------------------------------------------
 # 수직 미션 번들
 # ---------------------------------------------------------------------------
 
@@ -167,15 +249,18 @@ class VerticalMissions:
 
     intercom: IntercomMission = field(default_factory=IntercomMission)
     simultaneous: SimultaneousMission = field(default_factory=SimultaneousMission)
+    basement: BasementFinalMission = field(default_factory=BasementFinalMission)
 
 
 def create_vertical_missions(
     forbidden_words: list[str],
     seed: int | None = None,
 ) -> VerticalMissions:
-    """금기어 목록과 시드로 2층/1층 미션을 초기화한다."""
+    """금기어 목록과 시드로 2층/1층/지하 미션을 초기화한다."""
+    effective_seed = seed if seed is not None else 0
     intercom = IntercomMission(
         sequence=IntercomMission.generate_sequence(3, seed=seed),
     )
     simultaneous = SimultaneousMission()
-    return VerticalMissions(intercom=intercom, simultaneous=simultaneous)
+    basement = create_basement_mission(seed=effective_seed)
+    return VerticalMissions(intercom=intercom, simultaneous=simultaneous, basement=basement)

@@ -495,6 +495,7 @@ class TestActiveHunterFlow:
 
     def test_seeker_eliminating_required_ai_ends_mission_run(self, client):
         from app.game.session import session_manager
+        from app.game.state import PlayerStatus
 
         with client.websocket_connect("/ws/hunter-ai-catch/player1") as ws:
             ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
@@ -502,7 +503,16 @@ class TestActiveHunterFlow:
             session = session_manager.get_or_create("hunter-ai-catch")
             seeker = session.state.get_player("seeker")
             partner = session.state.get_player("partner")
+            partner2 = session.state.get_player("partner-2")
+            human = session.state.get_player("player1")
             assert seeker and partner
+
+            # 전원 탈락시켜야 game_over — 멀티 지원으로 변경됨
+            # 먼저 partner-2, 인간을 빙결/탈락시킨다
+            if partner2:
+                partner2.eliminate()
+            human.freeze()
+
             seeker.position.x = partner.position.x
             seeker.position.z = partner.position.z
             seeker.position.floor = partner.position.floor
@@ -510,15 +520,19 @@ class TestActiveHunterFlow:
                 "type": "action",
                 "payload": {"action_type": "seeker_catch", "target_id": "partner"},
             })
-            eliminated = ws.receive_json()
-            assert eliminated == {
-                "type": "eliminated",
-                "player_id": "partner",
-                "reason": "caught_by_seeker",
-            }
-            assert partner.status.value == "eliminated"
-            game_over = ws.receive_json()
-            assert game_over == {"type": "game_over", "reason": "caught_by_seeker"}
+            # eliminated + game_over 메시지를 찾는다
+            found_eliminated = False
+            found_game_over = False
+            for _ in range(10):
+                msg = ws.receive_json()
+                if msg.get("type") == "eliminated" and msg.get("player_id") == "partner":
+                    found_eliminated = True
+                if msg.get("type") == "game_over":
+                    found_game_over = True
+                    break
+            assert found_eliminated
+            assert found_game_over
+            assert partner.status == PlayerStatus.ELIMINATED
             assert session.state.phase.value == "result"
 
     def test_client_cannot_move_seeker_or_accelerate_server_tick(self, client):

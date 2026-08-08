@@ -52,6 +52,8 @@
       "deviceIds": ["ip_f1_security", "ip_f1_admin", "ip_f1_kitchen", "ip_f1_health"]
     },
     "F1_SECURITY_ROOM": { "kind": "room", "floor": "F1", "position": [4.2, 0, -12.25], "zone": "f1_security", "anchorRoom": "f1_security" },
+    "F1_DEVICE_A": { "kind": "device", "floor": "F1", "position": [0.78, 1.42, -9.65], "zone": "f1_security", "deviceId": "ip_f1_security", "anchorRoom": "f1_security" },
+    "F1_DEVICE_B": { "kind": "device", "floor": "F1", "position": [-21.4, 1.42, -50.78], "zone": "f1_admin", "deviceId": "ip_f1_admin", "anchorRoom": "f1_admin" },
     "F1_BLOCKER_SPAWN_ENTRY": { "kind": "spawn", "floor": "F1", "position": [-52.8, 0, -47.25], "zone": "f1_basement_stair", "anchorRoom": "b1_stair" },
     "F1_TO_BASEMENT_FIRE_DOOR": {
       "kind": "transition_lock",
@@ -75,6 +77,9 @@
 
     "BASEMENT_FINAL_ENTRY": { "kind": "final_entry", "floor": "B1", "position": [-52.8, -3.6, -47.25], "zone": "b1_stair", "anchorRoom": "b1_stair" },
     "BASEMENT_FINAL_DEVICE_POOL": { "kind": "room_pool", "floor": "B1", "interactionPosition": [-42.2, -3.6, -54.2], "roomIds": ["b1_mach", "b1_elec", "b1_archive", "b1_shelter"], "deviceIds": ["ip_b1_mach", "ip_b1_elec", "ip_b1_archive", "ip_b1_shelter"] },
+    "BASEMENT_DEVICE_PANEL": { "kind": "device", "floor": "B1", "position": [-28.8, -2.18, -50.78], "zone": "b1_elec", "deviceId": "ip_b1_elec", "anchorRoom": "b1_elec" },
+    "BASEMENT_DEVICE_VALVE": { "kind": "device", "floor": "B1", "position": [-39.6, -2.18, -50.78], "zone": "b1_mach", "deviceId": "ip_b1_mach", "anchorRoom": "b1_mach" },
+    "BASEMENT_DEVICE_GENERATOR": { "kind": "device", "floor": "B1", "position": [-19.3, -2.18, -50.78], "zone": "b1_archive", "deviceId": "ip_b1_archive", "anchorRoom": "b1_archive" },
     "BASEMENT_ESCAPE_GATE": { "kind": "escape_gate", "floor": "B1", "position": [-2, -3.6, -30.1], "zone": "b1_tunnel", "anchorRoom": "b1_tunnel" },
 
     "FIELD_FINAL_ENTRY": { "kind": "final_entry", "floor": "FIELD", "position": [4.2, 0, 2.2], "zone": "field_east_entry" },

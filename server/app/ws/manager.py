@@ -55,6 +55,7 @@ from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPh
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import (
     BROADCAST_MISSION_PROMPT,
+    activate_basement_device,
     activate_final_station,
     activate_simultaneous_device,
     complete_current_stage,
@@ -78,6 +79,7 @@ class Room:
 class ConnectionManager:
     def __init__(self) -> None:
         self.rooms: dict[str, Room] = {}
+        self.rooms_config: dict[str, "RoomConfig"] = {}  # 방 설정
         self._freeze_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
         self._hunter_tasks: dict[str, asyncio.Task[None]] = {}
         self._companion_tasks: dict[str, asyncio.Task[None]] = {}
@@ -153,6 +155,14 @@ class ConnectionManager:
             })
         elif msg_type == "spell":
             await self._handle_spell(room_id, player_id, payload)
+        elif msg_type == "create_room":
+            await self._handle_create_room(room_id, player_id, payload)
+        elif msg_type == "join_room":
+            await self._handle_join_room(room_id, player_id, payload)
+        elif msg_type == "select_character":
+            await self._handle_select_character(room_id, player_id, payload)
+        elif msg_type == "player_ready":
+            await self._handle_player_ready(room_id, player_id, payload)
         elif msg_type == "start_game":
             await self._handle_start_game(room_id, player_id, payload)
         else:
@@ -662,6 +672,30 @@ class ConnectionManager:
                     "progression": session.vertical_round.to_dict(),
                 })
 
+        elif action_type == "activate_basement_device":
+            device_id = str(payload.get("device_id", ""))
+            try:
+                result = activate_basement_device(session, player_id, device_id)
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type, "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {
+                "type": "basement_device_activated", **result,
+            })
+            if result.get("reset"):
+                # 잘못된 순서 → 소리 핑
+                record_hunter_signal(session, player_id,
+                    {"x": player.position.x, "z": player.position.z}, "device_reset")
+            if result.get("completed"):
+                # 지하 미션 완료 → 주문 단계
+                session.spell_words = ["달빛", "교정", "탈출"]
+                session.state.phase = GamePhase.FINAL_SPELL
+                await self.broadcast(room_id, {
+                    "type": "vertical_final_ready", "spell_words": session.spell_words,
+                })
+
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
             for companion_id in DEFAULT_AI_PARTNER_IDS:
                 await self.send_to(room_id, player_id, {
@@ -702,7 +736,7 @@ class ConnectionManager:
                     GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
                 }
                 and player and player.status == PlayerStatus.ALIVE
-                and target and target.role == PlayerRole.AI_PARTNER and target.is_frozen
+                and target and target.role != PlayerRole.SEEKER and target.is_frozen
                 and self._players_within(player, target, 2.0)
                 and has_clear_catch_line(
                     (player.position.x, player.position.z),
@@ -857,12 +891,15 @@ class ConnectionManager:
     ) -> None:
         session = session_manager.get_or_create(room_id)
         player.eliminate()
+
+        # 멀티: 모든 인간이 행동 불능인지 확인
+        all_humans_down = all(
+            p.status in {PlayerStatus.FROZEN, PlayerStatus.ELIMINATED, PlayerStatus.ESCAPED}
+            for p in session.state.players.values()
+            if p.role == PlayerRole.HUMAN
+        )
         team_defeated = (
-            player.role == PlayerRole.HUMAN
-            or (
-                player.role == PlayerRole.AI_PARTNER
-                and session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL}
-            )
+            all_humans_down
             or session.state.all_non_seeker_frozen_or_eliminated()
         )
         if team_defeated:
@@ -987,17 +1024,37 @@ class ConnectionManager:
             await self._finish_seeker_catch(room_id, player_id, player)
             return
 
-        session.state.phase = GamePhase.RESULT
         player.escape()
         session.escaped_player_ids.add(player_id)
-        self._cancel_room_freeze_timeouts(room_id)
-        await self.broadcast(room_id, {
-            "type": "game_won",
-            "player_id": player_id,
-            "reason": "escaped",
-            "gate_id": session.active_gate_id,
-            **session.result_payload(),  # A7
-        })
+
+        # 모든 인간이 탈출/행동불능이면 게임 종료 (AI가 남아도 인간 없으면 끝)
+        all_humans_done = all(
+            p.status in {PlayerStatus.ESCAPED, PlayerStatus.ELIMINATED, PlayerStatus.FROZEN}
+            for p in session.state.players.values()
+            if p.role == PlayerRole.HUMAN
+        )
+        all_runners_done = all(
+            p.status in {PlayerStatus.ESCAPED, PlayerStatus.ELIMINATED, PlayerStatus.FROZEN}
+            for p in session.state.players.values()
+            if p.role != PlayerRole.SEEKER
+        )
+        if all_humans_done or all_runners_done:
+            session.state.phase = GamePhase.RESULT
+            self._cancel_room_freeze_timeouts(room_id)
+            await self.broadcast(room_id, {
+                "type": "game_won",
+                "player_id": player_id,
+                "reason": "escaped",
+                "gate_id": session.active_gate_id,
+                **session.result_payload(),  # A7
+            })
+        else:
+            # 부분 탈출: 개별 탈출 알림만 발송
+            await self.broadcast(room_id, {
+                "type": "runner_escaped",
+                "player_id": player_id,
+                "gate_id": session.active_gate_id,
+            })
 
     async def _handle_inspect_prop(
         self,
@@ -1150,19 +1207,25 @@ class ConnectionManager:
             room_id, player_id,
         )
 
-        # 현재 사전과제는 인간 1명 플레이이므로 조작 주체가 탈락하면 판을 종료한다.
-        # AI 동료가 살아 있다는 이유로 입력할 인간이 없는 세션을 방치하지 않는다.
+        # 멀티: 모든 인간이 탈락/빙결/탈출이면 게임 종료
         if player.role == PlayerRole.HUMAN:
-            session.state.phase = GamePhase.RESULT
-            self._cancel_room_freeze_timeouts(room_id)
-            await self.broadcast(room_id, {
-                "type": "game_over",
-                "reason": "human_eliminated",
-            })
-            return
+            all_humans_down = all(
+                p.status in {PlayerStatus.FROZEN, PlayerStatus.ELIMINATED, PlayerStatus.ESCAPED}
+                for p in session.state.players.values()
+                if p.role == PlayerRole.HUMAN
+            )
+            if all_humans_down:
+                session.state.phase = GamePhase.RESULT
+                self._cancel_room_freeze_timeouts(room_id)
+                await self.broadcast(room_id, {
+                    "type": "game_over",
+                    "reason": "all_humans_eliminated",
+                })
+                return
 
         if session.state.all_non_seeker_frozen_or_eliminated():
             session.state.phase = GamePhase.RESULT
+            self._cancel_room_freeze_timeouts(room_id)
             await self.broadcast(room_id, {
                 "type": "game_over",
                 "reason": "all_frozen_or_eliminated",
@@ -1287,10 +1350,117 @@ class ConnectionManager:
                 "transcript": result["transcript"],
             })
 
+    async def _handle_create_room(
+        self, room_id: str, player_id: str, payload: dict
+    ) -> None:
+        from app.game.room import RoomError, create_room, room_to_dict
+
+        try:
+            config = create_room(player_id)
+            self.rooms_config[room_id] = config
+            await self.broadcast(room_id, {
+                "type": "room_created",
+                "room": room_to_dict(config),
+            })
+        except RoomError as error:
+            await self.send_to(room_id, player_id, {
+                "type": "room_error", "reason": str(error),
+            })
+
+    async def _handle_join_room(
+        self, room_id: str, player_id: str, payload: dict
+    ) -> None:
+        from app.game.room import RoomError, join_room, room_to_dict
+
+        config = self.rooms_config.get(room_id)
+        if not config:
+            await self.send_to(room_id, player_id, {
+                "type": "room_error", "reason": "방을 찾을 수 없다",
+            })
+            return
+        try:
+            join_room(config, player_id)
+            await self.broadcast(room_id, {
+                "type": "room_joined",
+                "player_id": player_id,
+                "room": room_to_dict(config),
+            })
+        except RoomError as error:
+            await self.send_to(room_id, player_id, {
+                "type": "room_error", "reason": str(error),
+            })
+
+    async def _handle_select_character(
+        self, room_id: str, player_id: str, payload: dict
+    ) -> None:
+        from app.game.room import RoomError, room_to_dict, select_character
+
+        config = self.rooms_config.get(room_id)
+        if not config:
+            return
+        try:
+            select_character(config, player_id, str(payload.get("character_id", "")))
+            await self.broadcast(room_id, {
+                "type": "character_selected",
+                "player_id": player_id,
+                "character_id": payload.get("character_id"),
+                "room": room_to_dict(config),
+            })
+        except RoomError as error:
+            await self.send_to(room_id, player_id, {
+                "type": "room_error", "reason": str(error),
+            })
+
+    async def _handle_player_ready(
+        self, room_id: str, player_id: str, payload: dict
+    ) -> None:
+        from app.game.room import RoomError, room_to_dict, set_ready
+
+        config = self.rooms_config.get(room_id)
+        if not config:
+            return
+        try:
+            set_ready(config, player_id, bool(payload.get("ready", True)))
+            await self.broadcast(room_id, {
+                "type": "player_ready_changed",
+                "player_id": player_id,
+                "ready": config.players[player_id].is_ready,
+                "room": room_to_dict(config),
+            })
+        except RoomError as error:
+            await self.send_to(room_id, player_id, {
+                "type": "room_error", "reason": str(error),
+            })
+
     async def _handle_start_game(
         self, room_id: str, player_id: str, payload: dict
     ) -> None:
+        from app.game.room import RoomError, RoomPhase, start_game_from_room
+
         session = session_manager.get_or_create(room_id)
+        config = self.rooms_config.get(room_id)
+
+        # 방 시스템이 활성화된 경우 AI 충원 처리
+        if config and config.phase not in {RoomPhase.ONBOARDING, RoomPhase.PLAYING}:
+            try:
+                game_info = start_game_from_room(config)
+            except RoomError as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "room_error", "reason": str(error),
+                })
+                return
+
+            # AI 충원: 방 설정에 따라 AI 파트너 등록
+            for ai_info in game_info["ai_partners"]:
+                partner_id = ai_info["partner_id"]
+                if session.state.get_player(partner_id) is None:
+                    session.state.add_player(partner_id, PlayerRole.AI_PARTNER)
+
+            await self.broadcast(room_id, {
+                "type": "game_starting", **game_info,
+            })
+
+        # 기존 게임 시작 로직 (forbidden_words 등)
         requested_words = payload.get("forbidden_words")
         forbidden_words = requested_words or DEFAULT_FORBIDDEN_WORDS
         session.setup_game(forbidden_words)
@@ -1514,6 +1684,22 @@ class ConnectionManager:
                 "type": "companion_report", "companion_id": companion_id,
                 "message": message, "phase": action.get("phase", ""),
                 "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
+            }, companion_id)
+        elif action["type"] == "basement_device_report":
+            # AI가 지하 장치에 도착하여 상태를 보고
+            device_status = action.get("device_status", {})
+            device_name = device_status.get("name", "장치") if device_status else "장치"
+            device_state = device_status.get("state", "off") if device_status else "off"
+            state_label = {"off": "꺼져 있어", "standby": "대기 중이야", "active": "작동 중이야"}.get(device_state, "알 수 없어")
+            message = f"{device_name} 상태를 확인했어! 지금 {state_label}."
+            message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report", "companion_id": companion_id,
+                "message": message, "phase": action.get("phase", ""),
+                "device_id": action.get("device_id"),
+                "device_status": device_status,
+                "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
 
