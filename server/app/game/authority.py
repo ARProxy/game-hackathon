@@ -53,6 +53,7 @@ def next_navigation_waypoint(
     start: tuple[float, float],
     end: tuple[float, float],
     floor: str,
+    stop_distance: float = 0.0,
 ) -> tuple[float, float]:
     """공유 맵 그래프에서 목표로 가는 다음 가시 waypoint를 반환한다.
 
@@ -60,7 +61,20 @@ def next_navigation_waypoint(
     벽 AABB와 맞닿아 가시 노드가 없을 때는 가장 가까운 노드를 종점으로 삼고,
     마지막 접근은 기존 벽 회피 이동에 맡긴다.
     """
-    if math.dist(start, end) <= 6.0 and has_clear_catch_line(start, end, floor):
+    def stopping_point(origin: tuple[float, float]) -> tuple[float, float]:
+        distance = math.dist(origin, end)
+        if distance <= max(0.0, stop_distance) or distance <= 1e-9:
+            return origin
+        travel_scale = (distance - max(0.0, stop_distance)) / distance
+        return (
+            origin[0] + (end[0] - origin[0]) * travel_scale,
+            origin[1] + (end[1] - origin[1]) * travel_scale,
+        )
+
+    if (
+        math.dist(start, end) <= 6.0
+        and has_clear_catch_line(start, stopping_point(start), floor)
+    ):
         return end
     nodes = NAVIGATION_NODES_BY_FLOOR.get(floor, ())
     if not nodes:
@@ -78,7 +92,9 @@ def next_navigation_waypoint(
     ]
     goal_nodes = [
         node for node in nodes
-        if has_clear_catch_line(node_position(node), end, floor)
+        if has_clear_catch_line(
+            node_position(node), stopping_point(node_position(node)), floor,
+        )
     ]
     if not start_nodes:
         start_nodes = sorted(nodes, key=lambda node: math.dist(start, node_position(node)))[:1]

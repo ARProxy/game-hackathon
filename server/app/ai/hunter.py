@@ -534,10 +534,11 @@ def hunter_snapshot(session: Any) -> dict:
 
 def _safe_hunter_step(
     x: float, z: float, target_x: float, target_z: float, step: float, floor: str = "F1",
+    stop_distance: float = 0.0,
 ) -> tuple[float, float]:
     """서버 벽 계약을 넘지 않으며 목표 쪽 또는 벽의 측면으로 한 걸음 이동한다."""
     target_x, target_z = next_navigation_waypoint(
-        (x, z), (target_x, target_z), floor,
+        (x, z), (target_x, target_z), floor, stop_distance=stop_distance,
     )
     distance = math.hypot(target_x - x, target_z - z)
     if distance <= 0 or step <= 0:

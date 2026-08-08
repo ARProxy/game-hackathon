@@ -103,7 +103,7 @@ export default function Partner({
       intent.target,
       speed,
       companion.thinkIntervalSeconds,
-      companion.arrivalDistance,
+      intent.arrivalDistance ?? companion.arrivalDistance,
       _displayTarget,
     )
     const displayDx = _displayTarget.x - group.position.x

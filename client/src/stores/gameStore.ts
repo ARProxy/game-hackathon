@@ -132,6 +132,7 @@ export interface CompanionIntent {
   target: { x: number; z: number }
   partnerPosition: { x: number; z: number }
   reason: string
+  arrivalDistance?: number
 }
 
 interface GameStore {
@@ -311,6 +312,7 @@ function sameCompanionIntent(left: CompanionIntent | null, right: CompanionInten
     && left.state === right.state
     && left.targetId === right.targetId
     && left.reason === right.reason
+    && left.arrivalDistance === right.arrivalDistance
     && samePosition(left.target, right.target)
     && samePosition(left.partnerPosition, right.partnerPosition))
 }

@@ -337,6 +337,7 @@ export default function useWebSocket() {
           target: data.target,
           partnerPosition: data.partner_position,
           reason: data.reason,
+          arrivalDistance: data.arrival_distance,
         })
         break
 

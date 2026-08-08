@@ -254,14 +254,22 @@ def test_rooftop_companions_split_east_and_west_signal_scouts() -> None:
 
     east = decide_companion_intent(session, "partner")
     west = decide_companion_intent(session, "partner-2")
-    east_position = get_map_slot("ROOF_SIGNAL_EAST")["position"]
-    west_position = get_map_slot("ROOF_SIGNAL_WEST")["position"]
+    east_slot = get_map_slot("ROOF_SIGNAL_EAST")
+    west_slot = get_map_slot("ROOF_SIGNAL_WEST")
 
     assert east["reason"] == west["reason"] == "rooftop_signal_scout"
     assert east["target_id"] == "roof_signal_scout_east"
     assert west["target_id"] == "roof_signal_scout_west"
-    assert east["target"] == {"x": east_position[0], "z": east_position[2]}
-    assert west["target"] == {"x": west_position[0], "z": west_position[2]}
+    assert east["target"] == {
+        "x": east_slot["approachPosition"][0],
+        "z": east_slot["approachPosition"][2],
+    }
+    assert west["target"] == {
+        "x": west_slot["approachPosition"][0],
+        "z": west_slot["approachPosition"][2],
+    }
+    assert east["arrival_distance"] == east_slot["approachRadius"]
+    assert west["arrival_distance"] == west_slot["approachRadius"]
     assert east["target"] != west["target"]
 
     partner = session.state.get_player("partner")
@@ -278,13 +286,50 @@ def test_rooftop_companions_split_east_and_west_signal_scouts() -> None:
     assert distance_after_tick < distance_before_tick
 
 
+def test_rooftop_companions_do_not_reverse_near_signal_consoles() -> None:
+    session = make_session("companion-rooftop-arrival-stability")
+    session.round_data = None
+    seeker = session.state.get_player("seeker")
+    seeker.position.floor = WorldFloor.F1
+
+    for companion_id in ("partner", "partner-2"):
+        runtime = session.companion_states[companion_id]
+        partner = session.state.get_player(companion_id)
+        intent = decide_companion_intent(session, companion_id)
+        previous_distance = math.hypot(
+            intent["target"]["x"] - partner.position.x,
+            intent["target"]["z"] - partner.position.z,
+        )
+        near_signal_distances: list[float] = []
+
+        for _ in range(48):
+            runtime.last_tick = time.monotonic() - 0.25
+            snapshot, _ = advance_companion(session, companion_id)
+            distance = math.hypot(
+                snapshot["target"]["x"] - snapshot["partner_position"]["x"],
+                snapshot["target"]["z"] - snapshot["partner_position"]["z"],
+            )
+            if previous_distance < 5.0:
+                near_signal_distances.append(distance)
+            previous_distance = distance
+            if distance <= snapshot["arrival_distance"] + 0.05:
+                break
+
+        assert near_signal_distances
+        assert all(
+            current <= previous + 1e-6
+            for previous, current in zip(near_signal_distances, near_signal_distances[1:])
+        )
+        assert previous_distance <= intent["arrival_distance"] + 0.05
+
+
 def test_rooftop_companion_waits_at_assigned_signal_until_its_turn() -> None:
     session = make_session("companion-rooftop-signal-wait")
     session.round_data = None
     seeker = session.state.get_player("seeker")
     seeker.position.floor = WorldFloor.F1
     partner = session.state.get_player("partner")
-    east_position = get_map_slot("ROOF_SIGNAL_EAST")["interactionPosition"]
+    east_position = get_map_slot("ROOF_SIGNAL_EAST")["approachPosition"]
     partner.position.x, partner.position.y, partner.position.z = east_position
     partner.position.floor = WorldFloor.ROOF
 

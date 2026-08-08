@@ -161,12 +161,15 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         if session.vertical_round.phase == VerticalRoundPhase.ROOFTOP_INTRO:
             signal_side = "east" if companion_id == "partner" else "west"
             signal_slot = _get_map_slot(f"ROOF_SIGNAL_{signal_side.upper()}")
-            sx, _, sz = signal_slot["position"]
+            sx, _, sz = signal_slot.get("approachPosition", signal_slot["position"])
             return {
                 "state": "EXPLORE_ZONE",
                 "target_id": f"roof_signal_scout_{signal_side}",
                 "target": {"x": sx, "z": sz},
                 "reason": "rooftop_signal_scout",
+                "arrival_distance": float(
+                    signal_slot.get("approachRadius", CONTRACT["arrivalDistance"]),
+                ),
             }
 
         # 두 번째 동료는 플레이어와 미션 담당 동료를 따라 겹치지 않고,
@@ -392,24 +395,28 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         }, None
 
     distance = math.hypot(intent["target"]["x"] - partner.position.x, intent["target"]["z"] - partner.position.z)
+    arrival_distance = max(
+        0.0,
+        float(intent.get("arrival_distance", CONTRACT["arrivalDistance"])),
+    )
     speed_key = {
         "EXPLORE_ZONE": "exploreSpeed", "INSPECT_CANDIDATE": "missionSpeed",
         "AVOID_SEEKER": "avoidSpeed", "RESCUE_TEAMMATE": "rescueSpeed",
         "MOVE_TO_GATE": "gateSpeed", "ESCAPE": "gateSpeed",
         "FOLLOW_TO_FLOOR": "gateSpeed",
     }.get(intent["state"])
-    if speed_key and distance > CONTRACT["arrivalDistance"]:
-        step = min(float(CONTRACT[speed_key]) * min(elapsed, 0.5), distance - CONTRACT["arrivalDistance"])
+    if speed_key and distance > arrival_distance:
+        step = min(float(CONTRACT[speed_key]) * min(elapsed, 0.5), distance - arrival_distance)
         partner.position.x, partner.position.z = _safe_hunter_step(
             partner.position.x, partner.position.z, intent["target"]["x"], intent["target"]["z"], step,
-            partner.position.floor.value,
+            partner.position.floor.value, stop_distance=arrival_distance,
         )
         session.position_samples[partner.player_id] = MovementSample(partner.position.x, partner.position.z, now)
 
     arrived = math.hypot(
         intent["target"]["x"] - partner.position.x,
         intent["target"]["z"] - partner.position.z,
-    ) <= CONTRACT["arrivalDistance"] + 0.05
+    ) <= arrival_distance + 0.05
     sighting = runtime.last_seeker_seen
     triggered_trap = next((
         trap for trap in TRAP_CONTRACT["traps"]

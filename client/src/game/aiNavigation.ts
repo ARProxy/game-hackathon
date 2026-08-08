@@ -45,9 +45,6 @@ export function planAvoidedStep(
     0,
     preferredSide * Math.PI / 4,
     preferredSide * Math.PI / 2,
-    preferredSide * Math.PI * 3 / 4,
-    Math.PI,
-    -preferredSide * Math.PI * 3 / 4,
     -preferredSide * Math.PI / 2,
     -preferredSide * Math.PI / 4,
   ]

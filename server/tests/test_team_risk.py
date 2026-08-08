@@ -63,8 +63,8 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         seeker.position.floor = WorldFloor.F1
 
         center = get_map_slot("ROOF_SIGNAL_CENTER")["interactionPosition"]
-        east = get_map_slot("ROOF_SIGNAL_EAST")["interactionPosition"]
-        west = get_map_slot("ROOF_SIGNAL_WEST")["interactionPosition"]
+        east = get_map_slot("ROOF_SIGNAL_EAST")["approachPosition"]
+        west = get_map_slot("ROOF_SIGNAL_WEST")["approachPosition"]
         human.position.x, human.position.y, human.position.z = center
         partner.position.x, partner.position.y, partner.position.z = east
         partner_two.position.x, partner_two.position.y, partner_two.position.z = west

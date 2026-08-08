@@ -89,6 +89,23 @@ for (const [slotId, consoleId] of [
     `${slotId} 장치 좌표와 실제 콘솔이 어긋났다`,
   )
   assert.equal(slots[slotId].interactionPosition[1], 10.8, `${slotId} 상호작용 지점이 옥상 바닥에서 떴다`)
+  if (slots[slotId].approachPosition) {
+    const [approachX, approachY, approachZ] = slots[slotId].approachPosition
+    assert.equal(approachY, 10.8, `${slotId} AI 접근 지점이 옥상 바닥에서 떴다`)
+    assert.ok(slabAt('ROOF', approachX, approachZ), `${slotId} AI 접근 지점 아래에 옥상 슬래브가 없다`)
+    const blocker = COMPACT_SCHOOL.boxes.find((item) => (
+      item.f === 'ROOF' && isServerBarrier(item)
+      && pointInsideBoxXZ(approachX, approachZ, item, CAPSULE_RADIUS)
+    ))
+    assert.equal(blocker, undefined, `${slotId} AI 접근 지점이 ${blocker?.id ?? '장벽'}과 겹친다`)
+    assert.ok(
+      Math.hypot(
+        approachX - slots[slotId].interactionPosition[0],
+        approachZ - slots[slotId].interactionPosition[2],
+      ) <= 2.4,
+      `${slotId} AI 접근 지점이 상호작용 반경을 벗어났다`,
+    )
+  }
 }
 for (const suffix of ['A', 'B', 'C']) {
   const slot = slots[`ROOF_RUNNER_SPAWN_${suffix}`]
