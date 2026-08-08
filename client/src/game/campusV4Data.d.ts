@@ -75,6 +75,25 @@ export interface CampusCell {
   links: string[]
 }
 
+export type ClassroomLayout = 'rows' | 'pods' | 'exam' | 'horseshoe' | 'project'
+
+export interface CampusRoom {
+  id: string
+  name: string
+  kind: string
+  floor: CampusFloor
+  wing: string
+  cond?: string
+  layoutId?: ClassroomLayout
+  x0: number
+  z0: number
+  x1: number
+  z1: number
+  cx: number
+  cz: number
+  tone: string
+}
+
 export interface CampusData {
   solids: CampusBox[]
   visuals: CampusBox[]
@@ -83,7 +102,7 @@ export interface CampusData {
   fixtures: CampusFixture[]
   doors: CampusDoor[]
   lamps: Array<{ p: V2; h: number; tone: string }>
-  rooms: unknown[]
+  rooms: CampusRoom[]
   devices: CampusDevice[]
   cells: CampusCell[]
   EVS: Array<{ id: string; name: string; x: V2; z: V2; roof: boolean }>
@@ -95,6 +114,7 @@ export const FLOOR_HEIGHT: number
 export const FLOOR_Y: Record<CampusFloor, number>
 export const EVS: Array<{ id: string; name: string; x: V2; z: V2; roof: boolean }>
 export const TONE: Record<string, string>
+export const CLASSROOM_LAYOUTS: Record<string, ClassroomLayout>
 export const SPAWNS: {
   human: { p: V2; floor: CampusFloor; note: string }
   partners: Array<{ p: V2; floor: CampusFloor; note: string }>

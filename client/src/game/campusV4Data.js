@@ -114,7 +114,10 @@ const KIND = {
 }
 export const TONE = { warm: '#ffe6bd', cool: '#d5e8ff', soft: '#f0e9dd', dim: '#9fb0bd', amber: '#ffd6a0' }
 
-/** 층별 실 배치. [id, 이름, kind, 베이수] — 윙 순서는 서→동 / 북→남 */
+/**
+ * 층별 실 배치. [id, 이름, kind, 베이수] — 윙 순서는 서→동 / 북→남.
+ * 건축 프로그램은 판마다 바뀌지 않는다. 반복 플레이 변화는 방 상태·미션·소품에만 둔다.
+ */
 const PROGRAM = {
   F1: {
     N: [['staff', '교무실', 'admin', 2], ['admin', '행정실', 'admin'], ['principal', '교장실', 'admin'], ['health', '보건실', 'health']],
@@ -134,28 +137,24 @@ const PROGRAM = {
 }
 
 /**
- * 판마다 특별실 자리를 섞는다.
- * 같은 kind 끼리만 교환하므로 "과학실은 항상 2층 동익"이 깨지되,
- * 방 성격과 층 구성은 그대로 남는다.
+ * 일반교실은 같은 학교 모듈을 공유하되, 생활 장면과 판단 동선이 서로 다르다.
+ * ID를 데이터로 남겨 QA가 "교실 10개가 다시 같은 격자"로 퇴행하는지 검사할 수 있게 한다.
  */
-function shuffleProgram(seed) {
-  const rr = rngFrom(hash32('prog:' + seed))
-  const out = JSON.parse(JSON.stringify(PROGRAM))
-  // 교환 가능한 특별실 — 준비실은 본실 옆에 붙어 있어야 하므로 제외
-  const SWAPPABLE = new Set(['lab', 'computer', 'music', 'art', 'dance', 'av', 'english', 'club', 'calli', 'pottery', 'library'])
-  const slots = []
-  for (const fk of ['F2', 'F3']) for (const wing of ['W', 'E']) {
-    out[fk][wing].forEach((row, i) => { if (SWAPPABLE.has(row[2])) slots.push([fk, wing, i]) })
-  }
-  // 베이 수가 같은 것끼리만 자리를 바꾼다 — 평면이 깨지지 않는다
-  for (let i = slots.length - 1; i > 0; i--) {
-    const j = Math.floor(rr() * (i + 1))
-    const [af, aw, ai] = slots[i], [bf, bw, bi] = slots[j]
-    const A = out[af][aw][ai], B = out[bf][bw][bi]
-    if ((A[3] || 1) !== (B[3] || 1)) continue
-    out[af][aw][ai] = B; out[bf][bw][bi] = A
-  }
-  return out
+export const CLASSROOM_LAYOUTS = {
+  f2_c21: 'rows',
+  f2_c22: 'pods',
+  f2_c23: 'exam',
+  f2_c24: 'horseshoe',
+  f2_c25: 'project',
+  f3_c31: 'project',
+  f3_c32: 'horseshoe',
+  f3_c33: 'rows',
+  f3_c34: 'pods',
+  f3_c35: 'exam',
+}
+
+function fixedProgram() {
+  return JSON.parse(JSON.stringify(PROGRAM))
 }
 
 /** 지하 1층 — 북측 윙 + 북측 코어 아래만 굴착 */
@@ -281,7 +280,9 @@ export function buildCampus(opts = {}) {
     }
   }
 
-  const PROG = shuffleProgram(SEED)
+  // 과학실-준비실, 음악실-악기실, 방송실-준비실의 기능 인접성을 보존한다.
+  // 시드는 고정 건축 프로그램을 섞지 않는다.
+  const PROG = fixedProgram()
   const HOLES = []
   const LEAKS = []   // 개구부 = 소리가 새는 구멍
   const DEVICES = [] // 음성 미션이 실제로 조작하는 설비
@@ -319,7 +320,12 @@ export function buildCampus(opts = {}) {
       for (const [id, name, kind, bay] of prog[wing]) {
         const wBay = span * (bay || 1)
         const rect = R(x + 0.1, BAND.N.room[0], x + wBay - 0.1, BAND.N.room[1])
-        out.push({ rect, meta: { id: f.toLowerCase() + '_' + id, name, kind, wing }, row: { wing, axis: 'x', a: x, b: x + wBay, id, kind } })
+        const roomId = f.toLowerCase() + '_' + id
+        out.push({
+          rect,
+          meta: { id: roomId, name, kind, wing, layoutId: CLASSROOM_LAYOUTS[roomId] },
+          row: { wing, axis: 'x', a: x, b: x + wBay, id, kind },
+        })
         x += wBay
       }
     }
@@ -331,7 +337,12 @@ export function buildCampus(opts = {}) {
         const dBay = span * (bay || 1)
         const rect = wing === 'W' ? R(BAND.W.room[0], z + 0.1, BAND.W.room[1], z + dBay - 0.1)
           : R(BAND.E.room[0], z + 0.1, BAND.E.room[1], z + dBay - 0.1)
-        out.push({ rect, meta: { id: f.toLowerCase() + '_' + id, name, kind, wing }, row: { wing, axis: 'z', a: z, b: z + dBay, id, kind } })
+        const roomId = f.toLowerCase() + '_' + id
+        out.push({
+          rect,
+          meta: { id: roomId, name, kind, wing, layoutId: CLASSROOM_LAYOUTS[roomId] },
+          row: { wing, axis: 'z', a: z, b: z + dBay, id, kind },
+        })
         z += dBay
       }
     }
@@ -342,7 +353,9 @@ export function buildCampus(opts = {}) {
    * 생성 전에 모든 방의 상태와 구멍 위치를 정한다.
    * 개수는 고정하고 위치만 섞는다 — 학습은 되지만 예측은 안 되게.
    */
-  const QUOTA = { collapse: 5, breach: 6, messy: 8, stacked: 3, stripped: 2 }
+  // 정상 학교 문법이 먼저 읽히도록 전체 프로그램실의 약 75%를 정상 상태로 유지한다.
+  // 파손은 기본 구조가 아니라 진행 중 발견하는 희소한 overlay다.
+  const QUOTA = { collapse: 2, breach: 3, messy: 5, stacked: 1, stripped: 1 }
   function precompute() {
     const all = []
     for (const f of ['F1', 'F2', 'F3']) for (const e of wingRects(f)) all.push({ f, ...e })
@@ -353,15 +366,18 @@ export function buildCampus(opts = {}) {
       for (let i = pool.length - 1; i > 0; i--) { const j = (rr() * (i + 1)) | 0; const t = pool[i]; pool[i] = pool[j]; pool[j] = t }
       return pool.slice(0, n)
     }
-    const safe = (e) => !['stair', 'toilet', 'machine', 'broadcast'].includes(e.meta.kind)
+    // 일반교실의 차이는 수업 장면으로 읽혀야 한다. 벽 파손·붕괴·가구 전량 적재는
+    // 특별실/서비스실에만 두어 10개 교실의 고유 레이아웃을 실제 플레이에서 보존한다.
+    const safe = (e) => !['stair', 'toilet', 'machine', 'broadcast', 'classroom'].includes(e.meta.kind)
+    const canEmpty = (e) => e.meta.kind !== 'classroom'
     // 1층 붕괴는 지하가 있는 북측 윙에서만 — 아래가 없는 곳은 뚫을 수 없다
     const b1Under = (e) => e.f === 'F1' && e.rect.z1 <= -50.5 && e.rect.x0 >= -55.9 && e.rect.x1 <= 7.9
     for (const e of pick(1, (e) => safe(e) && b1Under(e))) COND[e.meta.id] = 'collapse'
     for (const e of pick(QUOTA.collapse - 1, (e) => safe(e) && (e.f === 'F2' || e.f === 'F3'))) COND[e.meta.id] = 'collapse'
     for (const e of pick(QUOTA.breach, safe)) COND[e.meta.id] = 'breach'
-    for (const e of pick(QUOTA.messy, () => true)) COND[e.meta.id] = 'messy'
-    for (const e of pick(QUOTA.stacked, () => true)) COND[e.meta.id] = 'stacked'
-    for (const e of pick(QUOTA.stripped, () => true)) COND[e.meta.id] = 'stripped'
+    for (const e of pick(QUOTA.messy, canEmpty)) COND[e.meta.id] = 'messy'
+    for (const e of pick(QUOTA.stacked, canEmpty)) COND[e.meta.id] = 'stacked'
+    for (const e of pick(QUOTA.stripped, canEmpty)) COND[e.meta.id] = 'stripped'
     // 파손 폭 등급 — 0.9 m 는 기어서 통과, 술래가 손해를 본다
     for (const e of all) {
       if (COND[e.meta.id] !== 'breach') continue
@@ -486,6 +502,38 @@ export function buildCampus(opts = {}) {
     const myHoles = holesOn(f).filter((h) => h.x0 < r.x1 && h.x1 > r.x0 && h.z0 < r.z1 && h.z1 > r.z0)
     const inHole = (x, z) => myHoles.some((h) => x > h.x0 - 0.5 && x < h.x1 + 0.5 && z > h.z0 - 0.5 && z < h.z1 + 0.5)
 
+    /**
+     * 방 로컬 좌표: u=칠판을 바라봤을 때 가로, v=칠판에서 방 안쪽으로 들어가는 깊이.
+     * 윙이 달라도 같은 배치가 벽과 함께 회전하므로 월드 x/z 하드코딩으로 인한 뒤집힘을 막는다.
+     */
+    const localWidth = face === 'N' || face === 'S' ? w : d
+    const localDepth = face === 'N' || face === 'S' ? d : w
+    const localYaw = face === 'N' ? 0 : face === 'S' ? Math.PI : face === 'E' ? -Math.PI / 2 : Math.PI / 2
+    const toWorld = (u, v) => {
+      if (face === 'N') return [cx + u, r.z0 + v]
+      if (face === 'S') return [cx - u, r.z1 - v]
+      if (face === 'E') return [r.x1 - v, cz + u]
+      return [r.x0 + v, cz - u]
+    }
+    const localBox = (u, v, height, size, color, turn = 0, opt = {}) => {
+      const [x, z] = toWorld(u, v)
+      if (inHole(x, z)) return
+      // 복도문 양끝의 1.2m 진입/스윙 구역. 낮은 가구만 거부하고 칠판·벽 TV는 허용한다.
+      const entersDoorZone = height < 1.2 && v < 1.7 && Math.abs(u) + size[0] / 2 > localWidth / 2 - 1.5
+      if (kind === 'classroom' && entersDoorZone) return
+      V(f, [x, y + height, z], size, color, {
+        ...opt,
+        rot: [0, localYaw + turn, 0],
+        roomId: meta.id,
+        layoutId: meta.layoutId,
+        local: [u, v],
+      })
+    }
+    const localCylinder = (u, v, height, radius, cylinderHeight, color) => {
+      const [x, z] = toWorld(u, v)
+      if (!inHole(x, z)) CY(f, [x, y + height, z], radius, cylinderHeight, color)
+    }
+
     /** 가구를 뺀 자리에 남는 눌림 자국 */
     const wearMarks = (nx, nz, gapx, gapz) => {
       for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
@@ -583,25 +631,81 @@ export function buildCampus(opts = {}) {
     }
 
     if (kind === 'classroom') {
-      const fp = facePos()
-      const bw = Math.min(4.2, (fp.rot ? d : w) - 1.6)
-      V(f, [fp.x, y + 1.85, fp.z], fp.rot ? [0.08, 1.3, bw] : [bw, 1.3, 0.08], PAL.chalk)
-      V(f, [fp.x, y + 1.15, fp.z], fp.rot ? [0.18, 0.09, bw] : [bw, 0.09, 0.18], PAL.wood)
-      // 교탁
-      const tx = fp.rot ? fp.x + (face === 'E' ? -1.3 : 1.3) : fp.x + 1.2
-      const tz = fp.rot ? fp.z + 1.2 : fp.z + (face === 'S' ? -1.3 : 1.3)
-      V(f, [tx, y + 0.78, tz], [1.1, 0.06, 0.55], PAL.wood)
-      V(f, [tx, y + 0.4, tz], [1.0, 0.72, 0.45], PAL.desk)
-      // 학생 책상 4열 × 5행 (열 1.6m, 통로 1.05m 확보)
-      const cols = 4, rowsn = 5
-      const ax = face === 'S' || face === 'N' ? 'z' : 'x'
-      grid(ax === 'z' ? cols : rowsn, ax === 'z' ? rowsn : cols, ax === 'z' ? 1.55 : 1.35, ax === 'z' ? 1.35 : 1.55,
-        (x, z) => deskUnit(x, z, 0))
-      cabinet(cx, r.z0 + 0.35, Math.min(w - 2, 5), false)
-      V(f, [r.x0 + 0.35, y + 1.6, cz + 2], [0.12, 1.1, 2.4], PAL.paper)   // 게시판
-      V(f, [r.x1 - 0.3, y + 2.35, cz - 1.6], [0.5, 0.35, 0.6], '#232a30') // 벽걸이 TV
-      V(f, [r.x0 + 0.5, y + 0.4, r.z1 - 0.5], [0.5, 0.8, 0.5], PAL.locker)// 청소함
-      CY(f, [r.x1 - 0.6, y + 0.18, r.z1 - 0.6], 0.17, 0.36, '#5c6165')    // 쓰레기통
+      const layoutId = meta.layoutId || CLASSROOM_LAYOUTS[meta.id] || 'rows'
+      const boardWidth = Math.min(4.2, localWidth - 1.6)
+
+      // 모든 교실이 공유하는 70%의 학교 문법: 칠판·교탁·뒤 사물함·게시판·청소 코너.
+      localBox(0, 0.12, 1.85, [boardWidth, 1.3, 0.08], PAL.chalk)
+      localBox(0, 0.2, 1.15, [boardWidth, 0.09, 0.18], PAL.wood)
+      localBox(0, 1.15, 0.78, [1.1, 0.06, 0.55], PAL.wood)
+      localBox(0, 1.15, 0.4, [1.0, 0.72, 0.45], PAL.desk)
+      // 뒤벽 전체를 막지 않고 한쪽 코너만 쓴다. 뒷문과 회전 공간을 남기는 학교식 수납이다.
+      localBox(localWidth * 0.2, localDepth - 0.3, 0.9, [2.0, 1.8, 0.45], PAL.locker)
+      localBox(-localWidth / 2 + 0.12, localDepth * 0.62, 1.6, [0.08, 1.1, 2.2], PAL.paper)
+      localBox(localWidth / 2 - 0.26, 1.05, 2.35, [0.5, 0.35, 0.55], '#232a30')
+      localBox(-localWidth / 2 + 0.42, localDepth - 0.72, 0.4, [0.5, 0.8, 0.5], PAL.locker)
+      localCylinder(localWidth / 2 - 0.55, localDepth - 0.62, 0.18, 0.17, 0.36, '#5c6165')
+
+      const deskLocal = (u, v, turn = 0) => {
+        if (cond === 'stripped') {
+          const [x, z] = toWorld(u, v)
+          if (!inHole(x, z)) P(f, [x, y + 0.035, z], [1.05, 0.5], '#7c8478')
+          return
+        }
+        let ju = 0, jv = 0, jt = 0
+        if (cond === 'messy') {
+          // 레이아웃의 주 통로를 깨지 않는 생활 흔적 범위.
+          ju = (rr() - 0.5) * 0.2
+          jv = (rr() - 0.5) * 0.2
+          jt = (rr() - 0.5) * 0.24
+        }
+        const rot = turn + jt
+        localBox(u + ju, v + jv, 0.72, [0.72, 0.05, 0.48], PAL.desk, rot)
+        localBox(u + ju, v + jv, 0.58, [0.66, 0.22, 0.34], PAL.deskLeg, rot)
+        const chairDistance = 0.52
+        const chairU = u + ju + Math.sin(rot) * chairDistance
+        const chairV = v + jv + Math.cos(rot) * chairDistance
+        localBox(chairU, chairV, 0.44, [0.42, 0.05, 0.42], PAL.chair, rot)
+        localBox(chairU + Math.sin(rot) * 0.2, chairV + Math.cos(rot) * 0.2, 0.66, [0.42, 0.44, 0.05], PAL.chair, rot)
+      }
+
+      if (cond === 'stacked') {
+        stackPile(14)
+      } else if (layoutId === 'pods') {
+        // 네 개의 모둠 섬. 섬 사이 십자 통로는 1.1 m 이상 남긴다.
+        for (const pu of [-1.65, 1.65]) for (const pv of [2.65, 5.0]) {
+          deskLocal(pu - 0.62, pv - 0.42, Math.PI)
+          deskLocal(pu + 0.62, pv - 0.42, Math.PI)
+          deskLocal(pu - 0.62, pv + 0.42, 0)
+          deskLocal(pu + 0.62, pv + 0.42, 0)
+        }
+        localBox(0, localDepth - 1.05, 1.15, [1.8, 0.7, 0.35], '#6f8a68')
+      } else if (layoutId === 'exam') {
+        // 간격을 넓힌 시험 대형. 중앙 세로 통로가 정면에서 뒷문까지 열린다.
+        for (const u of [-2.15, 0, 2.15]) for (const v of [2.05, 3.25, 4.45, 5.65]) deskLocal(u, v)
+        localBox(-localWidth / 2 + 0.38, 2.0, 1.15, [0.22, 0.75, 1.2], '#d6cfaa')
+      } else if (layoutId === 'horseshoe') {
+        // 발표·토론형 U자. 중앙 3.4×3.1 m를 완전히 비운다.
+        for (const v of [2.35, 3.55, 4.75]) {
+          deskLocal(-2.45, v, Math.PI / 2)
+          deskLocal(2.45, v, -Math.PI / 2)
+        }
+        for (const u of [-2.25, -0.75, 0.75, 2.25]) deskLocal(u, 5.55, 0)
+        localBox(0, 3.75, 0.03, [2.2, 0.03, 1.4], '#7b8f91')
+      } else if (layoutId === 'project') {
+        // 제작 수업형: 양옆 벤치 + 중앙 공동 작업대, 앞뒤 회유 동선.
+        for (const v of [2.15, 3.25, 4.35, 5.45]) {
+          deskLocal(-2.45, v, Math.PI / 2)
+          deskLocal(2.45, v, -Math.PI / 2)
+        }
+        localBox(0, 3.75, 0.74, [2.5, 0.08, 1.1], '#8e765d')
+        localBox(0, 3.75, 0.38, [2.3, 0.68, 0.9], PAL.deskLeg)
+        localBox(0, 5.45, 1.35, [2.4, 1.3, 0.18], '#b88756')
+      } else {
+        // 정돈형 기준 교실. 두 개의 종방향 통로와 뒤쪽 횡통로를 유지한다.
+        for (const u of [-2.25, -0.75, 0.75, 2.25]) for (const v of [2.05, 3.2, 4.35, 5.5]) deskLocal(u, v)
+        localCylinder(localWidth / 2 - 0.45, 1.9, 0.38, 0.28, 0.48, '#4b7046')
+      }
     } else if (kind === 'lab') {
       grid(2, 3, 2.6, 2.0, (x, z) => {
         V(f, [x, y + 0.85, z], [2.2, 0.08, 0.9], '#b9c2c6')
