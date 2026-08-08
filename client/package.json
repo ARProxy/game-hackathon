@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "export:collision": "node scripts/export-server-collision.mjs",
+    "verify:campus": "node scripts/verify-campus-contract.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

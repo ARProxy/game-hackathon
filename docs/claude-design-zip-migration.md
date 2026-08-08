@@ -1,0 +1,48 @@
+# Claude Design ZIP 이전 대조표
+
+기준 원본은 2026-08-08 전달받은 `학교 맵 리얼리즘 업그레이드3.zip`이다. 이 문서는 디자인 ZIP과 실제 게임 런타임 사이의 연결 상태를 추적하는 정본이다.
+
+## 이전 원칙
+
+- 원본 절차형 캠퍼스 데이터와 시각 설계를 임의로 단순화하지 않는다.
+- 게임 고유 로직은 원본 장면 위에 연결하며, 원본을 비슷하게 재작성하지 않는다.
+- 렌더링 최적화는 유지한다. 반복 형상은 재질군별 인스턴싱하고 동적 광원 수는 제한한다.
+- 기능 단위로 빌드·테스트한 뒤 Gitmoji 한국어 커밋을 남긴다.
+
+## 파일·기능 대응
+
+| ZIP 원본 | 현재 게임 | 상태 |
+| --- | --- | --- |
+| `campus.js` | `client/src/game/campusV4Data.js` | 린트 주석 외 원본 동일 |
+| `textures.js` | `client/src/game/textures.ts` | 재질 생성 함수와 재질군 전체 포팅 |
+| `elevator.js` | `client/src/game/claudeDesign/elevator.js` | 433줄 원본 보존, R3F 장면에서 직접 호출 |
+| Canvas 승강기 상태기계 | `client/src/game/OriginalElevators.tsx` | 호출·문·카 이동·탑승자 이동·서버 층 승인 연결 |
+| Canvas 문 렌더 | `client/src/game/OriginalDoors.tsx` | 122개 문, 원본 경첩·치수·색·근접 개폐·동적 충돌 연결 |
+| Canvas 야간 환경 | `client/src/game/Fog.tsx`, `client/src/App.tsx` | ACES 노출, 안개, 환경 반사, 달빛·반구광 복원 |
+| Canvas 형상 렌더 | `client/src/game/SchoolCampusV4.tsx` | 원본 `solids`, `visuals`, `plates`, `cyls`, `fixtures` 전부 연결 |
+
+## 인테리어·소품 검증
+
+ZIP의 교실 가구와 도구는 별도 에셋 파일이 아니다. `campus.js`의 `room()`이 `furnish()`를 호출하고, 책상·의자·칠판·실험실·음악실 등 방별 소품을 공통 형상 배열에 생성한다. 원본 `Canvas.dc.html`은 이 배열들을 렌더하며, 현재 `SchoolCampusV4.tsx`도 같은 다섯 배열을 재질군별로 배칭한다.
+
+seed 0 기준 고정 계약은 다음과 같다.
+
+- 구조 솔리드 2,397개
+- 시각 박스 6,606개
+- 바닥·천장 플레이트 589개
+- 원통 형상 1,387개
+- 조명기구 150개
+- 방 80개
+- 문 122개
+- 엘리베이터 2대
+
+`npm run verify:campus`가 위 수량과 발광 기구·계단 경사·교실 문 존재를 검사한다. 따라서 인테리어 생성이나 렌더 입력이 빠지면 빌드 전 검증에서 바로 드러난다.
+
+## 남은 시각 QA
+
+- 원본 ZIP 기준 구도와 실제 게임 플레이 구도의 스크린샷 비교
+- 닫힌 승강장 문과 카 내부의 물리 차단 확인
+- 교실·복도·계단·옥상에서 노출과 안개 농도 비교
+- 플레이어 눈높이에서 가구 크기와 문 통과 폭 확인
+
+시각 QA가 끝나기 전에는 “완벽 이전”으로 표시하지 않는다.
