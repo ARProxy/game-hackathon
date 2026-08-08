@@ -25,8 +25,10 @@ from app.ai.hunter import (
     SeekerRole,
     advance_hunter,
     advance_secondary_hunter,
+    effective_seeker_threat,
     hunter_snapshot,
     record_hunter_signal,
+    seeker_can_capture,
 )
 from app.ai.speech import (
     SpeechIntent,
@@ -575,7 +577,7 @@ class ConnectionManager:
                     await self.broadcast(room_id, {
                         "type": "vertical_final_ready",
                         "required_clues": len(session.spell_words),
-                        "progression": session.vertical_round.to_dict(),
+                        "progression": session.vertical_progression_payload(),
                     })
                 return
             if session.vertical_round.phase == VerticalRoundPhase.FLOOR_3:
@@ -588,6 +590,12 @@ class ConnectionManager:
                     })
                     return
                 session.broadcast_mission_actor_id = player_id
+                session.hunter_last_intent = None
+                await self.broadcast(room_id, {
+                    "type": "vertical_threat_changed",
+                    "seeker_threat": effective_seeker_threat(session).value,
+                    "progression": session.vertical_progression_payload(),
+                })
                 await self.send_to(room_id, player_id, {
                     "type": "vertical_mission_started",
                     "mission": "floor_3_broadcast",
@@ -794,7 +802,7 @@ class ConnectionManager:
                 await self.broadcast(room_id, {
                     "type": "vertical_final_ready",
                     "required_clues": len(session.spell_words),
-                    "progression": session.vertical_round.to_dict(),
+                    "progression": session.vertical_progression_payload(),
                 })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
@@ -929,6 +937,7 @@ class ConnectionManager:
                 and seeker
                 and seeker.role == PlayerRole.SEEKER
                 and seeker.status == PlayerStatus.ALIVE
+                and seeker_can_capture(session, seeker_id)
                 and self._players_within(seeker, target, 1.5)
                 and has_clear_catch_line(
                     (seeker.position.x, seeker.position.z),
@@ -1096,7 +1105,7 @@ class ConnectionManager:
             "player_id": last_actor_id,
             "reason": reason,
             "gate_id": f"{session.vertical_round.final_route.value}_final_exit",
-            "progression": session.vertical_round.to_dict(),
+            "progression": session.vertical_progression_payload(),
             **session.result_payload(),
         })
         return True
@@ -1597,7 +1606,7 @@ class ConnectionManager:
                 "matched": result["matched"],
                 "order_valid": result["order_valid"],
                 "transcript": result["transcript"],
-                "progression": session.vertical_round.to_dict() if vertical_final else None,
+                "progression": session.vertical_progression_payload() if vertical_final else None,
             })
         else:
             # 틀린 주문도 큰 소리로 외친 행동이다. 무료 재시도가 되지 않도록
@@ -1918,7 +1927,7 @@ class ConnectionManager:
                         "zone": partner.position.zone,
                     },
                     "closed_floor": closed_floor.value if closed_floor else None,
-                    "progression": session.vertical_round.to_dict(),
+                    "progression": session.vertical_progression_payload(),
                 })
         elif action["type"] == "rooftop_signal_ready":
             signal_id = str(action.get("signal_id", ""))

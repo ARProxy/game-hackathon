@@ -112,6 +112,7 @@ export interface SoundEvent {
 }
 
 export type HunterState = 'HUNT' | 'INVESTIGATE' | 'DETECTED' | 'CHASE' | 'SEARCH' | 'RUSH_GATE'
+  | 'BLOCK' | 'GUARD' | 'PATROL'
 export interface HunterIntent {
   state: HunterState
   targetId: string | null

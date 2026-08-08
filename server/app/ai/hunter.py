@@ -22,7 +22,7 @@ from app.game.authority import (
     segment_intersects_rect,
 )
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
-from app.game.progression import VerticalRoundPhase
+from app.game.progression import SeekerThreat, VerticalRoundPhase
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +45,33 @@ VERTICAL_PHASE_SPEED = {
     VerticalRoundPhase.FIELD_FINAL: 1.3,
     VerticalRoundPhase.BASEMENT_FINAL: 1.3,
 }
+
+
+def effective_seeker_threat(session: Any) -> SeekerThreat:
+    """진행 단계와 명확한 미션 사건을 합쳐 현재 실제 위협을 반환한다."""
+    if not session.vertical_progression_enabled:
+        return SeekerThreat.FULL_HUNT
+    if session.vertical_round.phase == VerticalRoundPhase.FLOOR_3:
+        return (
+            SeekerThreat.LIMITED_HUNT
+            if session.broadcast_mission_actor_id is not None
+            else SeekerThreat.OMEN
+        )
+    return session.vertical_round.policy.seeker_threat
+
+
+def seeker_can_capture(session: Any, seeker_id: str) -> bool:
+    """활성 수와 위협 단계가 실제 포획을 허용하는지 서버에서 판정한다."""
+    threat = effective_seeker_threat(session)
+    if threat not in {
+        SeekerThreat.LIMITED_HUNT,
+        SeekerThreat.FULL_HUNT,
+        SeekerThreat.PINCER,
+        SeekerThreat.ENRAGED,
+    }:
+        return False
+    required_count = 2 if seeker_id == "seeker-2" else 1
+    return session.vertical_round.policy.seeker_count >= required_count
 
 
 def vertical_threat_snapshot(session: Any, now: float | None = None) -> dict[str, float]:
@@ -107,6 +134,8 @@ def record_hunter_signal(
     # S5: 발화 모드별 반경 결정
     if speech_mode == SpeechMode.SILENT:
         return False  # 침묵 모드는 소리 핑 없음
+    if effective_seeker_threat(session) in {SeekerThreat.INACTIVE, SeekerThreat.OMEN}:
+        return False
 
     source = session.state.get_player(player_id)
 
@@ -114,6 +143,10 @@ def record_hunter_signal(
     delivered = False
     for seeker in session.state.players.values():
         if seeker.role != PlayerRole.SEEKER or seeker.status != PlayerStatus.ALIVE:
+            continue
+        if seeker.player_id == "seeker-2" and session.vertical_round.policy.seeker_count < 2:
+            continue
+        if seeker.player_id == "seeker" and session.vertical_round.policy.seeker_count < 1:
             continue
 
         if (
@@ -166,6 +199,15 @@ def decide_hunter_intent(session: Any) -> dict:
     )
     if seeker is None:
         return {"state": "HUNT", "target_id": None, "target": {"x": 0.0, "z": 0.0}, "reason": "no_seeker"}
+
+    threat = effective_seeker_threat(session)
+    if threat in {SeekerThreat.INACTIVE, SeekerThreat.OMEN}:
+        return {
+            "state": "HUNT",
+            "target_id": None,
+            "target": {"x": seeker.position.x, "z": seeker.position.z},
+            "reason": "inactive" if threat == SeekerThreat.INACTIVE else "omen_watch",
+        }
 
     if session.state.phase == GamePhase.ESCAPE and session.active_gate_id:
         if (
@@ -259,6 +301,14 @@ def decide_hunter_intent(session: Any) -> dict:
             "reason": "lost_visual",
         }
 
+    if threat == SeekerThreat.LIMITED_HUNT:
+        return {
+            "state": "HUNT",
+            "target_id": None,
+            "target": {"x": seeker.position.x, "z": seeker.position.z},
+            "reason": "limited_wait",
+        }
+
     hunt_targets = []
     mission = session.current_mission()
     if mission:
@@ -296,6 +346,7 @@ def advance_hunter(session: Any) -> dict:
         **decide_hunter_intent(session),
         **director_snapshot(session),
         **vertical_threat_snapshot(session),
+        "seeker_threat": effective_seeker_threat(session).value,
     }
     dx = intent["target"]["x"] - seeker.position.x
     dz = intent["target"]["z"] - seeker.position.z
@@ -377,11 +428,17 @@ def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
 
     if spotted:
         _, target = min(spotted, key=lambda c: c[0])
+        shared_position = _nearest_navigation_position(
+            target.position.floor.value,
+            target.position.x,
+            target.position.z,
+        )
         # S3: 차단자가 발견하면 추격자에게 구역 수준 정보 공유
         session.blocker_zone_share = {
             "player_id": target.player_id,
             "zone": target.position.zone,
             "floor": target.position.floor.value,
+            "position": shared_position,
             "shared_at": now,
         }
         # 차단자는 직접 추격 대신 퇴로를 차단한다
@@ -392,14 +449,17 @@ def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
             cx = target.position.x - chaser.position.x
             cz = target.position.z - chaser.position.z
             cl = max(0.01, math.hypot(cx, cz))
-            flank_x = target.position.x + (cx / cl) * 3.0
-            flank_z = target.position.z + (cz / cl) * 3.0
+            desired_flank_x = target.position.x + (cx / cl) * 3.0
+            desired_flank_z = target.position.z + (cz / cl) * 3.0
         else:
-            flank_x, flank_z = target.position.x, target.position.z
+            desired_flank_x, desired_flank_z = target.position.x, target.position.z
+        flank = _nearest_navigation_position(
+            seeker.position.floor.value, desired_flank_x, desired_flank_z,
+        )
         return {
             "state": "BLOCK",
             "target_id": target.player_id,
-            "target": {"x": flank_x, "z": flank_z},
+            "target": flank,
             "reason": "visual_block",
             "role": SeekerRole.BLOCKER.value,
         }
@@ -414,15 +474,26 @@ def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
         closest = min(frozen_runners, key=lambda p: math.hypot(
             p.position.x - seeker.position.x, p.position.z - seeker.position.z
         ))
-        guard_start = getattr(session, "blocker_guard_start", 0.0)
+        if getattr(session, "blocker_guard_target_id", None) != closest.player_id:
+            session.blocker_guard_target_id = closest.player_id
+            session.blocker_guard_start = now
+        guard_start = session.blocker_guard_start
         if now - guard_start < 8.0:
+            guard_target = _nearest_navigation_position(
+                seeker.position.floor.value,
+                closest.position.x + 2.0,
+                closest.position.z,
+            )
             return {
                 "state": "GUARD",
                 "target_id": closest.player_id,
-                "target": {"x": closest.position.x + 2.0, "z": closest.position.z},
+                "target": guard_target,
                 "reason": "frozen_guard",
                 "role": SeekerRole.BLOCKER.value,
             }
+    else:
+        session.blocker_guard_target_id = None
+        session.blocker_guard_start = None
 
     if (
         session.state.phase == GamePhase.ESCAPE
@@ -441,13 +512,27 @@ def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
 
     # 추격자와 같은 목표를 추격하지 않도록 다른 구역 순찰
     primary_target = primary_intent.get("target", {"x": 0, "z": 0})
-    # 추격자 목표의 반대편 구역 순찰
-    patrol_x = -primary_target["x"] * 0.5
-    patrol_z = -primary_target["z"] * 0.5
+    floor_nodes = NAVIGATION_NODES_BY_FLOOR.get(seeker.position.floor.value, ())
+    patrol_nodes = [node for node in floor_nodes if "_ring_" in str(node["id"])] or list(floor_nodes)
+    patrol_nodes.sort(
+        key=lambda node: math.hypot(
+            float(node["position"][0]) - float(primary_target["x"]),
+            float(node["position"][1]) - float(primary_target["z"]),
+        ),
+        reverse=True,
+    )
+    if patrol_nodes:
+        patrol_node = patrol_nodes[int(now / 8.0) % min(3, len(patrol_nodes))]
+        patrol_target = {
+            "x": float(patrol_node["position"][0]),
+            "z": float(patrol_node["position"][1]),
+        }
+    else:
+        patrol_target = {"x": seeker.position.x, "z": seeker.position.z}
     return {
         "state": "PATROL",
         "target_id": None,
-        "target": {"x": patrol_x, "z": patrol_z},
+        "target": patrol_target,
         "reason": "area_patrol",
         "role": SeekerRole.BLOCKER.value,
     }
@@ -471,7 +556,9 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
     if not hasattr(session, "blocker_zone_share"):
         session.blocker_zone_share = None
     if not hasattr(session, "blocker_guard_start"):
-        session.blocker_guard_start = 0.0
+        session.blocker_guard_start = None
+    if not hasattr(session, "blocker_guard_target_id"):
+        session.blocker_guard_target_id = None
 
     now = time.monotonic()
     elapsed = float(CONTRACT["thinkIntervalSeconds"])
@@ -510,7 +597,7 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
         ):
             session.hunter_signal = {
                 "player_id": zone_share["player_id"],
-                "position": intent["target"],  # 구역 중심점 (정확한 좌표 아님)
+                "position": zone_share["position"],
                 "strength": "blocker_share",
                 "timestamp": now,
             }
@@ -525,11 +612,35 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
 
 def hunter_snapshot(session: Any) -> dict:
     seeker = session.state.get_player("seeker")
-    intent = session.hunter_last_intent or {
+    current_threat = effective_seeker_threat(session).value
+    cached_intent = session.hunter_last_intent
+    intent = cached_intent if cached_intent and cached_intent.get("seeker_threat") == current_threat else {
         **decide_hunter_intent(session), **director_snapshot(session),
         **vertical_threat_snapshot(session),
+        "seeker_threat": current_threat,
     }
     return {**intent, "role": SeekerRole.CHASER.value, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
+
+
+def _nearest_navigation_position(floor: str, x: float, z: float) -> dict[str, float]:
+    """정밀 actor 좌표를 노출하지 않도록 가장 가까운 공용 경로점으로 양자화한다."""
+    nodes = NAVIGATION_NODES_BY_FLOOR.get(floor, ())
+    ring_nodes = [node for node in nodes if "_ring_" in str(node["id"])]
+    public_nodes = [node for node in nodes if not str(node["id"]).endswith("_nav_room")]
+    candidates = ring_nodes or public_nodes or list(nodes)
+    if not candidates:
+        return {"x": float(x), "z": float(z)}
+    node = min(
+        candidates,
+        key=lambda candidate: math.hypot(
+            float(candidate["position"][0]) - x,
+            float(candidate["position"][1]) - z,
+        ),
+    )
+    return {
+        "x": float(node["position"][0]),
+        "z": float(node["position"][1]),
+    }
 
 
 def _safe_hunter_step(

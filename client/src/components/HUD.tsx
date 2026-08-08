@@ -78,6 +78,15 @@ const VERTICAL_PHASE_LABELS: Record<string, string> = {
   escape_open: '최종 · 탈출구 개방',
 }
 
+const SEEKER_THREAT_LABELS: Record<string, string> = {
+  inactive: '안전 구간 · 술래 판정 없음',
+  omen: '위협 암시 · 붉은 실루엣과 발소리를 경계',
+  limited_hunt: '제한 추격 · 큰 소리와 직접 시야에 반응',
+  full_hunt: '완전 추격 · 소리와 시야를 모두 경계',
+  pincer: '복수 위협 · 서로 다른 접근 신호를 경계',
+  enraged: '광분 · 최종 출구까지 압박 지속',
+}
+
 const ROOFTOP_SIGNAL_LABELS: Record<string, string> = {
   center: '플레이어 · 중앙',
   east: 'AI 동료 1 · 동쪽',
@@ -518,6 +527,14 @@ export default function HUD() {
               {activeMissionPrompt
                 ?? VERTICAL_INSTRUCTIONS[verticalProgression.phase]
                 ?? '현재 구역의 청색 목표를 찾아 E로 상호작용하세요.'}
+            </div>
+            <div style={{
+              marginTop: 6, paddingTop: 6,
+              borderTop: '1px solid rgba(82,229,255,.18)',
+              color: verticalProgression.seeker_threat === 'limited_hunt' ? '#FFBE72' : '#9FC6D4',
+              fontSize: 10,
+            }}>
+              {SEEKER_THREAT_LABELS[verticalProgression.seeker_threat] ?? '위협 상태 분석 중'}
             </div>
             {verticalProgression.phase === 'rooftop_intro' && rooftopSignal && (
               <div style={{

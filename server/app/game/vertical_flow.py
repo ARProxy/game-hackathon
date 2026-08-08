@@ -235,7 +235,7 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
     return {
         "completed_phase": phase.value,
         "next_phase": next_phase.value,
-        "progression": session.vertical_round.to_dict(),
+        "progression": session.vertical_progression_payload(),
         "clue": VERTICAL_CLUE_BY_PHASE.get(phase),
     }
 
@@ -370,7 +370,7 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
             "zone": destination["zone"],
         },
         "closed_floor": closed_floor.value if closed_floor else None,
-        "progression": session.vertical_round.to_dict(),
+        "progression": session.vertical_progression_payload(),
     }
 
 

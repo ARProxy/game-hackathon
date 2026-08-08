@@ -4,15 +4,18 @@ import time
 
 from app.ai.hunter import (
     CONTRACT,
+    _decide_blocker_intent,
     _safe_hunter_step,
     advance_secondary_hunter,
     decide_hunter_intent,
     director_snapshot,
+    effective_seeker_threat,
     record_hunter_signal,
+    seeker_can_capture,
     vertical_threat_snapshot,
 )
 from app.game.session import GameSession
-from app.game.progression import VerticalRoundPhase, WorldFloor
+from app.game.progression import SeekerThreat, VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole
 from app.game.authority import WALL_RECTS_BY_FLOOR, segment_intersects_rect
 
@@ -25,6 +28,7 @@ def make_session(room_id: str = "hunter") -> GameSession:
     human.position.floor = WorldFloor.F1
     session.state.get_player("partner").position.floor = WorldFloor.F1
     session.state.get_player("seeker").position.floor = WorldFloor.F1
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
     return session
 
 
@@ -269,3 +273,100 @@ def test_secondary_seeker_activates_only_from_first_floor() -> None:
     # S3: 차단자는 역할 분화된 reason을 반환한다
     assert result["reason"] in {"pincer_flank", "area_patrol", "visual_block", "frozen_guard"}
     assert result.get("role") == "blocker" or result["target"] != primary["target"]
+
+
+def test_rooftop_and_early_third_floor_cannot_track_or_capture() -> None:
+    session = make_session("hunter-passive-phases")
+    seeker = session.state.get_player("seeker")
+    human = session.state.get_player("human")
+    seeker.position.x, seeker.position.z = 0.0, 0.0
+    human.position.x, human.position.z = 1.0, 0.0
+
+    session.vertical_round.phase = VerticalRoundPhase.ROOFTOP_INTRO
+    assert effective_seeker_threat(session) == SeekerThreat.INACTIVE
+    assert not record_hunter_signal(session, "human", {"x": 1.0, "z": 0.0}, "freeze")
+    assert decide_hunter_intent(session)["reason"] == "inactive"
+    assert not seeker_can_capture(session, "seeker")
+
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    seeker.position.floor = human.position.floor = WorldFloor.F3
+    assert effective_seeker_threat(session) == SeekerThreat.OMEN
+    assert decide_hunter_intent(session)["reason"] == "omen_watch"
+    assert not seeker_can_capture(session, "seeker")
+
+
+def test_third_floor_broadcast_opens_limited_hunt_without_roaming() -> None:
+    session = make_session("hunter-limited")
+    seeker = session.state.get_player("seeker")
+    human = session.state.get_player("human")
+    partner = session.state.get_player("partner")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    session.broadcast_mission_actor_id = "human"
+    seeker.position.floor = human.position.floor = WorldFloor.F3
+    partner.position.floor = WorldFloor.F2
+    seeker.position.x, seeker.position.z = -24.0, -38.0
+    human.position.x, human.position.z = -5.0, -5.0
+
+    assert effective_seeker_threat(session) == SeekerThreat.LIMITED_HUNT
+    waiting = decide_hunter_intent(session)
+    assert waiting["reason"] == "limited_wait"
+    assert waiting["target"] == {"x": seeker.position.x, "z": seeker.position.z}
+    assert seeker_can_capture(session, "seeker")
+
+    human.position.x, human.position.z = -23.0, -38.0
+    session.hunter_forward = {"x": 1.0, "z": 0.0}
+    assert decide_hunter_intent(session)["state"] == "DETECTED"
+
+
+def test_blocker_uses_map_nodes_for_patrol_and_zone_sharing() -> None:
+    from app.game.authority import NAVIGATION_NODES_BY_FLOOR
+
+    session = make_session("hunter-blocker-map")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
+    blocker = session.state.get_player("seeker-2")
+    human = session.state.get_player("human")
+    session.state.get_player("partner").position.floor = WorldFloor.F2
+    session.state.get_player("partner-2").position.floor = WorldFloor.F2
+    blocker.position.floor = human.position.floor = WorldFloor.F1
+    blocker.position.x, blocker.position.z = -24.0, -38.0
+    human.position.x, human.position.z = -21.3, -38.0
+    session.blocker_forward = {"x": 1.0, "z": 0.0}
+    primary = {"target": {"x": -10.0, "z": -18.0}}
+
+    blocking = _decide_blocker_intent(session, primary)
+    assert blocking["state"] == "BLOCK"
+    assert session.blocker_zone_share["position"] != {
+        "x": human.position.x, "z": human.position.z,
+    }
+    node_positions = {
+        (float(node["position"][0]), float(node["position"][1]))
+        for node in NAVIGATION_NODES_BY_FLOOR["F1"]
+    }
+    assert (blocking["target"]["x"], blocking["target"]["z"]) in node_positions
+
+    human.position.floor = WorldFloor.F2
+    patrol = _decide_blocker_intent(session, primary)
+    assert patrol["state"] == "PATROL"
+    assert (patrol["target"]["x"], patrol["target"]["z"]) in node_positions
+
+
+def test_blocker_guard_timer_starts_on_first_guard_and_expires() -> None:
+    session = make_session("hunter-blocker-guard")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
+    blocker = session.state.get_player("seeker-2")
+    human = session.state.get_player("human")
+    session.state.get_player("partner").position.floor = WorldFloor.F2
+    session.state.get_player("partner-2").position.floor = WorldFloor.F2
+    blocker.position.floor = human.position.floor = WorldFloor.F1
+    blocker.position.x, blocker.position.z = -24.0, -30.0
+    human.position.x, human.position.z = -24.0, -26.0
+    session.blocker_forward = {"x": 0.0, "z": -1.0}
+    human.freeze()
+
+    guarded = _decide_blocker_intent(session, {"target": {"x": -10.0, "z": -18.0}})
+    assert guarded["state"] == "GUARD"
+    assert session.blocker_guard_start is not None
+
+    session.blocker_guard_start -= 9.0
+    released = _decide_blocker_intent(session, {"target": {"x": -10.0, "z": -18.0}})
+    assert released["state"] == "PATROL"

@@ -102,6 +102,11 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = 0.0
         self.hunter_last_intent: dict | None = None
+        self.secondary_hunter_signal: dict | None = None
+        self.blocker_forward = {"x": 0.0, "z": -1.0}
+        self.blocker_zone_share: dict | None = None
+        self.blocker_guard_start: float | None = None
+        self.blocker_guard_target_id: str | None = None
         self.companion_states = {
             actor_id: CompanionRuntime() for actor_id in DEFAULT_AI_PARTNER_IDS
         }
@@ -165,6 +170,11 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = time.monotonic()
         self.hunter_last_intent = None
+        self.secondary_hunter_signal = None
+        self.blocker_forward = {"x": 0.0, "z": -1.0}
+        self.blocker_zone_share = None
+        self.blocker_guard_start = None
+        self.blocker_guard_target_id = None
         companion_now = time.monotonic()
         for runtime in self.companion_states.values():
             runtime.reset(companion_now)
@@ -238,12 +248,21 @@ class GameSession:
                 # actor 층 좌표와 문 계약이 연결되기 전에는 클라이언트가 이
                 # 상태만 보고 옥상 스폰이나 층 잠금을 적용하지 않는다.
                 "enabled": self.vertical_progression_enabled,
-                **self.vertical_round.to_dict(),
+                **self.vertical_progression_payload(),
             },
             "rooftop_signal": (
                 self.vertical_missions.rooftop.public_state()
                 if self.vertical_missions is not None else None
             ),
+        }
+
+    def vertical_progression_payload(self) -> dict:
+        """런타임 사건으로 바뀌는 3층 위협까지 합친 공개 진행 상태."""
+        from app.ai.hunter import effective_seeker_threat
+
+        return {
+            **self.vertical_round.to_dict(),
+            "seeker_threat": effective_seeker_threat(self).value,
         }
 
     # 기존 단일 동료 테스트와 호출부가 점진적으로 이행할 수 있는 호환 프로퍼티.

@@ -216,6 +216,18 @@ export default function useWebSocket() {
         addSubtitle('system', data.prompt ?? '장치가 활성화되었습니다.')
         break
 
+      case 'vertical_threat_changed':
+        if (data.progression) {
+          useGameStore.getState().setVerticalProgression({
+            enabled: true,
+            ...data.progression,
+          })
+        }
+        addSubtitle('system', data.seeker_threat === 'limited_hunt'
+          ? '붉은 실루엣이 움직입니다. 큰 소리와 직접 시야를 피하세요.'
+          : '학교 안의 위협 상태가 바뀌었습니다.')
+        break
+
       case 'vertical_mission_feedback':
         useGameStore.getState().setActiveMissionPrompt(
           `다시 전달하세요. ${data.prompt ?? '도구·출입구·개방 행동을 모두 표현해야 합니다.'}`,

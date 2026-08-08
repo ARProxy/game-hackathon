@@ -31,6 +31,9 @@ const SPEEDS: Record<HunterState, number> = {
   CHASE: hunter.chaseSpeed,
   SEARCH: hunter.huntSpeed,
   RUSH_GATE: hunter.rushSpeed,
+  BLOCK: hunter.chaseSpeed * 0.85,
+  GUARD: hunter.chaseSpeed * 0.85,
+  PATROL: hunter.huntSpeed * 0.85,
 }
 
 export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requestsThink = true }: SeekerProps) {
@@ -43,6 +46,8 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     return intent?.state === 'DETECTED' || intent?.state === 'CHASE'
   })
   const redLightRef = useRef<THREE.PointLight>(null)
+  const blockerLightRef = useRef<THREE.SpotLight>(null)
+  const blockerAimRef = useRef<THREE.Object3D>(null)
   const previousState = useRef<HunterState | null>(null)
   const lastThink = useRef(-Infinity)
   const lastCatchAttempt = useRef(-Infinity)
@@ -110,7 +115,8 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       }
 
       if (
-        intent.targetId && distance <= hunter.catchDistance
+        intent.targetId && ['DETECTED', 'CHASE'].includes(intent.state)
+        && distance <= hunter.catchDistance
         && clock.elapsedTime - lastCatchAttempt.current >= CATCH_RETRY_SECONDS
       ) {
         if (sendGameMessage({ type: 'action', payload: { action_type: 'seeker_catch', seeker_id: seekerId, target_id: intent.targetId } })) {
@@ -171,6 +177,9 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     if (redLightRef.current) {
       redLightRef.current.intensity = 32 + Math.sin(clock.elapsedTime * 12) * 22
     }
+    if (blockerLightRef.current && blockerAimRef.current) {
+      blockerLightRef.current.target = blockerAimRef.current
+    }
   })
 
   return (
@@ -178,6 +187,22 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} />
       {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />
+      )}
+      {seekerId === 'seeker-2' && (
+        <>
+          <spotLight
+            ref={blockerLightRef}
+            position={[0, 1.35, 0.35]}
+            color="#E7F4FF"
+            intensity={72}
+            distance={16}
+            angle={Math.PI / 7}
+            penumbra={0.5}
+            decay={1.7}
+          />
+          <pointLight position={[0, 1.25, 0.25]} color="#DCEEFF" intensity={8} distance={3.5} decay={2} />
+          <object3D ref={blockerAimRef} position={[0, 0.75, 10]} />
+        </>
       )}
     </group>
   )

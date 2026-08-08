@@ -5,6 +5,7 @@ import json
 import unittest
 
 from app.game.session import session_manager
+from app.game.progression import VerticalRoundPhase
 from app.ws.manager import ConnectionManager
 
 
@@ -113,6 +114,7 @@ class TestFreezeTimer(unittest.IsolatedAsyncioTestCase):
 
     async def test_seeker_catch_cancels_pending_freeze_timeout(self) -> None:
         await self._freeze()
+        self.session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
         key = (self.room_id, self.player_id)
         task = self.manager._freeze_tasks[key]
         player = self.session.state.get_player(self.player_id)

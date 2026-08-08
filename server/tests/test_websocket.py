@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.game.authority import MovementSample
-from app.game.progression import VerticalRoundPhase
+from app.game.progression import VerticalRoundPhase, WorldFloor
 
 
 def allow_elapsed_movement(session, player_id: str, seconds: float = 20.0) -> None:
@@ -232,6 +232,54 @@ class TestVerticalStageInteraction:
             assert advanced["type"] == "vertical_stage_advanced"
             assert advanced["next_phase"] == "floor_1"
             assert advanced["clue"] == {"word": "교정", "order": 2, "total": 3}
+
+    def test_third_floor_mission_changes_omen_to_limited_hunt(self, client):
+        from app.game.session import session_manager
+        from app.game.vertical_flow import mission_interaction_position
+
+        with client.websocket_connect("/ws/vertical-third-floor-threat/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("vertical-third-floor-threat")
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+            player = session.state.get_player("player1")
+            x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_3)
+            player.position.x, player.position.y, player.position.z = x, y, z
+            player.position.floor = WorldFloor.F3
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+
+            changed = ws.receive_json()
+            started = ws.receive_json()
+            assert changed["type"] == "vertical_threat_changed"
+            assert changed["seeker_threat"] == "limited_hunt"
+            assert changed["progression"]["seeker_threat"] == "limited_hunt"
+            assert started["type"] == "vertical_mission_started"
+
+    def test_rooftop_contact_cannot_be_submitted_as_seeker_capture(self, client):
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/rooftop-catch-disabled/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("rooftop-catch-disabled")
+            player = session.state.get_player("player1")
+            seeker = session.state.get_player("seeker")
+            seeker.position.x, seeker.position.z = player.position.x, player.position.z
+            seeker.position.floor = player.position.floor
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "seeker_catch"},
+            })
+
+            assert ws.receive_json() == {
+                "type": "action_rejected",
+                "action_type": "seeker_catch",
+                "reason": "invalid_seeker_contact",
+            }
+            assert player.status.value == "alive"
 
     def test_simultaneous_device_advances_floor_one(self, client):
         from app.game.map_slots import get_map_slot
@@ -582,6 +630,7 @@ class TestActions:
         with client.websocket_connect("/ws/room10/player1") as ws:
             self._start_game(ws)
             session = session_manager.get_or_create("room10")
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
             player = session.state.get_player("player1")
             seeker = session.state.get_player("seeker")
             assert player is not None and seeker is not None
@@ -724,6 +773,7 @@ class TestActiveHunterFlow:
             ws.send_json({"type": "start_game", "payload": {"forbidden_words": ["열쇠"]}})
             ws.receive_json()
             session = session_manager.get_or_create("hunter-ai-catch")
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
             seeker = session.state.get_player("seeker")
             partner = session.state.get_player("partner")
             partner2 = session.state.get_player("partner-2")
@@ -769,7 +819,11 @@ class TestActiveHunterFlow:
             player = session.state.get_player("player1")
             assert seeker
             session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+            session.broadcast_mission_actor_id = "player1"
             player.position.floor = seeker.position.floor
+            player.position.x = seeker.position.x + 3.0
+            player.position.z = seeker.position.z
+            session.hunter_forward = {"x": 1.0, "z": 0.0}
             start = (seeker.position.x, seeker.position.z)
 
             ws.send_json({
