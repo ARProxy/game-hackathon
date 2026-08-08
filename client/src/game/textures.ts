@@ -321,6 +321,10 @@ export const FAMILY_OF_PAL: Record<string, string> = {
   asphalt: 'asphalt', line: 'paint', corrLine: 'paint',
   grass: 'grass', dirt: 'concrete', rubber: 'fabric',
   fabric: 'fabric', chair: 'fabric',
+  extStucco: 'paint', schoolBlue: 'paint', safetyYellow: 'paint',
+  extConcrete: 'concrete', extBand: 'concrete', sitePaver: 'concrete', siteJoint: 'concrete', serviceWall: 'concrete', backgroundMass: 'concrete',
+  extFrame: 'metal', extSteel: 'metal', extSteelDark: 'metal',
+  backgroundFoliage: 'grass',
 }
 
 export interface BakedFamily {

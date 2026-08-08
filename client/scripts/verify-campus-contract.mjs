@@ -9,8 +9,10 @@ import {
   GATE_SLOTS,
   MAP_SIZE,
   MISSION_SLOTS,
+  PAL,
   PROP_SLOTS,
   REQUIRED_SUITE_EDGES,
+  TONE,
   TRAP_SLOTS,
 } from '../src/game/campusV4Data.js'
 import collisionContract from '../src/game/serverCollisionContract.json' with { type: 'json' }
@@ -22,11 +24,11 @@ const campus = buildCampus({ seed: 0 })
 const alternate = buildCampus({ seed: 1 })
 
 const expected = {
-  solids: 2422,
-  visuals: 5675,
+  solids: 2290,
+  visuals: 5699,
   plates: 543,
   cyls: 1331,
-  fixtures: 150,
+  fixtures: 152,
   rooms: 80,
   doors: 127,
 }
@@ -37,6 +39,38 @@ for (const [key, count] of Object.entries(expected)) {
     count,
     `Claude Design seed 0 ${key} count changed`,
   )
+}
+
+const exteriorPrimitives = [...campus.solids, ...campus.visuals, ...campus.plates, ...campus.cyls]
+  .filter((item) => item.f === 'OUT' || item.f === 'ROOF')
+const semanticExteriorColors = new Set([...Object.values(PAL), ...Object.values(TONE)].map((color) => color.toLowerCase()))
+const rawExterior = exteriorPrimitives.filter((item) => !semanticExteriorColors.has(item.c.toLowerCase()))
+assert.deepEqual(rawExterior, [], 'OUT/ROOF contains raw colors outside the semantic PAL/TONE contract')
+const facadeBands = {
+  'facade-band-f2': 3.4,
+  'facade-band-f3': 7.0,
+  'facade-cornice': 10.55,
+}
+for (const [role, expectedY] of Object.entries(facadeBands)) {
+  const pieces = campus.visuals.filter((item) => item.facadeRole === role)
+  assert.equal(pieces.length, 5, `${role} no longer wraps the five exterior facade runs`)
+  assert.ok(pieces.every((item) => Math.abs(item.p[1] - expectedY) <= 0.02), `${role} height drifted`)
+  assert.ok(pieces.every((item) => item.c === PAL.extBand), `${role} lost the shared concrete band material`)
+}
+const facadePlinth = campus.solids.filter((item) => item.facadeRole === 'facade-plinth')
+assert.ok(facadePlinth.length > 0, 'F1 facade plinth disappeared')
+assert.ok(facadePlinth.every((item) => item.f === 'F1'), 'Facade plinth repeated above F1')
+assert.ok(facadePlinth.every((item) => Math.abs(item.p[1] - 0.325) <= 0.001 && Math.abs(item.s[1] - 0.65) <= 0.001), 'Facade plinth height changed')
+const entryRoles = {
+  'main-entry-header': 1,
+  'main-entry-pier': 2,
+  'main-entry-canopy': 1,
+  'main-entry-post': 2,
+  'school-name': 1,
+  'main-entry-light': 2,
+}
+for (const [role, count] of Object.entries(entryRoles)) {
+  assert.equal(campus.visuals.filter((item) => item.landmarkRole === role).length, count, `Central entrance lost ${role}`)
 }
 
 assert.equal(campus.EVS.length, 2, 'Both Claude Design elevators must remain present')
@@ -260,6 +294,14 @@ const structural = (item) => {
   if (item.hide && item.ramp) return true
   return (y <= 0.75 && x >= 2 && z >= 2) || (y >= 1.75 && (x >= 1.5 || z >= 1.5))
 }
+const entranceKeepout = { x0: -25.55, x1: -22.45, z0: -46.3, z1: -43.0 }
+const entranceBlockers = campus.solids.filter((item) => ['F1', 'OUT'].includes(item.f) && structural(item)).filter((item) => {
+  const halfX = item.s[0] / 2
+  const halfZ = item.s[2] / 2
+  return item.p[0] + halfX > entranceKeepout.x0 && item.p[0] - halfX < entranceKeepout.x1
+    && item.p[2] + halfZ > entranceKeepout.z0 && item.p[2] - halfZ < entranceKeepout.z1
+})
+assert.deepEqual(entranceBlockers, [], 'Central entrance 3.1m walking axis is blocked by a collider')
 const exportedWalls = campus.solids.filter(structural).filter((item) => item.s[1] >= 1.75 || item.forceCollider).map((item) => ({
   floor: item.f,
   center: [item.p[0], item.p[2]],
