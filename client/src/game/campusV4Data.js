@@ -1,4 +1,5 @@
 /* oxlint-disable no-unused-vars */
+import gameplayTrapContract from './trapContract.json' with { type: 'json' }
 /**
  * campus.js — 야간 학교 캠퍼스 v4 (120×120)
  * 본관: ㅁ자 3층 + 지하 1층 + 옥상 / 중정 40×24 / 순환 복도 4.2m
@@ -91,6 +92,7 @@ const KIND = {
   art: { f: 'labFloor', b: 'classBase', w: 'classWall', tone: 'cool' },
   av: { f: 'storeFloor', b: 'adminBase', w: 'adminWall', tone: 'soft' },
   broadcast: { f: 'storeFloor', b: 'adminBase', w: 'adminWall', tone: 'soft' },
+  broadcastPrep: { f: 'storeFloor', b: 'storeBase', w: 'storeWall', tone: 'dim' },
   dance: { f: 'wood', b: 'classBase', w: 'classWall', tone: 'warm' },
   food: { f: 'foodFloor', b: 'foodBase', w: 'foodWall', tone: 'cool' },
   kitchen: { f: 'kitchenFloor', b: 'kitchenBase', w: 'kitchenWall', tone: 'cool' },
@@ -133,7 +135,7 @@ const PROGRAM = {
   F3: {
     N: [['c31', '3학년 1반', 'classroom'], ['c32', '3학년 2반', 'classroom'], ['c33', '3학년 3반', 'classroom'], ['c34', '3학년 4반', 'classroom'], ['c35', '3학년 5반', 'classroom']],
     W: [['dance', '무용실', 'dance', 2], ['calli', '서예실', 'calli'], ['pottery', '도예실', 'pottery'], ['music2', '제2음악실', 'music']],
-    E: [['broadcast', '방송실', 'broadcast'], ['bcprep', '방송준비실', 'store'], ['computer2', '제2컴퓨터실', 'computer'], ['earth', '지구과학실', 'lab'], ['club', '동아리실', 'club']],
+    E: [['broadcast', '방송실', 'broadcast'], ['bcprep', '방송준비실', 'broadcastPrep'], ['computer2', '제2컴퓨터실', 'computer'], ['earth', '지구과학실', 'lab'], ['club', '동아리실', 'club']],
   },
 }
 
@@ -541,6 +543,17 @@ export function buildCampus(opts = {}) {
         local: [u, v],
       })
     }
+    const localSolid = (u, v, height, size, color, turn = 0, opt = {}) => {
+      const [x, z] = toWorld(u, v)
+      if (inHole(x, z)) return
+      S(f, [x, y + height, z], size, color, {
+        ...opt,
+        rot: [0, localYaw + turn, 0],
+        roomId: meta.id,
+        layoutId: meta.layoutId,
+        local: [u, v],
+      })
+    }
     const localCylinder = (u, v, height, radius, cylinderHeight, color, opt = {}) => {
       const [x, z] = toWorld(u, v)
       if (!inHole(x, z)) CY(f, [x, y + height, z], radius, cylinderHeight, color, undefined, {
@@ -829,15 +842,34 @@ export function buildCampus(opts = {}) {
         }
         localBox(0, 1.25, 2.72, [0.42, 0.24, 0.55], '#30383f', 0, { landmarkRole: 'projector', navRole: 'ceiling-mounted' })
       } else {
-        V(f, [cx, y + 0.75, r.z1 - 1.4], [3.2, 0.08, 1.0], '#2c333a')
-        V(f, [cx, y + 0.38, r.z1 - 1.4], [3.0, 0.72, 0.9], '#454d55')
-        for (let i = 0; i < 6; i++) V(f, [cx - 1.3 + i * 0.52, y + 0.83, r.z1 - 1.4], [0.36, 0.06, 0.5], '#1f262c')
-        V(f, [cx, y + 1.55, cz], [w - 1.6, 1.5, 0.06], PAL.glass)   // 부스 유리
-        V(f, [cx, y + 0.8, r.z0 + 1.4], [1.4, 0.06, 0.8], PAL.desk)
-        CY(f, [cx, y + 1.15, r.z0 + 1.4], 0.02, 0.4, PAL.steel)
-        V(f, [cx, y + 1.4, r.z0 + 1.4], [0.1, 0.14, 0.1], '#1c2126')
-        V(f, [r.x1 - 0.5, y + 2.4, r.z0 + 0.6], [0.5, 0.24, 0.1], PAL.accentRed, { e: 1 })  // ON AIR
+        // 왼쪽은 복도문→suite 문→부스의 연속 통로, 오른쪽은 조정 콘솔 영역이다.
+        localBox(0.8, 2.35, 0.75, [3.0, 0.08, 0.92], '#2c333a', 0, {
+          landmarkRole: 'broadcast-console',
+          anchorIds: ['p_f3_bc_console', 'm_f3_broadcast', 'd_bc_console'],
+        })
+        localBox(0.8, 2.35, 0.38, [2.8, 0.72, 0.82], '#454d55')
+        for (let i = 0; i < 6; i++) localBox(-0.35 + i * 0.46, 2.35, 0.83, [0.32, 0.06, 0.46], '#1f262c')
+        for (const u of [0.1, 1.5]) localBox(u, 2.02, 1.38, [0.72, 0.72, 0.08], '#24313a', 0, { e: 0.25 })
+        // 큰 패널과 짧은 stub 사이에 1.10m 개구를 둔다. 시각물과 물리 점유를 일치시킨다.
+        localBox(0.825, 5.05, 1.55, [5.85, 1.5, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass', navRole: 'collision-visual' })
+        localSolid(0.825, 5.05, 1.55, [5.85, 1.8, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass-collider', hide: true })
+        localBox(-3.475, 5.05, 1.55, [0.55, 1.5, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass-stub', navRole: 'collision-visual' })
+        localSolid(-3.475, 5.05, 1.55, [0.55, 1.8, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass-stub-collider', hide: true })
+        localBox(0.8, 6.15, 0.8, [1.5, 0.06, 0.8], PAL.desk)
+        localCylinder(0.8, 6.15, 1.15, 0.02, 0.4, PAL.steel)
+        localBox(0.8, 6.15, 1.4, [0.1, 0.14, 0.1], '#1c2126', 0, { landmarkRole: 'studio-mic' })
+        localBox(-2.61, 0.12, 2.55, [1.2, 0.24, 0.06], PAL.accentRed, 0, { e: 1, landmarkRole: 'on-air', navRole: 'wall-mounted' })
+        for (const u of [-2.4, 0, 2.4]) localBox(u, localDepth - 0.12, 1.55, [1.55, 1.7, 0.06], '#38434b', 0, { landmarkRole: 'acoustic-panel', navRole: 'wall-mounted' })
       }
+    } else if (kind === 'broadcastPrep') {
+      // 방송실과 같은 콘솔을 복제하지 않고 장비 랙·케이블·편집 작업대로 읽히게 한다.
+      for (const u of [-2.1, 0, 2.1]) {
+        localBox(u, 6.55, 1.0, [1.25, 2.0, 0.62], '#343d45', 0, { landmarkRole: 'equipment-rack' })
+        for (let i = 0; i < 4; i++) localBox(u, 6.22, 0.45 + i * 0.38, [1.0, 0.18, 0.05], i === 3 ? '#7f2d31' : '#1f272d')
+      }
+      localBox(0, 4.8, 0.74, [2.8, 0.08, 0.82], PAL.desk, 0, { landmarkRole: 'edit-bench' })
+      localBox(0, 4.8, 0.38, [2.6, 0.72, 0.72], PAL.deskLeg)
+      for (const u of [-2.7, 2.7]) localCylinder(u, 5.2, 0.26, 0.38, 0.52, '#30383f', { landmarkRole: 'cable-drum' })
     } else if (kind === 'dance') {
       V(f, [cx, y + 1.6, r.z0 + 0.14], [w - 0.6, 2.6, 0.05], '#aebcc4')  // 거울벽
       V(f, [cx, y + 0.95, r.z0 + 0.35], [w - 1.2, 0.07, 0.07], PAL.wood) // 발레바
@@ -2226,8 +2258,9 @@ export function buildCampus(opts = {}) {
     box: [r.x0, FLOOR_Y[r.floor], r.z0, r.x1, FLOOR_Y[r.floor] + CEIL_H, r.z1],
     links: doors.filter((dd) => {
       if (dd.f !== r.floor) return false
-      const dx = dd.axis === 'x' ? dd.hinge[0] + dd.w / 2 : dd.fixed
-      const dz = dd.axis === 'x' ? dd.fixed : dd.hinge[2] + dd.w / 2
+      const leafDirection = dd.flip ? -1 : 1
+      const dx = dd.axis === 'x' ? dd.hinge[0] + leafDirection * dd.w / 2 : dd.fixed
+      const dz = dd.axis === 'x' ? dd.fixed : dd.hinge[2] + leafDirection * dd.w / 2
       return dx > r.x0 - 0.6 && dx < r.x1 + 0.6 && dz > r.z0 - 0.6 && dz < r.z1 + 0.6
     }).map((dd) => dd.id),
   }))
@@ -2277,7 +2310,7 @@ export const PROP_SLOTS = [
   { id: 'p_f2_comp_desk', room: 'f2_computer', p: [4.2, -26], floor: 'F2', surfaceY: 4.35, note: '컴퓨터실 본체 뒤' },
   { id: 'p_f3_c31_desk', room: 'f3_c31', p: [-40, -54.2], floor: 'F3', surfaceY: 7.95, note: '3-1 뒷자리 책상' },
   { id: 'p_f3_c33_locker', room: 'f3_c33', p: [-24, -54.2], floor: 'F3', surfaceY: 9.0, note: '3-3 사물함 위' },
-  { id: 'p_f3_bc_console', room: 'f3_broadcast', p: [4.2, -42], floor: 'F3', surfaceY: 7.95, note: '방송 콘솔 뒤' },
+  { id: 'p_f3_bc_console', room: 'f3_broadcast', p: [2.95, -42.75], floor: 'F3', surfaceY: 7.99, note: '방송 조정 콘솔 상판' },
   { id: 'p_f3_dance_mat', room: 'f3_dance', p: [-52.2, -38], floor: 'F3', surfaceY: 7.45, note: '무용실 매트 아래' },
   { id: 'p_f3_earth_bench', room: 'f3_earth', p: [4.2, -18], floor: 'F3', surfaceY: 8.05, note: '지구과학실 실험대' },
   { id: 'p_b1_shelf', room: 'b1_foodstore', p: [-12, -54], floor: 'B1', surfaceY: -2.55, note: '급식창고 선반' },
@@ -2293,29 +2326,32 @@ export const MISSION_SLOTS = [
   { id: 'm_f2_interphone', name: '교실 인터폰 릴레이', tags: ['coop', 'voice'], room: 'f2_c23', p: [-24, -54.2], floor: 'F2', hintZone: '2층 북측 교실 · 송수신 2실', doc: 'M06' },
   { id: 'm_f2_science', name: '약품 배열 순서', tags: ['solo'], room: 'f2_science', p: [4.2, -42], floor: 'F2', hintZone: '과학실' },
   { id: 'm_f2_library', name: '청구기호 정렬', tags: ['coop'], room: 'f2_library', p: [-52.8, -35.3], floor: 'F2', hintZone: '도서실 중앙 서가' },
-  { id: 'm_f3_broadcast', name: '방송실 비밀번호', tags: ['solo', 'voice'], room: 'f3_broadcast', p: [4.2, -42], floor: 'F3', hintZone: '3층 동익 방송실', doc: 'M01' },
+  { id: 'm_f3_broadcast', name: '방송실 비밀번호', tags: ['solo', 'voice'], room: 'f3_broadcast', p: [2.95, -42.75], floor: 'F3', hintZone: '3층 동익 방송 조정 콘솔', doc: 'M01' },
   { id: 'm_f3_dance', name: '동시 스위치', tags: ['coop'], room: 'f3_dance', p: [-52.2, -38], floor: 'F3', hintZone: '무용실' },
   { id: 'm_f3_deck', name: '피뢰 계측기 보정', tags: ['coop'], p: [-24, -27.6], floor: 'F3', hintZone: '3층 남향 전망 데크' },
   { id: 'm_b1_mach', name: '급수 밸브 압력', tags: ['coop'], room: 'b1_mach', p: [-39, -54], floor: 'B1', hintZone: '지하 기계실' },
 ]
 
-/**
- * 트랩 슬롯 10 — 한 판 4~5개. 후보를 줄이고 각각에 성격을 붙였다.
- * 복도 중심선: 북 z = -48.3 / 서 x = -46.3 / 동 x = -1.7
- */
-export const TRAP_SLOTS = [
-  { id: 't_f1_cor_n', p: [-30, -48.3], floor: 'F1', kind: 'gap', risk: 2 },
-  { id: 't_f1_kitchen', p: [-53.5, -22.4], floor: 'F1', kind: 'noise', risk: 3, note: '중앙 작업섬 스테인리스 — 밟으면 두 층 위까지 울린다' },
-  { id: 't_f1_tail_w', p: [-46.3, -8], floor: 'F1', kind: 'deadend', risk: 3, note: '서익 남단 — 계단실 문이 유일한 출구' },
-  { id: 't_f2_bridge_w', p: [-40, -34], floor: 'F2', kind: 'shortcut', risk: 3, note: '브릿지 서단 — 건너면 빠르지만 3층 복도 전체에 노출' },
-  { id: 't_f2_bridge_e', p: [-8, -34], floor: 'F2', kind: 'shortcut', risk: 3, note: '브릿지 동단 — 같은 대가' },
-  { id: 't_f2_lib', p: [-52.8, -32.9], floor: 'F2', kind: 'noise', risk: 2, note: '도서실 북측 서가 — 밀면 넘어지고 소리가 길다' },
-  { id: 't_f3_deck', p: [-24, -27.6], floor: 'F3', kind: 'deadend', risk: 4, note: '전망 데크 — 되돌아 나오는 길뿐. 대신 운동장이 다 보인다' },
-  { id: 't_f3_cor_w', p: [-46.3, -20], floor: 'F3', kind: 'gap', risk: 2, note: '방화문 구간 — 닫으면 시야가 끊긴다' },
-  { id: 't_spiral', p: [-24, -34], floor: 'OUT', kind: 'vertical', risk: 3, note: '원형 계단 — 세 층이 한 점에서 만난다' },
-  { id: 't_b1_tunnel', p: [-2, -30], floor: 'B1', kind: 'vertical', risk: 4, note: '설비 터널 — 폭 1.8 m, 느리지만 시야에서 완전히 사라진다' },
-  { id: 't_roof_hatch', p: [4.2, -54.2], floor: 'ROOF', kind: 'vertical', risk: 3, note: '옥탑 승강장 — 승강기가 유일한 빠른 하강' },
-]
+/** 런타임과 생성기가 공유하는 12개 트랩 정본. 좌표·층은 trapContract.json만 소유한다. */
+const TRAP_METADATA = {
+  trap_1f_corridor: { kind: 'gap', risk: 2, note: '1층 북측 복도 병목' },
+  trap_2f_science: { kind: 'gap', risk: 3, note: '2층 과학실 앞 필수 동선' },
+  trap_1f_kitchen: { kind: 'gap', risk: 2, note: '1층 조리실 앞 병목' },
+  trap_field_gate: { kind: 'gap', risk: 2, note: '운동장 정문 개구부' },
+  trap_field_diag: { kind: 'shortcut', risk: 1, note: '운동장 중앙 지름길' },
+  trap_alley_curve: { kind: 'shortcut', risk: 2, note: '북서 외곽 시야 사각' },
+  trap_gym_stage: { kind: 'shortcut', risk: 2, note: '2층 브릿지 서단 횡단' },
+  trap_1f_storage: { kind: 'deadend', risk: 3, note: '서익 남단 계단실 앞' },
+  trap_gym_bleacher: { kind: 'deadend', risk: 3, note: '3층 전망 데크 막다른 구간' },
+  trap_3f_end: { kind: 'deadend', risk: 3, note: '3층 서익 복도 끝' },
+  trap_play_bridge: { kind: 'vertical', risk: 2, note: '앞마당 원형 계단' },
+  trap_roof_tank: { kind: 'vertical', risk: 3, note: '옥상 헬리포트 노출 구간' },
+}
+export const TRAP_SLOTS = gameplayTrapContract.traps.map(({ id, floor, x, z }) => {
+  const metadata = TRAP_METADATA[id]
+  if (!metadata) throw new Error(`Missing generated trap metadata: ${id}`)
+  return { id, p: [x, z], floor, ...metadata }
+})
 
 /** 탈출 게이트 4 — 한 판 1개 */
 export const GATE_SLOTS = [
@@ -2335,7 +2371,7 @@ export const DELTA_SLOTS = [
   { id: 'd_cor_dark', name: '북측 복도 소등 구간', anchor: 'f2_cor_n', p: [-30, -48.3], floor: 'F2', kind: 'light', normal: '북측 복도 형광등 점등', altered: '한 구간만 소등, 앞뒤는 켜진 채', trigger: '미션 1개 완료' },
   { id: 'd_cor_flick', name: '서익 복도 점멸', anchor: 'f1_cor_w', p: [-46.3, -30], floor: 'F1', kind: 'light', normal: '서익 복도 정상 점등', altered: '4 Hz 점멸', trigger: '미션 2개 완료' },
   { id: 'd_music_piano', name: '피아노 단음 반복', anchor: 'p_f2_music_piano', p: [-52.2, -26], floor: 'F2', kind: 'sound', normal: '무음', altered: '피아노 단음 반복', trigger: '술래 근접' },
-  { id: 'd_bc_console', name: '방송 콘솔 적색', anchor: 'p_f3_bc_console', p: [4.2, -42], floor: 'F3', kind: 'prop', normal: '콘솔 대기 LED', altered: '전 채널 붉게 점등', trigger: '광분 예고' },
+  { id: 'd_bc_console', name: '방송 콘솔 적색', anchor: 'p_f3_bc_console', p: [2.95, -42.75], floor: 'F3', kind: 'prop', normal: '콘솔 대기 LED', altered: '전 채널 붉게 점등', trigger: '광분 예고' },
   { id: 'd_deck_rail', name: '전망 데크 난간등', anchor: 'f3_deck', p: [-24, -27.6], floor: 'F3', kind: 'light', normal: '난간등 상시 점등', altered: '데크만 소등 — 운동장에서 안 보인다', trigger: '시드' },
   { id: 'd_field_light', name: '운동장 조명탑', anchor: 'field', p: [-24, -5], floor: 'OUT', kind: 'light', normal: '조명탑 4기 점등', altered: '1기만 점등, 그림자가 길어진다', trigger: '미션 3개 완료' },
   { id: 'd_health_bed', name: '보건실 커튼', anchor: 'p_f1_health_bed', p: [-8, -54.2], floor: 'F1', kind: 'prop', normal: '커튼 열림', altered: '커튼 닫힘 + 실루엣', trigger: '시드' },
@@ -2391,7 +2427,7 @@ export function buildContracts(opts = {}) {
   return {
     'terrainContract.json': {
       seed: built.seed,
-      quota: { collapse: 4, breach: 6, messy: 12, stacked: 4, stripped: 3 },
+      quota: { collapse: 2, breach: 3, messy: 5, stacked: 1, stripped: 1 },
       chords: {
         F1: '중정 십자 관통 — 링에 현을 놓는다. 술래가 36 m 를 9초에 끊는다',
         F2: '앞마당 가로 브릿지 (W↔E, 폭 3.0 m) — 2층 유일한 고리',
@@ -2416,7 +2452,7 @@ export function buildContracts(opts = {}) {
       cores: CORES.map((c) => ({ id: c.id, name: c.name, x: c.x, z: c.z })),
     },
     'actorContract.json': { spawns: SPAWNS, patrol: PATROL },
-    'trapContract.json': { traps: TRAP_SLOTS, perRound: [5, 6], mix: { gap: [1, 2], shortcut: [1, 2], deadend: [1, 2], vertical: [1, 1] } },
+    'trapContract.json': { traps: TRAP_SLOTS, perRound: [4, 5], mix: { gap: [1, 2], shortcut: [1, 2], deadend: [1, 2], vertical: [0, 1] } },
     'gateContract.json': { gates: GATE_SLOTS, sensorLocalZ: 1.2, lockedBlockerHalfSize: [2.0, 1.6, 0.2] },
     'missionContract.json': { props: PROP_SLOTS, missions: MISSION_SLOTS, perRound: 3 },
     'deltaContract.json': { deltas: DELTA_SLOTS, channels: CHANNELS, camera: CAMERA, perRound: [0, 3], rule: 'anchor 는 기존 슬롯만 참조한다. 신규 좌표 금지.' },

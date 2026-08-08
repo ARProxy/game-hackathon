@@ -2,22 +2,27 @@ import assert from 'node:assert/strict'
 
 import {
   buildCampus,
+  buildContracts,
   CLASSROOM_LAYOUTS,
+  DELTA_SLOTS,
   FLOOR_Y,
+  MAP_SIZE,
   MISSION_SLOTS,
   PROP_SLOTS,
   REQUIRED_SUITE_EDGES,
+  TRAP_SLOTS,
 } from '../src/game/campusV4Data.js'
 import collisionContract from '../src/game/serverCollisionContract.json' with { type: 'json' }
+import gameplayTrapContract from '../src/game/trapContract.json' with { type: 'json' }
 
 const campus = buildCampus({ seed: 0 })
 const alternate = buildCampus({ seed: 1 })
 
 const expected = {
-  solids: 2392,
-  visuals: 5814,
+  solids: 2394,
+  visuals: 5804,
   plates: 549,
-  cyls: 1355,
+  cyls: 1357,
   fixtures: 150,
   rooms: 80,
   doors: 127,
@@ -55,7 +60,8 @@ assert.ok(classrooms.every((room) => room.cond === 'intact'), 'Classroom baselin
 const roomById = Object.fromEntries(campus.rooms.map((room) => [room.id, room]))
 const localVisuals = campus.visuals.filter((item) => item.roomId && item.local)
 const localCylinders = campus.cyls.filter((item) => item.roomId && item.local)
-const localPrimitives = [...localVisuals, ...localCylinders]
+const localSolids = campus.solids.filter((item) => item.roomId && item.local)
+const localPrimitives = [...localVisuals, ...localCylinders, ...localSolids]
 const localToWorld = (room, u, v) => {
   if (room.wing === 'N') return [room.cx - u, room.z1 - v]
   if (room.wing === 'S') return [room.cx + u, room.z0 + v]
@@ -95,6 +101,29 @@ for (const item of localPrimitives) {
     assert.ok(boundaryGap <= 0.25, `${room.id} wall-mounted prop is not attached to a wall`)
   }
 }
+
+const anchorById = Object.fromEntries([...PROP_SLOTS, ...MISSION_SLOTS, ...DELTA_SLOTS]
+  .filter((anchor) => anchor.id)
+  .map((anchor) => [anchor.id, anchor]))
+const anchoredPrimitives = localPrimitives.filter((item) => item.anchorIds)
+for (const item of anchoredPrimitives) {
+  for (const anchorId of item.anchorIds) {
+    const anchor = anchorById[anchorId]
+    assert.ok(anchor, `${item.landmarkRole} references missing anchor ${anchorId}`)
+    assert.deepEqual(anchor.p, [item.p[0], item.p[2]], `${anchorId} drifted from ${item.landmarkRole}`)
+    if (anchor.surfaceY != null) {
+      const top = item.p[1] + item.s[1] / 2
+      assert.ok(Math.abs(anchor.surfaceY - top) <= 0.001, `${anchorId} surface height drifted from ${item.landmarkRole}`)
+    }
+  }
+}
+const boothGlass = localVisuals.filter((item) => item.roomId === 'f3_broadcast' && ['booth-glass', 'booth-glass-stub'].includes(item.landmarkRole))
+const boothColliders = localSolids.filter((item) => item.roomId === 'f3_broadcast' && item.landmarkRole?.includes('booth-glass'))
+assert.equal(boothGlass.length, 2, 'Broadcast booth must have a two-piece visual partition')
+assert.equal(boothColliders.length, 2, 'Broadcast booth visuals and physical occupancy diverged')
+const [leftPanel, rightPanel] = boothGlass.sort((a, b) => a.local[0] - b.local[0])
+const boothOpening = (rightPanel.local[0] - rightPanel.s[0] / 2) - (leftPanel.local[0] + leftPanel.s[0] / 2)
+assert.ok(Math.abs(boothOpening - 1.1) <= 0.001, `Broadcast booth opening must be 1.10m, got ${boothOpening}`)
 
 const doorById = Object.fromEntries(campus.doors.map((door) => [door.id, door]))
 const worldToLocal = (room, x, z) => {
@@ -169,6 +198,10 @@ const conditionCounts = Object.values(campus.conditions).reduce((counts, conditi
 }, {})
 const normalRate = (conditionCounts.intact ?? 0) / Object.keys(campus.conditions).length
 assert.ok(normalRate >= 0.7 && normalRate <= 0.8, `Normal school baseline must stay at 70-80%, got ${normalRate}`)
+const generatedContracts = buildContracts({ seed: 0 })
+const expectedQuota = Object.fromEntries(Object.entries(conditionCounts).filter(([condition]) => condition !== 'intact'))
+assert.deepEqual(generatedContracts['terrainContract.json'].quota, expectedQuota, 'Exported terrain quota is stale')
+assert.deepEqual(generatedContracts['trapContract.json'].perRound, [4, 5], 'Trap round count drifted from the game rule')
 
 for (const [mainId, prepId] of REQUIRED_SUITE_EDGES) {
   const main = roomById[mainId]
@@ -189,6 +222,20 @@ for (const room of campus.rooms.filter((item) => ['F2', 'F3'].includes(item.floo
   const other = alternateById[room.id]
   assert.deepEqual([other?.floor, other?.cx, other?.cz], [room.floor, room.cx, room.cz], `${room.id} architecture moved with seed`)
 }
+const protectedSuiteIds = new Set(REQUIRED_SUITE_EDGES.flat())
+for (let seed = 0; seed < 16; seed++) {
+  const sample = buildCampus({ seed })
+  for (const roomId of protectedSuiteIds) assert.equal(sample.conditions[roomId], 'intact', `${roomId} lost suite grammar at seed ${seed}`)
+  const sampleCounts = Object.values(sample.conditions).reduce((counts, condition) => {
+    counts[condition] = (counts[condition] ?? 0) + 1
+    return counts
+  }, {})
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(sampleCounts).filter(([condition]) => condition !== 'intact')),
+    expectedQuota,
+    `Seed ${seed} failed the fixed damage quota`,
+  )
+}
 
 const structural = (item) => {
   const [x, y, z] = item.s
@@ -202,6 +249,25 @@ const exportedWalls = campus.solids.filter(structural).filter((item) => item.s[1
   rotationY: Array.isArray(item.rot) ? (item.rot[1] ?? 0) : (item.rot?.rot?.[1] ?? 0),
 }))
 assert.deepEqual(collisionContract.walls, exportedWalls, 'Server collision export is stale')
+assert.equal(gameplayTrapContract.activeCount, 5, 'Runtime trap activation count must remain within the 4-5 rule')
+assert.equal(new Set(gameplayTrapContract.traps.map((trap) => trap.id)).size, gameplayTrapContract.traps.length, 'Runtime trap ids must be unique')
+assert.equal(TRAP_SLOTS.length, gameplayTrapContract.traps.length, 'Generated and runtime trap candidate counts diverged')
+assert.deepEqual(
+  TRAP_SLOTS.map(({ id, floor, p }) => ({ id, floor, x: p[0], z: p[1] })),
+  gameplayTrapContract.traps,
+  'Generated and runtime traps no longer share one coordinate contract',
+)
+const trapPoints = [
+  ...gameplayTrapContract.traps,
+  ...generatedContracts['trapContract.json'].traps.map((trap) => ({ id: trap.id, floor: trap.floor, x: trap.p[0], z: trap.p[1] })),
+]
+for (const trap of trapPoints) {
+  assert.ok(Math.abs(trap.x) <= MAP_SIZE / 2 && Math.abs(trap.z) <= MAP_SIZE / 2, `${trap.id} escaped the v4 map`)
+  const embedded = collisionContract.walls.some((wall) => wall.floor === trap.floor
+    && Math.abs(trap.x - wall.center[0]) < wall.size[0] / 2
+    && Math.abs(trap.z - wall.center[1]) < wall.size[1] / 2)
+  assert.equal(embedded, false, `${trap.id} is embedded in a v4 structural wall`)
+}
 assert.deepEqual(campus.slots.props.map((slot) => slot.p), PROP_SLOTS.map((slot) => slot.p), 'Prop anchors were moved from their surfaces')
 assert.deepEqual(campus.slots.missions.map((slot) => slot.p), MISSION_SLOTS.map((slot) => slot.p), 'Mission anchors were moved from their fixtures')
 

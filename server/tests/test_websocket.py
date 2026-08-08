@@ -323,33 +323,35 @@ class TestActions:
 
     def test_trap_freezes_at_reported_position(self, client):
         from app.game.authority import MovementSample
-        from app.game.session import session_manager
+        from app.game.session import TRAP_CONTRACT, session_manager
 
         with client.websocket_connect("/ws/room9/player1") as ws:
             self._start_game(ws)
             session = session_manager.get_or_create("room9")
             player = session.state.get_player("player1")
             assert player is not None
-            session.active_trap_ids.add("trap_field_diag")
-            player.position.x = 2.0
-            player.position.z = 6.0
+            trap = next(item for item in TRAP_CONTRACT["traps"] if item["id"] == "trap_field_diag")
+            trap_x, trap_z = float(trap["x"]), float(trap["z"])
+            session.active_trap_ids.add(trap["id"])
+            player.position.x = trap_x
+            player.position.z = trap_z
             session.position_samples["player1"] = MovementSample(
-                2.0, 6.0, session.position_samples["player1"].timestamp
+                trap_x, trap_z, session.position_samples["player1"].timestamp
             )
             ws.send_json({
                 "type": "action",
                 "payload": {
                     "action_type": "trap",
-                    "trap_id": "trap_field_diag",
-                    "x": 2.0,
-                    "z": 6.0,
+                    "trap_id": trap["id"],
+                    "x": trap_x,
+                    "z": trap_z,
                 },
             })
             frozen = ws.receive_json()
             assert frozen["type"] == "freeze"
             assert frozen["matched_stage"] == "trap"
-            assert frozen["trap_id"] == "trap_field_diag"
-            assert frozen["position"] == {"x": 2.0, "z": 6.0}
+            assert frozen["trap_id"] == trap["id"]
+            assert frozen["position"] == {"x": trap_x, "z": trap_z}
 
     def test_seeker_catch_eliminates_human_and_ends_game(self, client):
         from app.game.session import session_manager

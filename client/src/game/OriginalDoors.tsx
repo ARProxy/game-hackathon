@@ -55,7 +55,7 @@ export default function OriginalDoors({ visibleFloors, playerRef }: {
       nearbyRef.current = closest
       setNearby(closest)
     }
-    // 정지한 122개 문은 Rapier에 쓰지 않는다. 목표가 바뀐 문만 완전히 열리거나
+    // 정지한 문은 개수와 무관하게 Rapier에 쓰지 않는다. 목표가 바뀐 문만 완전히 열리거나
     // 닫힐 때까지 이 작은 집합에 남아 WASM borrow/lifecycle 압력을 줄인다.
     for (const doorId of activeDoorIds.current) {
       const door = CAMPUS_DOOR_BY_ID.get(doorId)
@@ -88,7 +88,7 @@ export default function OriginalDoors({ visibleFloors, playerRef }: {
     {nearby && (
       <Html position={[nearby.hinge[0], nearby.hinge[1] + 2.55, nearby.hinge[2]]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
         <div style={{ whiteSpace: 'nowrap', padding: '6px 10px', borderRadius: 7, color: '#E7F5FF', background: 'rgba(5,15,22,.92)', border: '1px solid rgba(189,239,255,.55)', fontSize: 12, fontWeight: 800 }}>
-          E · {nearby.kind === 'fire' ? '방화문' : '교실 문'} {targets.current.get(nearby.id) ? '닫기' : '열기'}
+          E · {nearby.kind === 'fire' ? '방화문' : nearby.kind === 'suite' ? '연결문' : '교실 문'} {targets.current.get(nearby.id) ? '닫기' : '열기'}
         </div>
       </Html>
     )}
