@@ -79,8 +79,8 @@ export const PAL = {
   wood: '#8a6a44', fabric: '#4b6d84', paper: '#ded6c2', accentRed: '#a8392f',
   grass: '#31502f', dirt: '#7a5b3a', asphalt: '#3f4448', line: '#e6e6e0',
   sand: '#9a8560', water: '#2f6f86', rubber: '#5b4a4a',
-  extStucco: '#b9b2a2', extConcrete: '#767c80', extBand: '#8b8f93', extFrame: '#6d757c',
-  extSteel: '#7d858c', extSteelDark: '#454c52', schoolBlue: '#3f5a76', safetyYellow: '#c9b24a',
+  extStucco: '#b9b2a2', extConcrete: '#767c80', extBand: '#858b90', extFrame: '#6d757c',
+  extSteel: '#7d858c', extSteelDark: '#454c52', schoolBlue: '#3e5873', safetyYellow: '#c9b24a',
   sitePaver: '#7d8288', siteJoint: '#6b7076', serviceWall: '#6f695f',
   backgroundMass: '#252d31', backgroundFoliage: '#263c2b',
 }
@@ -1589,7 +1589,12 @@ export function buildCampus(opts = {}) {
     const facadeOptions = { c: PAL.extStucco, base: facadeBase, baseH: 0.65, facadeRole: 'facade' }
     wall(f, y, 'x', BAND.N.outer, B.x0, B.x1, { ...facadeOptions, openings: winsFor(B.x0 + 1, B.x1 - 1, 3.2) })
     wall(f, y, 'x', B.z1 - 0.1, B.x0, BAND.W.court, { ...facadeOptions, openings: winsFor(B.x0 + 1, BAND.W.court - 1, 3.2) })
-    wall(f, y, 'x', B.z1 - 0.1, BAND.E.court, B.x1, { ...facadeOptions, openings: winsFor(BAND.E.court + 1, B.x1 - 1, 3.2) })
+    const eastReturnWindows = winsFor(BAND.E.court + 1, B.x1 - 1, 3.2)
+    const eastReturnOpenings = f === 'F1'
+      ? eastReturnWindows.filter((opening) => Math.abs(opening.c - 4.2) > 2.4).concat([{ c: 4.2, w: 3.0, head: 2.7 }])
+      : eastReturnWindows
+    if (f === 'F1') LEAKS.push({ f, id: 'leak_gate_gym', kind: 'gate', grade: 'walk', w: 3.0, p: [4.2, B.z1 - 0.1], atten: 0.8 })
+    wall(f, y, 'x', B.z1 - 0.1, BAND.E.court, B.x1, { ...facadeOptions, openings: eastReturnOpenings })
     wall(f, y, 'z', BAND.W.outer, B.z0, B.z1, { ...facadeOptions, openings: winsFor(B.z0 + 1, B.z1 - 1, 3.2) })
     wall(f, y, 'z', BAND.E.outer, B.z0, B.z1, { ...facadeOptions, openings: winsFor(B.z0 + 1, B.z1 - 1, 3.2) })
 
@@ -2282,9 +2287,9 @@ export function buildCampus(opts = {}) {
     P(f, [GX, 0.02, 24], [30, 8], PAL.asphalt)
     for (let i = 0; i < 5; i++) P(f, [GX, 0.03, 24 + i * 2.4], [8, 0.7], PAL.line)
     // 교문
-    for (const sgn of [-1, 1]) { S(f, [GX + sgn * 4.2, 1.6, SITE.z1], [1.0, 3.2, 1.0], PAL.extConcrete, { landmarkRole: 'main-gate-pier' }); V(f, [GX + sgn * 4.2, 3.35, SITE.z1], [1.2, 0.3, 1.2], PAL.extBand) }
-    for (const sgn of [-1, 1]) { V(f, [GX + sgn * 2.0, 1.35, SITE.z1], [3.8, 2.7, 0.12], PAL.extSteelDark, { landmarkRole: 'main-gate-leaf' }); for (let i = 0; i < 8; i++) CY(f, [GX + sgn * (0.3 + i * 0.45), 1.35, SITE.z1], 0.045, 2.7, PAL.extSteelDark) }
-    V(f, [GX - 6.4, 2.35, SITE.z1], [1.0, 1.8, 0.3], PAL.schoolBlue, { landmarkRole: 'main-gate-school-sign' })
+    for (const sgn of [-1, 1]) { S(f, [GX + sgn * 1.9, 1.6, SITE.z1], [1.0, 3.2, 1.0], PAL.extConcrete, { landmarkRole: 'main-gate-pier' }); V(f, [GX + sgn * 1.9, 3.35, SITE.z1], [1.2, 0.3, 1.2], PAL.extBand) }
+    // 열림 상태는 GateFrame이 소유한다. 정적 철문 visual을 중복 생성하지 않는다.
+    V(f, [GX - 3.0, 2.35, SITE.z1], [1.0, 1.8, 0.3], PAL.schoolBlue, { landmarkRole: 'main-gate-school-sign' })
     // 경비실
     S(f, [GX + 9, 1.55, 34], [6, 3.1, 4.4], PAL.extStucco)
     V(f, [GX + 9, 3.25, 34], [6.8, 0.3, 5.2], PAL.extFrame)
@@ -2300,7 +2305,7 @@ export function buildCampus(opts = {}) {
     // 담장 — 정문만 열려 있다
     const fence = (ax, fx, a0, a1) => wall(f, 0, ax, fx, a0, a1, { h: 2.2, t: 0.35, c: PAL.serviceWall, base: PAL.extConcrete })
     fence('x', SITE.z0, SITE.x0, SITE.x1)
-    fence('x', SITE.z1, SITE.x0, GX - 6.5); fence('x', SITE.z1, GX + 6.5, SITE.x1)
+    fence('x', SITE.z1, SITE.x0, GX - 2.4); fence('x', SITE.z1, GX + 2.4, SITE.x1)
     fence('z', SITE.x0, SITE.z0, SITE.z1); fence('z', SITE.x1, SITE.z0, SITE.z1)
     for (let i = 0; i < 25; i++) V(f, [SITE.x0 + 1.5 + i * 3, 2.35, SITE.z0], [2.9, 0.18, 0.55], PAL.extSteelDark)
     // 후문 골목 (서측)

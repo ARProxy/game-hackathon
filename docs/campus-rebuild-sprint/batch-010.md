@@ -22,6 +22,14 @@ OUT 983개 primitive 중 690개가 즉석 HEX를 사용해 metal·concrete·fabr
 - 중앙 현관 landmark 수와 폭 3.1m keep-out의 collider 0개를 검사한다.
 - `npm run export:collision`, `npm run verify:campus`, `npm run build` 통과.
 
+## 적대 QA 후속 수정
+
+- `gate_gym` 앞 F1 외벽에 폭 3.0m 실제 개구를 추가해 문이 열려도 벽에 막히던 문제를 제거했다.
+- 정문 담장·문주 사이 순수 폭을 2.8m로 줄여 2.6m 런타임 잠금 blocker 양옆 우회를 막았다.
+- 정적 철문 visual을 제거해 런타임 gate가 열린 뒤에도 닫혀 보이던 모순을 없앴다.
+- `extBand`/`schoolBlue` HEX를 기존 `doorFrame`/`chair`와 분리해 reverse-map이 문틀 metal과 의자 fabric을 덮어쓰지 않게 했다.
+- 위 네 조건을 verifier의 의미 기반 회귀 검사로 추가했다.
+
 ## 다음 단계
 
 - 일반 보행등 높이를 4.2~5.0m로 정리하고 지면 curb/drain 높이 규칙을 추가한다.

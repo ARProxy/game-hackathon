@@ -24,10 +24,10 @@ const campus = buildCampus({ seed: 0 })
 const alternate = buildCampus({ seed: 1 })
 
 const expected = {
-  solids: 2290,
-  visuals: 5699,
+  solids: 2283,
+  visuals: 5693,
   plates: 543,
-  cyls: 1331,
+  cyls: 1315,
   fixtures: 152,
   rooms: 80,
   doors: 127,
@@ -46,6 +46,8 @@ const exteriorPrimitives = [...campus.solids, ...campus.visuals, ...campus.plate
 const semanticExteriorColors = new Set([...Object.values(PAL), ...Object.values(TONE)].map((color) => color.toLowerCase()))
 const rawExterior = exteriorPrimitives.filter((item) => !semanticExteriorColors.has(item.c.toLowerCase()))
 assert.deepEqual(rawExterior, [], 'OUT/ROOF contains raw colors outside the semantic PAL/TONE contract')
+assert.notEqual(PAL.extBand, PAL.doorFrame, 'Concrete facade band aliases the metal door-frame HEX')
+assert.notEqual(PAL.schoolBlue, PAL.chair, 'Paint identity blue aliases the fabric chair HEX')
 const facadeBands = {
   'facade-band-f2': 3.4,
   'facade-band-f3': 7.0,
@@ -302,6 +304,19 @@ const entranceBlockers = campus.solids.filter((item) => ['F1', 'OUT'].includes(i
     && item.p[2] + halfZ > entranceKeepout.z0 && item.p[2] - halfZ < entranceKeepout.z1
 })
 assert.deepEqual(entranceBlockers, [], 'Central entrance 3.1m walking axis is blocked by a collider')
+const gymGateLeak = campus.leaks.find((leak) => leak.id === 'leak_gate_gym')
+assert.deepEqual(gymGateLeak?.p, [4.2, 1.9], 'East emergency gate lost its F1 facade opening')
+assert.equal(gymGateLeak?.w, 3.0, 'East emergency gate opening width drifted')
+const gymWallBlockers = campus.solids.filter((item) => item.f === 'F1' && structural(item)).filter((item) => (
+  item.p[1] + item.s[1] / 2 > 0.3
+  && Math.abs(item.p[0] - 4.2) <= item.s[0] / 2 && Math.abs(item.p[2] - 1.9) <= item.s[2] / 2
+))
+assert.deepEqual(gymWallBlockers, [], 'East emergency gate is still embedded in the F1 facade')
+const mainGatePiers = campus.solids.filter((item) => item.landmarkRole === 'main-gate-pier').sort((a, b) => a.p[0] - b.p[0])
+assert.equal(mainGatePiers.length, 2, 'Main gate must keep two static piers')
+const mainGateClearWidth = mainGatePiers[1].p[0] - mainGatePiers[0].p[0] - mainGatePiers[0].s[0] / 2 - mainGatePiers[1].s[0] / 2
+assert.ok(mainGateClearWidth >= 2.6 && mainGateClearWidth <= 3.0, 'Main gate opening can bypass the runtime lock blocker')
+assert.equal(campus.visuals.some((item) => item.landmarkRole === 'main-gate-leaf'), false, 'Static gate leaf remains visible after runtime gate opens')
 const exportedWalls = campus.solids.filter(structural).filter((item) => item.s[1] >= 1.75 || item.forceCollider).map((item) => ({
   floor: item.f,
   center: [item.p[0], item.p[2]],
