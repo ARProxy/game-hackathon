@@ -16,9 +16,10 @@ from pathlib import Path
 
 from app.ai.forbidden import ForbiddenWordEngine
 from app.ai.mission import Mission, RoundData
+from app.ai.speech import SpeechHistory
 from app.game.authority import MovementSample
 from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots
-from app.game.progression import VerticalRoundState, WorldFloor
+from app.game.progression import FORBIDDEN_RAGE_POLICIES, ForbiddenRageTier, VerticalRoundState, WorldFloor
 from app.game.state import GamePhase, GameState, PlayerRole
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class CompanionRuntime:
     goal_changed_at: float = 0.0
     last_seeker_seen: dict | None = None
     candidate_memory: list[dict] = field(default_factory=list)
+    speech_history: SpeechHistory = field(default_factory=SpeechHistory)  # B2: 발화 중복 억제
 
     def reset(self, now: float) -> None:
         self.memory.clear()
@@ -70,6 +72,7 @@ class CompanionRuntime:
         self.goal_changed_at = 0.0
         self.last_seeker_seen = None
         self.candidate_memory = []
+        self.speech_history.reset()
 
 
 class GameSession:
@@ -308,6 +311,41 @@ class GameSession:
         return {
             "x": gate["position"][0] + math.sin(gate["rotationY"]) * local_z,
             "z": gate["position"][1] + math.cos(gate["rotationY"]) * local_z,
+        }
+
+    def result_payload(self) -> dict:
+        """A7: 결과 화면에 금기어 누적→광분 인과관계를 포함한 데이터."""
+        vr = self.vertical_round
+        rage = vr.forbidden_rage_policy
+
+        # 금기어 위반 → 술래 강화 이력 구성
+        rage_history = []
+        for policy in FORBIDDEN_RAGE_POLICIES:
+            if vr.forbidden_word_violations >= policy.minimum_violations and policy.minimum_violations > 0:
+                rage_history.append({
+                    "tier": policy.tier.value,
+                    "triggered_at_violations": policy.minimum_violations,
+                    "speed_multiplier": policy.speed_multiplier,
+                    "hearing_expanded": policy.hearing_expanded,
+                    "vision_expanded": policy.vision_expanded,
+                })
+
+        return {
+            "forbidden_word_violations": vr.forbidden_word_violations,
+            "fw_rage_tier": rage.tier.value,
+            "fw_speed_multiplier": rage.speed_multiplier,
+            "rage_triggered": rage.tier != ForbiddenRageTier.CALM,
+            "rage_history": rage_history,
+            "final_route": vr.final_route.value if vr.final_route else None,
+            "vertical_phase": vr.phase.value,
+            "escaped_player_ids": sorted(self.escaped_player_ids),
+            "companion_statuses": {
+                actor_id: (
+                    self.state.get_player(actor_id).status.value
+                    if self.state.get_player(actor_id) else "missing"
+                )
+                for actor_id in DEFAULT_AI_PARTNER_IDS
+            },
         }
 
     def is_near_active_gate(self, player_id: str, radius: float = 2.75) -> bool:

@@ -1,4 +1,9 @@
-"""서버 권위 AI 동료의 독립 목표, 기억, 이동 계약."""
+"""서버 권위 AI 동료의 독립 목표, 기억, 이동 계약.
+
+S4: AI 발화 intent 구조화 + 금기어 회피
+B2: 발화 중복 억제
+B4: 행동-음성 일치 검증
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,15 @@ from pathlib import Path
 from typing import Any
 
 from app.ai.hunter import _safe_hunter_step
+from app.ai.speech import (
+    SpeechEvent,
+    SpeechHistory,
+    SpeechIntent,
+    SpeechMode,
+    avoid_forbidden_words,
+    build_speech_event,
+    select_speech_mode,
+)
 from app.game.authority import MovementSample, has_clear_catch_line
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
 
@@ -292,3 +306,65 @@ def _distance(first: Any, second: Any) -> float:
 def _intent(state: str, target_id: str | None, target: Any, reason: str) -> dict:
     position = {"x": target.position.x, "z": target.position.z} if target else {"x": 0.0, "z": 0.0}
     return {"state": state, "target_id": target_id, "target": position, "reason": reason}
+
+
+# ---------------------------------------------------------------------------
+# S4: action에 speech_event를 생성 + B4: 행동-음성 일치
+# ---------------------------------------------------------------------------
+
+# action type → (speech intent, 메시지 템플릿)
+_ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
+    "report": (SpeechIntent.REPORT_OBSERVATION, "{zone} 구역에서 {color} {mesh} 후보를 발견했어."),
+    "seeker_report": (SpeechIntent.REPORT_OBSERVATION, "술래를 봤어! 조심해!"),
+    "inspect": (SpeechIntent.DECLARE_ACTION, "이 후보를 조사할게."),
+    "rescue": (SpeechIntent.DECLARE_ACTION, "내가 구조하러 갈게!"),
+    "escape": (SpeechIntent.DECLARE_ACTION, "탈출구로 달려갈게!"),
+    "trap": (SpeechIntent.REPORT_OBSERVATION, "트랩에 걸렸어!"),
+    "vertical_objective": (SpeechIntent.REPORT_OBSERVATION, "장치를 찾았어."),
+}
+
+
+def create_action_speech(
+    companion_id: str,
+    action: dict,
+    intent_state: str,
+    seeker_distance: float | None,
+    forbidden_words: list[str] | None = None,
+) -> SpeechEvent | None:
+    """B4: action에 대응하는 speech_event를 생성한다. 행동과 음성이 일치함을 보장."""
+    action_type = action.get("type", "")
+    mapping = _ACTION_SPEECH_MAP.get(action_type)
+    if mapping is None:
+        return None
+
+    speech_intent, template = mapping
+
+    # 메시지 구성
+    if action_type == "report":
+        appearance = action.get("appearance", {})
+        text = template.format(
+            zone=action.get("zone", "?"),
+            color=appearance.get("color", "?"),
+            mesh=appearance.get("mesh", "물체"),
+        )
+    else:
+        text = template
+
+    # S4: 금기어 회피 연출
+    if forbidden_words:
+        text, was_avoided = avoid_forbidden_words(text, forbidden_words)
+        if was_avoided:
+            speech_intent = SpeechIntent.FORBIDDEN_AVOIDANCE
+
+    is_urgent = action_type in {"rescue", "trap", "seeker_report"}
+    mode = select_speech_mode(intent_state, seeker_distance, is_urgent)
+
+    return build_speech_event(
+        speaker=companion_id,
+        intent=speech_intent,
+        text=text,
+        mode=mode,
+        intent_state=intent_state,
+        seeker_distance=seeker_distance,
+        facts={"action_type": action_type, "action": action},
+    )

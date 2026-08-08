@@ -176,11 +176,18 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
     }
 
 
+ELEVATOR_SOUND_PING_RADIUS = 25.0  # A5: 엘리베이터 도착 소리 핑 반경
+
+
 def use_elevator(session: Any, actor_id: str, elevator_id: str, target_floor: str) -> dict:
-    """열린 층 사이의 엘리베이터 이동을 서버가 최종 승인한다."""
+    """열린 층 사이의 엘리베이터 이동을 서버가 최종 승인한다.
+
+    A5: 도착 시 소리 핑 발생. 술래도 사용 가능.
+    """
     actor = session.state.get_player(actor_id)
     if not session.vertical_progression_enabled or not actor or actor.status != PlayerStatus.ALIVE:
         raise InvalidProgression("엘리베이터를 사용할 수 없는 actor다")
+    # A5: 술래도 엘리베이터 사용 가능 (역할 제한 제거)
     try:
         destination = WorldFloor(target_floor)
         elevator_x, elevator_z = ELEVATOR_POSITION_BY_ID[elevator_id]
@@ -199,4 +206,11 @@ def use_elevator(session: Any, actor_id: str, elevator_id: str, target_floor: st
     return {
         "actor_id": actor_id, "elevator_id": elevator_id,
         "position": {"x": elevator_x, "y": actor.position.y, "z": elevator_z, "floor": destination.value, "zone": actor.position.zone},
+        # A5: 도착 층에 소리 핑 발생 — 술래가 감지 가능
+        "sound_ping": {
+            "position": {"x": elevator_x, "z": elevator_z},
+            "radius": ELEVATOR_SOUND_PING_RADIUS,
+            "floor": destination.value,
+            "source": "elevator_arrival",
+        },
     }

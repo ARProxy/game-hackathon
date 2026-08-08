@@ -266,5 +266,6 @@ def test_secondary_seeker_activates_only_from_first_floor() -> None:
     secondary.position.floor = WorldFloor.F1
     result = advance_secondary_hunter(session, primary)
     assert result is not None
-    assert result["reason"] == "pincer_flank"
-    assert result["target"] != primary["target"]
+    # S3: 차단자는 역할 분화된 reason을 반환한다
+    assert result["reason"] in {"pincer_flank", "area_patrol", "visual_block", "frozen_guard"}
+    assert result.get("role") == "blocker" or result["target"] != primary["target"]

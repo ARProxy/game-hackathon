@@ -75,14 +75,18 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         assert self.websocket.messages[-1]["reason"] == "invalid_rescue"
         assert partner.status == PlayerStatus.FROZEN
 
-    async def test_ai_forbidden_speech_uses_same_freeze_engine(self) -> None:
+    async def test_ai_forbidden_speech_avoids_forbidden_words(self) -> None:
+        """S4: AI는 금기어를 회피 연출로 교체한다. 빙결되지 않는다."""
         partner = self.session.state.get_player("partner")
         delivered = await self.manager._broadcast_companion_speech(self.room_id, {
             "type": "companion_report", "message": "빨간 물건을 발견했어",
         })
-        assert not delivered
-        assert partner.status == PlayerStatus.FROZEN
-        assert self.websocket.messages[-1]["matched_stage"] == "ai_speech"
+        # 금기어 회피 연출이 적용되어 빙결 없이 전달된다
+        assert delivered
+        assert partner.status == PlayerStatus.ALIVE
+        last = self.websocket.messages[-1]
+        assert last.get("forbidden_avoidance") is True
+        assert "빨간" not in last.get("message", "")
 
     async def test_ai_escape_is_server_validated_and_broadcast(self) -> None:
         partner = self.session.state.get_player("partner")
@@ -128,16 +132,17 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         assert human.status == PlayerStatus.FROZEN
 
     async def test_ai_freeze_only_finishes_when_all_three_runners_are_frozen(self) -> None:
+        """기획 v4: AI 동료는 금기어 발화로 빙결되지 않지만, 트랩으로는 빙결될 수 있다.
+        전원 빙결 시 게임 종료를 검증한다."""
         human = self.session.state.get_player(self.player_id)
         partner = self.session.state.get_player("partner")
         partner_two = self.session.state.get_player("partner-2")
         human.freeze()
         partner_two.freeze()
-        delivered = await self.manager._broadcast_companion_speech(self.room_id, {
-            "type": "companion_report", "message": "빨간 물건을 찾았어",
-        })
-        assert not delivered
-        assert partner.status == PlayerStatus.FROZEN
+        # AI는 금기어로 빙결되지 않으므로 직접 freeze (트랩 시뮬레이션)
+        partner.freeze()
+        finished = await self.manager._finish_if_team_frozen(self.room_id)
+        assert finished
         assert self.session.state.phase == GamePhase.RESULT
         assert self.websocket.messages[-1] == {"type": "game_over", "reason": "all_frozen"}
 

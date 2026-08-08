@@ -1,16 +1,31 @@
-"""서버 권위 능동 술래의 감지, 기억, 목표 선택."""
+"""서버 권위 능동 술래의 감지, 기억, 목표 선택.
+
+S3: 추격자(청각 특화) / 차단자(시야 특화) 역할 분화
+S5: AI 발화 모드별 소리 핑 반경
+"""
 
 from __future__ import annotations
 
 import json
 import math
 import time
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from app.ai.speech import SPEECH_MODE_RADIUS, SpeechMode
 from app.game.authority import WALL_RECTS_BY_FLOOR, has_clear_catch_line, segment_intersects_rect
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
 from app.game.progression import VerticalRoundPhase
+
+
+# ---------------------------------------------------------------------------
+# S3: 술래 역할 (추격자 vs 차단자)
+# ---------------------------------------------------------------------------
+
+class SeekerRole(str, Enum):
+    CHASER = "chaser"    # 청각 특화 — 소리 추적, 직접 추격
+    BLOCKER = "blocker"  # 시야 특화 — 경로 차단, 발견→추격자에게 구역 공유
 
 CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/hunterContract.json"
 with CONTRACT_PATH.open(encoding="utf-8") as contract_file:
@@ -75,34 +90,67 @@ def director_snapshot(session: Any, now: float | None = None) -> dict[str, float
     }
 
 
-def record_hunter_signal(session: Any, player_id: str, position: dict, strength: str) -> bool:
-    seeker = next(
-        (player for player in session.state.players.values() if player.role == PlayerRole.SEEKER),
-        None,
-    )
+def record_hunter_signal(
+    session: Any,
+    player_id: str,
+    position: dict,
+    strength: str,
+    speech_mode: SpeechMode | None = None,
+) -> bool:
+    """소리 핑을 술래에게 전달한다. speech_mode가 주어지면 모드별 반경을 사용한다."""
+    # S5: 발화 모드별 반경 결정
+    if speech_mode == SpeechMode.SILENT:
+        return False  # 침묵 모드는 소리 핑 없음
+
     source = session.state.get_player(player_id)
-    if (
-        strength in {"speech", "ai_action"}
-        and seeker is not None
-        and source is not None
-        and not source.shares_floor_with(seeker)
-    ):
-        return False
-    if strength in {"speech", "ai_action"} and seeker is not None:
-        distance = math.hypot(
-            float(position["x"]) - seeker.position.x,
-            float(position["z"]) - seeker.position.z,
-        )
-        hearing_distance = CONTRACT["hearingDistance"] * vertical_threat_snapshot(session)["hearing_multiplier"]
-        if distance > hearing_distance:
-            return False
-    session.hunter_signal = {
-        "player_id": player_id,
-        "position": {"x": float(position["x"]), "z": float(position["z"])},
-        "strength": strength,
-        "timestamp": time.monotonic(),
-    }
-    return True
+
+    # 모든 술래(주 + 협공)에게 신호를 전달한다
+    delivered = False
+    for seeker in session.state.players.values():
+        if seeker.role != PlayerRole.SEEKER or seeker.status != PlayerStatus.ALIVE:
+            continue
+
+        if (
+            strength in {"speech", "ai_action", "ai_speech"}
+            and source is not None
+            and not source.shares_floor_with(seeker)
+        ):
+            continue
+
+        if strength in {"speech", "ai_action", "ai_speech"}:
+            distance = math.hypot(
+                float(position["x"]) - seeker.position.x,
+                float(position["z"]) - seeker.position.z,
+            )
+            # S5: speech_mode가 있으면 모드별 반경, 없으면 기본 청각 반경
+            if speech_mode is not None:
+                effective_radius = SPEECH_MODE_RADIUS[speech_mode]
+            else:
+                effective_radius = CONTRACT["hearingDistance"]
+            effective_radius *= vertical_threat_snapshot(session)["hearing_multiplier"]
+            if distance > effective_radius:
+                continue
+
+        delivered = True
+        # S3: 차단자가 발견하면 추격자에게 구역 수준 정보 공유
+        # (hunter_signal은 주 술래 기준, secondary는 별도 처리)
+        if seeker.player_id == "seeker":
+            session.hunter_signal = {
+                "player_id": player_id,
+                "position": {"x": float(position["x"]), "z": float(position["z"])},
+                "strength": strength,
+                "speech_mode": speech_mode.value if speech_mode else None,
+                "timestamp": time.monotonic(),
+            }
+        elif seeker.player_id == "seeker-2":
+            session.secondary_hunter_signal = {
+                "player_id": player_id,
+                "position": {"x": float(position["x"]), "z": float(position["z"])},
+                "strength": strength,
+                "timestamp": time.monotonic(),
+            }
+
+    return delivered
 
 
 def decide_hunter_intent(session: Any) -> dict:
@@ -256,11 +304,124 @@ def advance_hunter(session: Any) -> dict:
             session.position_samples[seeker.player_id] = MovementSample(seeker.position.x, seeker.position.z, now)
     session.hunter_last_tick = now
     session.hunter_last_intent = intent
-    return {**intent, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
+    return {**intent, "role": SeekerRole.CHASER.value, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
+
+
+def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
+    """S3: 차단자(시야 특화) 목표 선택.
+
+    - 시야 감지 우선: 넓은 시야각(140도)으로 순찰하며 시각 발견
+    - 발견 시 추격자에게 구역 수준 정보 공유 (직접 좌표 아님)
+    - 직접 추격보다 계단·미션실·구조 경로의 퇴로 차단
+    - 얼어 있는 도망자 주변을 제한 시간 동안 경계
+    """
+    seeker = session.state.get_player("seeker-2")
+    if not seeker:
+        return {"state": "HUNT", "target_id": None, "target": {"x": 0, "z": 0}, "reason": "no_blocker"}
+
+    now = time.monotonic()
+    threat = vertical_threat_snapshot(session)
+    vision_distance = CONTRACT["visionDistance"] * threat["vision_multiplier"] * 1.15  # 차단자 시야 보너스
+    blocker_vision_angle = 140  # 추격자(100도)보다 넓은 시야
+
+    # 차단자의 전방 벡터 (별도 관리)
+    fwd = getattr(session, "blocker_forward", {"x": 0.0, "z": -1.0})
+    fwd_len = math.hypot(fwd["x"], fwd["z"])
+    if fwd_len < 0.01:
+        fwd = {"x": 0.0, "z": -1.0}
+        fwd_len = 1.0
+    fwd_x, fwd_z = fwd["x"] / fwd_len, fwd["z"] / fwd_len
+
+    # 시야로 발견한 도망자
+    spotted: list[tuple[float, Any]] = []
+    for runner in session.state.players.values():
+        if runner.role == PlayerRole.SEEKER or runner.status in {
+            PlayerStatus.ELIMINATED, PlayerStatus.ESCAPED,
+        }:
+            continue
+        if not runner.shares_floor_with(seeker):
+            continue
+        dx = runner.position.x - seeker.position.x
+        dz = runner.position.z - seeker.position.z
+        dist = math.hypot(dx, dz)
+        if dist > vision_distance or dist <= 0:
+            continue
+        if not has_clear_catch_line(
+            (seeker.position.x, seeker.position.z),
+            (runner.position.x, runner.position.z),
+            seeker.position.floor.value,
+        ):
+            continue
+        dot = (dx / dist) * fwd_x + (dz / dist) * fwd_z
+        if dot >= math.cos(math.radians(blocker_vision_angle / 2)):
+            frozen_bonus = 4.0 if runner.status == PlayerStatus.FROZEN else 0.0
+            spotted.append((-frozen_bonus - (12.0 - dist), runner))
+
+    if spotted:
+        _, target = min(spotted, key=lambda c: c[0])
+        # S3: 차단자가 발견하면 추격자에게 구역 수준 정보 공유
+        session.blocker_zone_share = {
+            "player_id": target.player_id,
+            "zone": target.position.zone,
+            "floor": target.position.floor.value,
+            "shared_at": now,
+        }
+        # 차단자는 직접 추격 대신 퇴로를 차단한다
+        # 목표의 반대편(추격자 기준)으로 이동해 협공
+        chaser = session.state.get_player("seeker")
+        if chaser and chaser.status == PlayerStatus.ALIVE:
+            # 목표에서 추격자 반대 방향으로 오프셋
+            cx = target.position.x - chaser.position.x
+            cz = target.position.z - chaser.position.z
+            cl = max(0.01, math.hypot(cx, cz))
+            flank_x = target.position.x + (cx / cl) * 3.0
+            flank_z = target.position.z + (cz / cl) * 3.0
+        else:
+            flank_x, flank_z = target.position.x, target.position.z
+        return {
+            "state": "BLOCK",
+            "target_id": target.player_id,
+            "target": {"x": flank_x, "z": flank_z},
+            "reason": "visual_block",
+            "role": SeekerRole.BLOCKER.value,
+        }
+
+    # 빙결된 도망자 근처 경계 (캠핑 방지: 최대 8초)
+    frozen_runners = [
+        p for p in session.state.players.values()
+        if p.role != PlayerRole.SEEKER and p.status == PlayerStatus.FROZEN
+        and p.shares_floor_with(seeker)
+    ]
+    if frozen_runners:
+        closest = min(frozen_runners, key=lambda p: math.hypot(
+            p.position.x - seeker.position.x, p.position.z - seeker.position.z
+        ))
+        guard_start = getattr(session, "blocker_guard_start", 0.0)
+        if now - guard_start < 8.0:
+            return {
+                "state": "GUARD",
+                "target_id": closest.player_id,
+                "target": {"x": closest.position.x + 2.0, "z": closest.position.z},
+                "reason": "frozen_guard",
+                "role": SeekerRole.BLOCKER.value,
+            }
+
+    # 추격자와 같은 목표를 추격하지 않도록 다른 구역 순찰
+    primary_target = primary_intent.get("target", {"x": 0, "z": 0})
+    # 추격자 목표의 반대편 구역 순찰
+    patrol_x = -primary_target["x"] * 0.5
+    patrol_z = -primary_target["z"] * 0.5
+    return {
+        "state": "PATROL",
+        "target_id": None,
+        "target": {"x": patrol_x, "z": patrol_z},
+        "reason": "area_patrol",
+        "role": SeekerRole.BLOCKER.value,
+    }
 
 
 def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
-    """1층부터 반대 각도로 목표를 압박하는 두 번째 서버 권위 술래."""
+    """S3: 1층부터 활성화되는 차단자(시야 특화) 술래."""
     if session.vertical_round.policy.seeker_count < 2:
         return None
     from app.game.authority import MovementSample
@@ -268,34 +429,64 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
     seeker = session.state.get_player("seeker-2")
     if seeker is None:
         return None
+
+    # secondary_hunter_signal 초기화
+    if not hasattr(session, "secondary_hunter_signal"):
+        session.secondary_hunter_signal = None
+    if not hasattr(session, "blocker_forward"):
+        session.blocker_forward = {"x": 0.0, "z": -1.0}
+    if not hasattr(session, "blocker_zone_share"):
+        session.blocker_zone_share = None
+    if not hasattr(session, "blocker_guard_start"):
+        session.blocker_guard_start = 0.0
+
     now = time.monotonic()
     elapsed = float(CONTRACT["thinkIntervalSeconds"])
-    target = primary_intent["target"]
-    # 같은 점으로 포개지지 않고 목표의 반대 측면을 조이는 협공 오프셋.
-    flank = {"x": target["x"] - 2.4, "z": target["z"] + 2.4}
-    dx, dz = flank["x"] - seeker.position.x, flank["z"] - seeker.position.z
+    intent = _decide_blocker_intent(session, primary_intent)
+
+    # 차단자는 추격자보다 느리다 (0.85배)
+    speed_mult = primary_intent.get("speed_multiplier", 1.0)
+    stage_mult = primary_intent.get("stage_speed_multiplier", 1.0)
+    blocker_speed_factor = 0.85
+
+    dx = intent["target"]["x"] - seeker.position.x
+    dz = intent["target"]["z"] - seeker.position.z
     distance = math.hypot(dx, dz)
     if distance > 0.5:
+        session.blocker_forward = {"x": dx / distance, "z": dz / distance}
+        speed_key = "chaseSpeed" if intent["state"] in {"BLOCK", "GUARD"} else "huntSpeed"
         step = min(
-            CONTRACT["chaseSpeed"] * primary_intent["speed_multiplier"]
-            * primary_intent["stage_speed_multiplier"] * elapsed,
+            CONTRACT[speed_key] * speed_mult * stage_mult * blocker_speed_factor * elapsed,
             distance - 0.5,
         )
         seeker.position.x, seeker.position.z = _safe_hunter_step(
-            seeker.position.x, seeker.position.z, flank["x"], flank["z"], step,
+            seeker.position.x, seeker.position.z,
+            intent["target"]["x"], intent["target"]["z"], step,
             seeker.position.floor.value,
         )
         session.position_samples[seeker.player_id] = MovementSample(
             seeker.position.x, seeker.position.z, now,
         )
+
+    # S3: 차단자가 구역 정보를 공유했으면 추격자 신호에 반영
+    zone_share = getattr(session, "blocker_zone_share", None)
+    if zone_share and now - zone_share.get("shared_at", 0) < 5.0:
+        # 추격자에게 구역 수준(정확한 좌표 아님) 힌트 전달
+        if session.hunter_signal is None or (
+            now - session.hunter_signal.get("timestamp", 0) > 3.0
+        ):
+            session.hunter_signal = {
+                "player_id": zone_share["player_id"],
+                "position": intent["target"],  # 구역 중심점 (정확한 좌표 아님)
+                "strength": "blocker_share",
+                "timestamp": now,
+            }
+
     return {
-        "state": "CHASE" if primary_intent.get("target_id") else "HUNT",
-        "target_id": primary_intent.get("target_id"),
-        "target": flank,
+        **intent,
         "seeker_position": {"x": seeker.position.x, "z": seeker.position.z},
-        "reason": "pincer_flank",
-        "speed_multiplier": primary_intent["speed_multiplier"],
-        "stage_speed_multiplier": primary_intent["stage_speed_multiplier"],
+        "speed_multiplier": speed_mult,
+        "stage_speed_multiplier": stage_mult,
     }
 
 
@@ -305,7 +496,7 @@ def hunter_snapshot(session: Any) -> dict:
         **decide_hunter_intent(session), **director_snapshot(session),
         **vertical_threat_snapshot(session),
     }
-    return {**intent, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
+    return {**intent, "role": SeekerRole.CHASER.value, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
 
 
 def _safe_hunter_step(

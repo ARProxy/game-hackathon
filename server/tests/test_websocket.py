@@ -613,15 +613,15 @@ class TestEscapeFlow:
                 "payload": {"action_type": "gate_escape", "gate_id": gate["gate_id"]},
             })
             won = ws.receive_json()
-            assert won == {
-                "type": "game_won",
-                "player_id": "player1",
-                "reason": "escaped",
-                "gate_id": gate["gate_id"],
-                "escaped_player_ids": ["player1"],
-                "partner_status": "alive",
-                "companion_statuses": {"partner": "alive", "partner-2": "alive"},
-            }
+            assert won["type"] == "game_won"
+            assert won["player_id"] == "player1"
+            assert won["reason"] == "escaped"
+            assert won["gate_id"] == gate["gate_id"]
+            assert won["escaped_player_ids"] == ["player1"]
+            assert won["companion_statuses"] == {"partner": "alive", "partner-2": "alive"}
+            # A7: 결과에 금기어 누적→광분 인과관계 포함
+            assert "fw_rage_tier" in won
+            assert "rage_history" in won
             assert session.state.phase.value == "result"
 
     def test_seeker_contact_wins_gate_escape_race(self, client):

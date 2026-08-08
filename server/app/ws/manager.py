@@ -17,14 +17,23 @@ from app.ai.companion import (
     advance_companion,
     command_companion,
     companion_snapshot,
+    create_action_speech,
     request_companion_rescue,
 )
 from app.ai.hunter import (
     CONTRACT as HUNTER_CONTRACT,
+    SeekerRole,
     advance_hunter,
     advance_secondary_hunter,
     hunter_snapshot,
     record_hunter_signal,
+)
+from app.ai.speech import (
+    SpeechIntent,
+    SpeechMode,
+    VoiceCommand,
+    avoid_forbidden_words,
+    classify_voice_command,
 )
 from app.ai.spell import check_spell
 from app.game.authority import (
@@ -167,6 +176,23 @@ class ConnectionManager:
         # 빙결된 플레이어의 발화는 무시
         if player and player.status != PlayerStatus.ALIVE:
             return
+
+        # B1: 음성 명령 분류
+        voice_cmd = VoiceCommand.NONE
+        if is_final and transcript.strip():
+            voice_cmd = classify_voice_command(transcript)
+            if voice_cmd == VoiceCommand.SILENCE:
+                for runtime in session.companion_states.values():
+                    runtime.speech_history.silence(10.0)
+                await self.broadcast(room_id, {
+                    "type": "voice_command", "command": voice_cmd.value,
+                    "player_id": player_id,
+                })
+            elif voice_cmd != VoiceCommand.NONE:
+                await self.broadcast(room_id, {
+                    "type": "voice_command", "command": voice_cmd.value,
+                    "player_id": player_id,
+                })
 
         # 확정된 정상 발화는 내용 판정에 앞서 위치 기반 청각 핑을 만든다.
         # 술래는 안전 발화와 금기어 발화를 동일한 순서로 감지할 수 있다.
@@ -529,13 +555,8 @@ class ConnectionManager:
             await self.broadcast(room_id, {
                 "type": "game_won", "player_id": player_id,
                 "reason": "vertical_school_escape",
-                "escaped_player_ids": sorted(session.escaped_player_ids),
-                "companion_statuses": {
-                    actor_id: session.state.get_player(actor_id).status.value
-                    for actor_id in DEFAULT_AI_PARTNER_IDS
-                    if session.state.get_player(actor_id)
-                },
                 "progression": session.vertical_round.to_dict(),
+                **session.result_payload(),  # A7
             })
 
         elif action_type == "use_elevator":
@@ -553,6 +574,19 @@ class ConnectionManager:
             await self.broadcast(room_id, {
                 "type": "actor_floor_changed", "route": "elevator", **event,
             })
+            # A5: 엘리베이터 도착 소리 핑 — 술래 감지
+            if "sound_ping" in event:
+                ping = event["sound_ping"]
+                record_hunter_signal(
+                    session, player_id, ping["position"], "elevator",
+                )
+                await self.broadcast(room_id, {
+                    "type": "sound_ping",
+                    "player_id": player_id,
+                    "position": ping["position"],
+                    "source": "elevator_arrival",
+                    "radius": ping["radius"],
+                })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
             for companion_id in DEFAULT_AI_PARTNER_IDS:
@@ -883,22 +917,12 @@ class ConnectionManager:
         player.escape()
         session.escaped_player_ids.add(player_id)
         self._cancel_room_freeze_timeouts(room_id)
-        partner = session.state.get_player("partner")
-        companion_statuses = {
-            companion_id: (
-                session.state.get_player(companion_id).status.value
-                if session.state.get_player(companion_id) else "missing"
-            )
-            for companion_id in DEFAULT_AI_PARTNER_IDS
-        }
         await self.broadcast(room_id, {
             "type": "game_won",
             "player_id": player_id,
             "reason": "escaped",
             "gate_id": session.active_gate_id,
-            "escaped_player_ids": sorted(session.escaped_player_ids),
-            "partner_status": partner.status.value if partner else "missing",
-            "companion_statuses": companion_statuses,
+            **session.result_payload(),  # A7
         })
 
     async def _handle_inspect_prop(
@@ -1279,20 +1303,58 @@ class ConnectionManager:
             raise
 
     async def _handle_companion_action(self, room_id: str, companion_id: str, action: dict) -> None:
+        session = session_manager.get_or_create(room_id)
+        runtime = session.companion_states.get(companion_id)
+        partner = session.state.get_player(companion_id)
+        seeker = session.state.get_player("seeker")
+
+        # S4+S5: 구조화된 발화 이벤트 생성
+        seeker_dist = None
+        if partner and seeker and partner.shares_floor_with(seeker):
+            seeker_dist = math.hypot(
+                partner.position.x - seeker.position.x,
+                partner.position.z - seeker.position.z,
+            )
+        intent_state = runtime.last_intent["state"] if runtime and runtime.last_intent else ""
+        speech_event = create_action_speech(
+            companion_id, action, intent_state, seeker_dist,
+            forbidden_words=session.state.forbidden_words,
+        )
+
+        # B2: 중복 억제
+        if speech_event and runtime:
+            if runtime.speech_history.should_suppress(speech_event.text, speech_event.intent):
+                speech_event = None
+            elif speech_event:
+                runtime.speech_history.record(speech_event.text, speech_event.intent)
+
+        # S5: AI 발화의 소리 핑
+        if speech_event and partner and speech_event.ping_radius > 0:
+            record_hunter_signal(
+                session, companion_id,
+                {"x": partner.position.x, "z": partner.position.z},
+                "ai_speech",
+                speech_mode=speech_event.mode,
+            )
+
         if action["type"] == "report":
+            message_text = speech_event.text if speech_event else (
+                f"{action['zone']} 구역에서 {action['appearance'].get('color', '알 수 없는 색')} "
+                f"{action['appearance'].get('mesh', '물체')} 후보를 발견했어."
+            )
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report", "companion_id": companion_id,
                 "prop_id": action["prop_id"], "zone": action["zone"],
                 "appearance": action["appearance"],
-                "message": (
-                    f"{action['zone']} 구역에서 {action['appearance'].get('color', '알 수 없는 색')} "
-                    f"{action['appearance'].get('mesh', '물체')} 후보를 발견했어. 이 특징과 맞는지 말해줘."
-                ),
+                "message": message_text,
+                **({"speech_intent": speech_event.intent.value, "speech_mode": speech_event.mode.value} if speech_event else {}),
             }, companion_id)
         elif action["type"] == "seeker_report":
+            message_text = speech_event.text if speech_event else "술래를 봤어! 마지막 위치를 공유할게."
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_seeker_report", "companion_id": companion_id,
-                "position": action["position"], "message": "술래를 봤어! 마지막 위치를 공유할게.",
+                "position": action["position"], "message": message_text,
+                **({"speech_intent": speech_event.intent.value, "speech_mode": speech_event.mode.value} if speech_event else {}),
             }, companion_id)
         elif action["type"] == "inspect":
             controller_id = next(iter(self.rooms[room_id].players), "")
@@ -1317,9 +1379,13 @@ class ConnectionManager:
                     VerticalRoundPhase.FLOOR_2.value: "2층 연결 장치를 찾았어. 지금 조작할게.",
                     VerticalRoundPhase.FLOOR_1.value: "1층 관제 장치를 찾았어. 출구 잠금을 해제할게.",
                 }.get(phase, "활성 장치를 찾았어. 주변을 확인할게.")
+            # S4: 금기어 회피 적용
+            message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
             delivered = await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report", "companion_id": companion_id,
                 "message": message, "phase": phase,
+                "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
             if delivered and phase != VerticalRoundPhase.FLOOR_3.value:
                 await self._handle_action(
@@ -1374,11 +1440,21 @@ class ConnectionManager:
         await self._finish_if_team_frozen(room_id)
 
     async def _broadcast_companion_speech(self, room_id: str, message: dict, companion_id: str = "partner") -> bool:
-        """AI의 월드 발화도 금기어를 거치며 안전할 때만 팀에 전달한다."""
+        """AI의 월드 발화도 금기어를 거치며 안전할 때만 팀에 전달한다.
+
+        S4: 금기어 회피 연출 적용
+        S5: 발화 모드에 따른 소리 핑
+        """
         session = session_manager.get_or_create(room_id)
         partner = session.state.get_player(companion_id)
         runtime = session.companion_states[companion_id]
         text = str(message.get("message") or message.get("reply") or "")
+
+        # S4: 금기어 회피 연출 — 금기어가 포함되어 있으면 회피 표현으로 교체
+        text, was_avoided = avoid_forbidden_words(text, session.state.forbidden_words)
+        if was_avoided:
+            message = {**message, "message": text, "forbidden_avoidance": True}
+
         result = session.engine.check(text)
         if result.is_forbidden and partner and partner.status == PlayerStatus.ALIVE:
             partner.freeze()
