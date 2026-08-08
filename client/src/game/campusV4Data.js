@@ -94,6 +94,7 @@ const KIND = {
   dance: { f: 'wood', b: 'classBase', w: 'classWall', tone: 'warm' },
   food: { f: 'foodFloor', b: 'foodBase', w: 'foodWall', tone: 'cool' },
   kitchen: { f: 'kitchenFloor', b: 'kitchenBase', w: 'kitchenWall', tone: 'cool' },
+  serving: { f: 'kitchenFloor', b: 'kitchenBase', w: 'kitchenWall', tone: 'cool' },
   store: { f: 'storeFloor', b: 'storeBase', w: 'storeWall', tone: 'dim' },
   duty: { f: 'classFloor', b: 'classBase', w: 'classWall', tone: 'warm' },
   machine: { f: 'machFloor', b: 'machBase', w: 'machWall', tone: 'dim' },
@@ -121,7 +122,7 @@ export const TONE = { warm: '#ffe6bd', cool: '#d5e8ff', soft: '#f0e9dd', dim: '#
 const PROGRAM = {
   F1: {
     N: [['staff', '교무실', 'admin', 2], ['admin', '행정실', 'admin'], ['principal', '교장실', 'admin'], ['health', '보건실', 'health']],
-    W: [['cafeteria', '급식실', 'food', 2], ['kitchen', '조리실', 'kitchen'], ['serving', '배식준비실', 'kitchen'], ['pantry', '식품창고', 'store'], ['janitor', '청소용구실', 'store']],
+    W: [['cafeteria', '급식실', 'food', 2], ['serving', '배식준비실', 'serving'], ['kitchen', '조리실', 'kitchen'], ['pantry', '식품창고', 'store'], ['janitor', '청소용구실', 'store']],
     E: [['counsel', '상담실', 'admin'], ['wee', '위(Wee)클래스', 'health'], ['print', '인쇄실', 'service'], ['council', '학생회실', 'council'], ['security', '경비·방재실', 'security', 2]],
   },
   F2: {
@@ -153,6 +154,16 @@ export const CLASSROOM_LAYOUTS = {
   f3_c35: 'exam',
 }
 
+/** 복도만 공유해서는 suite가 아니다. 공유 칸막이에 실제 문이 있어야 하는 기능실 묶음. */
+export const REQUIRED_SUITE_EDGES = [
+  ['f1_cafeteria', 'f1_serving'],
+  ['f1_serving', 'f1_kitchen'],
+  ['f2_music', 'f2_musicprep'],
+  ['f2_science', 'f2_sciprep'],
+  ['f3_broadcast', 'f3_bcprep'],
+]
+const SUITE_EDGE_KEYS = new Set(REQUIRED_SUITE_EDGES.map(([a, b]) => `${a}:${b}`))
+
 function fixedProgram() {
   return JSON.parse(JSON.stringify(PROGRAM))
 }
@@ -170,7 +181,7 @@ const B1_ROOMS = [
 
 /** 내선 인터폰이 걸리는 방 — 사람이 상주하거나 수업하는 공간 */
 const IP_KINDS = new Set(['classroom', 'lab', 'computer', 'library', 'music', 'art', 'dance',
-  'av', 'broadcast', 'admin', 'health', 'security', 'food', 'kitchen', 'duty', 'lobby', 'machine',
+  'av', 'broadcast', 'admin', 'health', 'security', 'food', 'kitchen', 'serving', 'duty', 'lobby', 'machine',
   'pottery', 'calli', 'club', 'council', 'english', 'evhall', 'archive', 'shelter'])
 
 const R = (x0, z0, x1, z1) => ({ x0, z0, x1, z1 })
@@ -368,8 +379,9 @@ export function buildCampus(opts = {}) {
     }
     // 일반교실의 차이는 수업 장면으로 읽혀야 한다. 벽 파손·붕괴·가구 전량 적재는
     // 특별실/서비스실에만 두어 10개 교실의 고유 레이아웃을 실제 플레이에서 보존한다.
-    const safe = (e) => !['stair', 'toilet', 'machine', 'broadcast', 'classroom'].includes(e.meta.kind)
-    const canEmpty = (e) => e.meta.kind !== 'classroom'
+    const protectedSuiteRooms = new Set(REQUIRED_SUITE_EDGES.flat())
+    const safe = (e) => !protectedSuiteRooms.has(e.meta.id) && !['stair', 'toilet', 'machine', 'broadcast', 'classroom'].includes(e.meta.kind)
+    const canEmpty = (e) => !protectedSuiteRooms.has(e.meta.id) && e.meta.kind !== 'classroom'
     // 1층 붕괴는 지하가 있는 북측 윙에서만 — 아래가 없는 곳은 뚫을 수 없다
     const b1Under = (e) => e.f === 'F1' && e.rect.z1 <= -50.5 && e.rect.x0 >= -55.9 && e.rect.x1 <= 7.9
     for (const e of pick(1, (e) => safe(e) && b1Under(e))) COND[e.meta.id] = 'collapse'
@@ -682,7 +694,7 @@ export function buildCampus(opts = {}) {
         stackPile(14)
       } else if (layoutId === 'pods') {
         // 네 개의 모둠 섬. 섬 사이 십자 통로는 1.1 m 이상 남긴다.
-        for (const pu of [-1.65, 1.65]) for (const pv of [2.65, 5.0]) {
+        for (const pu of [-1.65, 1.65]) for (const pv of [3.1, 5.0]) {
           deskLocal(pu - 0.62, pv - 0.42, Math.PI)
           deskLocal(pu + 0.62, pv - 0.42, Math.PI)
           deskLocal(pu - 0.62, pv + 0.42, 0)
@@ -691,11 +703,11 @@ export function buildCampus(opts = {}) {
         localBox(0, localDepth - 1.05, 1.15, [1.8, 0.7, 0.35], '#6f8a68')
       } else if (layoutId === 'exam') {
         // 간격을 넓힌 시험 대형. 중앙 세로 통로가 정면에서 뒷문까지 열린다.
-        for (const u of [-2.15, 0, 2.15]) for (const v of [2.05, 3.25, 4.45, 5.65]) deskLocal(u, v)
+        for (const u of [-2.15, 0, 2.15]) for (const v of [2.25, 3.35, 4.45, 5.55]) deskLocal(u, v)
         localBox(-localWidth / 2 + 0.38, 3.0, 1.15, [0.22, 0.75, 1.2], '#d6cfaa')
       } else if (layoutId === 'horseshoe') {
         // 발표·토론형 U자. 중앙 3.4×3.1 m를 완전히 비운다.
-        for (const v of [2.35, 3.55, 4.75]) {
+        for (const v of [2.55, 3.65, 4.75]) {
           deskLocal(-2.45, v, Math.PI / 2)
           deskLocal(2.45, v, -Math.PI / 2)
         }
@@ -703,7 +715,7 @@ export function buildCampus(opts = {}) {
         localBox(0, 3.75, 0.03, [2.2, 0.03, 1.4], '#7b8f91', 0, { navRole: 'floor-decal' })
       } else if (layoutId === 'project') {
         // 제작 수업형: 양옆 벤치 + 중앙 공동 작업대, 앞뒤 회유 동선.
-        for (const v of [2.15, 3.25, 4.35, 5.45]) {
+        for (const v of [2.35, 3.35, 4.35, 5.35]) {
           deskLocal(-2.45, v, Math.PI / 2)
           deskLocal(2.45, v, -Math.PI / 2)
         }
@@ -712,8 +724,8 @@ export function buildCampus(opts = {}) {
         localBox(0, 5.45, 1.35, [2.4, 1.3, 0.18], '#b88756')
       } else {
         // 정돈형 기준 교실. 두 개의 종방향 통로와 뒤쪽 횡통로를 유지한다.
-        for (const u of [-2.25, -0.75, 0.75, 2.25]) for (const v of [2.05, 3.2, 4.35, 5.5]) deskLocal(u, v)
-        localCylinder(localWidth / 2 - 0.45, 1.9, 0.38, 0.28, 0.48, '#4b7046')
+        for (const u of [-2.25, -0.75, 0.75, 2.25]) for (const v of [2.25, 3.3, 4.35, 5.4]) deskLocal(u, v)
+        localCylinder(localWidth / 2 - 0.45, 4.9, 0.38, 0.28, 0.48, '#4b7046')
       }
     } else if (kind === 'lab') {
       grid(2, 3, 2.6, 2.0, (x, z) => {
@@ -811,8 +823,8 @@ export function buildCampus(opts = {}) {
         localBox(0, localDepth - 0.12, 1.7, [5.4, 2.2, 0.08], '#1a1e22', 0, { landmarkRole: 'screen', navRole: 'wall-mounted' })
         localBox(0, 6.15, 0.16, [5.2, 0.16, 0.8], '#59636d', 0, { landmarkRole: 'stage' })
         for (let i = 0; i < 3; i++) {
-          const v = 2.0 + i * 1.25
-          localBox(0, v, 0.12 + i * 0.18, [4.6, 0.24 + i * 0.36, 0.9], '#4c5560')
+          const v = 2.4 + i * 1.25
+          localBox(0, v, 0.12 + i * 0.18, [4.0, 0.24 + i * 0.36, 0.9], '#4c5560')
           for (const u of [-1.65, -0.55, 0.55, 1.65]) localBox(u, v, 0.5 + i * 0.36, [0.46, 0.06, 0.46], PAL.chair)
         }
         localBox(0, 1.25, 2.72, [0.42, 0.24, 0.55], '#30383f', 0, { landmarkRole: 'projector', navRole: 'ceiling-mounted' })
@@ -832,23 +844,34 @@ export function buildCampus(opts = {}) {
       V(f, [r.x1 - 0.4, y + 0.95, cz], [0.07, 0.07, d - 1.2], PAL.wood)
       V(f, [r.x0 + 0.6, y + 0.25, r.z1 - 1.0], [1.6, 0.4, 1.0], '#5a5f66')
     } else if (kind === 'food') {
-      const n = Math.floor((w - 3) / 2.6)
-      for (let i = 0; i < n; i++) for (let j = 0; j < 3; j++) {
-        const x = r.x0 + 2.0 + i * 2.6, z = r.z0 + 2.0 + j * 1.9
-        V(f, [x, y + 0.73, z], [2.2, 0.07, 0.8], '#c3c8c4')
-        V(f, [x, y + 0.36, z], [0.18, 0.7, 0.5], PAL.steel)
-        for (const sz of [-0.62, 0.62]) V(f, [x, y + 0.42, z + sz], [2.1, 0.06, 0.3], '#8f959a')
+      // 두 식탁 열 사이의 중앙 회유축과 양 끝 복도문을 비운다.
+      for (const u of [-2.8, 0, 2.8]) for (const v of [2.35, 4.85]) {
+        localBox(u, v, 0.73, [2.15, 0.07, 0.78], '#c3c8c4')
+        localBox(u, v, 0.36, [0.18, 0.7, 0.5], PAL.steel)
+        for (const dv of [-0.62, 0.62]) localBox(u, v + dv, 0.42, [2.05, 0.06, 0.3], '#8f959a')
       }
-      V(f, [cx, y + 0.5, r.z1 - 0.9], [w - 3, 1.0, 0.9], '#b7532c')  // 배식대
-      V(f, [cx, y + 1.02, r.z1 - 0.9], [w - 3, 0.06, 0.95], PAL.steel)
-      V(f, [cx, y + 1.75, r.z1 - 0.55], [w - 3, 0.5, 0.1], PAL.steel)
+      // 배식준비실로 이어지는 측면문 가운데를 비운 2분할 배식대.
+      localBox(localWidth / 2 - 0.48, 5.8, 0.5, [2.0, 1.0, 0.82], '#b7532c', Math.PI / 2, { landmarkRole: 'serving-counter' })
+      localBox(localWidth / 2 - 0.48, 5.8, 1.02, [2.05, 0.06, 0.9], PAL.steel, Math.PI / 2)
+    } else if (kind === 'serving') {
+      // 식당→배식준비→조리실을 잇는 측면문 축(v=방 중앙)은 항상 비운다.
+      localBox(-0.95, 1.35, 0.5, [3.6, 1.0, 0.75], '#b7532c', 0, { landmarkRole: 'tray-line' })
+      localBox(-0.95, 1.35, 1.02, [3.65, 0.06, 0.82], PAL.steel)
+      for (const u of [-1.9, 0, 1.9]) {
+        localBox(u, 5.65, 0.82, [1.2, 1.64, 0.72], '#a8b0b5')
+        localBox(u, 5.27, 1.15, [1.0, 0.55, 0.05], '#30383f')
+      }
+      localBox(2.45, 6.65, 0.46, [0.72, 0.92, 0.58], '#737c82', 0, { landmarkRole: 'tray-return' })
     } else if (kind === 'kitchen') {
-      V(f, [cx, y + 0.45, r.z0 + 1.0], [w - 2, 0.9, 0.8], PAL.steel)
-      V(f, [cx, y + 0.92, r.z0 + 1.0], [w - 1.9, 0.06, 0.9], '#c4cace')
-      V(f, [cx, y + 2.15, r.z0 + 1.0], [w - 2.4, 0.7, 1.1], '#8e969b')   // 후드
-      for (let i = 0; i < 3; i++) CY(f, [r.x0 + 1.4 + i * 1.5, y + 0.5, cz + 0.4], 0.5, 1.0, '#7f878c')  // 국솥
-      V(f, [r.x1 - 0.9, y + 1.0, r.z1 - 1.2], [1.2, 2.0, 0.8], '#a8b0b5')  // 냉장고
-      V(f, [r.x1 - 0.9, y + 1.0, r.z1 - 1.2 - 0.42], [1.15, 1.9, 0.04], '#c3cacd')
+      // 외벽 조리선과 중앙 작업섬. 양쪽 suite 문을 잇는 횡축은 v=3.6에서 1.2m 폭으로 열린다.
+      localBox(0, 6.55, 0.45, [4.8, 0.9, 0.75], PAL.steel)
+      localBox(0, 6.55, 0.92, [4.9, 0.06, 0.82], '#c4cace')
+      localBox(0, 6.6, 2.2, [4.5, 0.7, 0.95], '#8e969b', 0, { navRole: 'ceiling-mounted' })
+      localBox(0, 5.2, 0.45, [3.2, 0.9, 0.78], PAL.steel, 0, { landmarkRole: 'prep-island' })
+      localBox(0, 5.2, 0.92, [3.3, 0.06, 0.86], '#c4cace')
+      for (const u of [-0.8, 0, 0.8]) localCylinder(u, 2.5, 0.5, 0.48, 1.0, '#7f878c')
+      localBox(-2.5, 5.5, 1.0, [1.0, 2.0, 0.8], '#a8b0b5', 0, { landmarkRole: 'refrigerator' })
+      localBox(-2.5, 5.08, 1.0, [0.94, 1.9, 0.04], '#c3cacd')
     } else if (kind === 'store' || kind === 'service') {
       const n = Math.max(2, Math.floor((d - 1.5) / 1.6))
       for (let i = 0; i < n; i++) shelf(r.x0 + 0.7, r.z0 + 1.2 + i * 1.6, 1.4, 0.6, true)
@@ -941,7 +964,7 @@ export function buildCampus(opts = {}) {
       V(f, [r.x0 + 0.7, y + 0.82, r.z1 - 0.8], [0.28, 0.04, 0.06], '#2b3036')
     } else if (kind === 'english') {
       // 3개 언어 포드. 4원탁 중첩을 없애고 문→중앙→뒤 포드의 1.2m 축을 남긴다.
-      const pods = [[-1.65, 2.8], [1.65, 2.8], [0, 5.35]]
+      const pods = [[-1.65, 3.15], [1.65, 3.15], [0, 5.35]]
       for (const [pu, pv] of pods) {
         localCylinder(pu, pv, 0.72, 0.64, 0.06, PAL.desk)
         localCylinder(pu, pv, 0.35, 0.14, 0.70, PAL.deskLeg)
@@ -1430,12 +1453,18 @@ export function buildCampus(opts = {}) {
     const onCore = (v) => corePlanes.some((p) => Math.abs(p - v) < 0.25)
     for (const r of rows) {
       if (onCore(r.b)) continue
+      const next = rows.find((candidate) => candidate.wing === r.wing && Math.abs(candidate.a - r.b) < 0.02)
+      const currentId = `${f.toLowerCase()}_${r.id}`
+      const nextId = next ? `${f.toLowerCase()}_${next.id}` : null
+      const suiteOpening = nextId && SUITE_EDGE_KEYS.has(`${currentId}:${nextId}`)
+        ? [{ c: r.axis === 'x' ? mid(BAND.N.room[0], BAND.N.room[1]) : mid(BAND[r.wing].room[0], BAND[r.wing].room[1]), w: 1.4, type: 'door', head: 2.2, doorKind: 'suite' }]
+        : []
       if (r.axis === 'x') {
-        wall(f, y, 'z', r.b, BAND.N.room[0], BAND.N.room[1], { c: PAL.classWall, base: PAL.classBase })
+        wall(f, y, 'z', r.b, BAND.N.room[0], BAND.N.room[1], { c: PAL.classWall, base: PAL.classBase, openings: suiteOpening })
       } else {
         for (const band of [BAND.W.room, BAND.E.room]) {
           if ((r.wing === 'W') !== (band === BAND.W.room)) continue
-          wall(f, y, 'x', r.b, band[0], band[1], { c: PAL.classWall, base: PAL.classBase })
+          wall(f, y, 'x', r.b, band[0], band[1], { c: PAL.classWall, base: PAL.classBase, openings: suiteOpening })
         }
       }
     }
@@ -2233,8 +2262,8 @@ export const PROP_SLOTS = [
   { id: 'p_f1_staff_desk', room: 'f1_staff', p: [-36, -54.2], floor: 'F1', surfaceY: 0.78, note: '교무실 책상 서류함' },
   { id: 'p_f1_admin_cab', room: 'f1_admin', p: [-24, -54.2], floor: 'F1', surfaceY: 1.8, note: '행정실 캐비닛 위' },
   { id: 'p_f1_health_bed', room: 'f1_health', p: [-8, -54.2], floor: 'F1', surfaceY: 0.62, note: '보건실 침대 옆' },
-  { id: 'p_f1_cafe_tray', room: 'f1_cafeteria', p: [-52.2, -39], floor: 'F1', surfaceY: 0.73, note: '급식실 배식대' },
-  { id: 'p_f1_kitchen_rack', room: 'f1_kitchen', p: [-52.2, -29], floor: 'F1', surfaceY: 0.92, note: '조리대 상단' },
+  { id: 'p_f1_cafe_tray', room: 'f1_cafeteria', p: [-54.4, -33.08], floor: 'F1', surfaceY: 1.05, note: '급식실 suite측 배식대' },
+  { id: 'p_f1_kitchen_rack', room: 'f1_kitchen', p: [-55.15, -22.38], floor: 'F1', surfaceY: 0.95, note: '외벽 조리대 상단' },
   { id: 'p_f1_council_box', room: 'f1_council', p: [4.2, -22], floor: 'F1', surfaceY: 0.75, note: '학생회실 의견함' },
   { id: 'p_f1_lobby_shoe', room: 'f1_core_se_b', p: [3.6, -1.8], floor: 'F1', surfaceY: 1.8, note: '중앙 현관 신발장 위' },
   { id: 'p_f1_counsel_sofa', room: 'f1_counsel', p: [4.2, -42], floor: 'F1', surfaceY: 0.44, note: '상담실 소파 쿠션 밑' },
@@ -2242,8 +2271,8 @@ export const PROP_SLOTS = [
   { id: 'p_f2_c24_podium', room: 'f2_c24', p: [-16, -54.2], floor: 'F2', surfaceY: 4.55, note: '2-4 교탁 서랍' },
   { id: 'p_f2_sci_hood', room: 'f2_science', p: [4.2, -42], floor: 'F2', surfaceY: 4.5, note: '흄후드 안' },
   { id: 'p_f2_prep_shelf', room: 'f2_sciprep', p: [4.2, -34], floor: 'F2', surfaceY: 5.0, note: '과학준비실 선반' },
-  { id: 'p_f2_lib_table', room: 'f2_library', p: [-52.2, -38], floor: 'F2', surfaceY: 4.34, note: '도서실 열람 테이블' },
-  { id: 'p_f2_lib_shelf', room: 'f2_library', p: [-52.2, -33], floor: 'F2', surfaceY: 5.1, note: '서가 3단' },
+  { id: 'p_f2_lib_table', room: 'f2_library', p: [-52.0, -39.9], floor: 'F2', surfaceY: 4.38, note: '도서실 동측 열람 테이블' },
+  { id: 'p_f2_lib_shelf', room: 'f2_library', p: [-52.8, -35.3], floor: 'F2', surfaceY: 5.3, note: '도서실 중앙 서가 4단' },
   { id: 'p_f2_music_piano', room: 'f2_music', p: [-52.2, -26], floor: 'F2', surfaceY: 4.72, note: '피아노 위' },
   { id: 'p_f2_comp_desk', room: 'f2_computer', p: [4.2, -26], floor: 'F2', surfaceY: 4.35, note: '컴퓨터실 본체 뒤' },
   { id: 'p_f3_c31_desk', room: 'f3_c31', p: [-40, -54.2], floor: 'F3', surfaceY: 7.95, note: '3-1 뒷자리 책상' },
@@ -2258,12 +2287,12 @@ export const PROP_SLOTS = [
 
 /** 미션지 슬롯 10 — 한 판 3개 활성. doc 필드는 room-mission-design.md 후보 번호 */
 export const MISSION_SLOTS = [
-  { id: 'm_f1_kitchen', name: '배전반 퓨즈 복구', tags: ['solo'], room: 'f1_kitchen', p: [-52.2, -29], floor: 'F1', hintZone: '1층 서익 조리실' },
+  { id: 'm_f1_kitchen', name: '배전반 퓨즈 복구', tags: ['solo'], room: 'f1_kitchen', p: [-55.1, -22.4], floor: 'F1', hintZone: '1층 서익 조리실 외벽' },
   { id: 'm_f1_admin', name: '캐비닛 암호', tags: ['solo'], room: 'f1_admin', p: [-24, -54.2], floor: 'F1', hintZone: '1층 북측 행정실' },
   { id: 'm_f1_security', name: 'CCTV 음성 관제', tags: ['coop', 'voice'], room: 'f1_security', p: [4.2, -14], floor: 'F1', hintZone: '1층 동익 경비·방재실', doc: 'M16' },
   { id: 'm_f2_interphone', name: '교실 인터폰 릴레이', tags: ['coop', 'voice'], room: 'f2_c23', p: [-24, -54.2], floor: 'F2', hintZone: '2층 북측 교실 · 송수신 2실', doc: 'M06' },
   { id: 'm_f2_science', name: '약품 배열 순서', tags: ['solo'], room: 'f2_science', p: [4.2, -42], floor: 'F2', hintZone: '과학실' },
-  { id: 'm_f2_library', name: '청구기호 정렬', tags: ['coop'], room: 'f2_library', p: [-52.2, -38], floor: 'F2', hintZone: '도서실' },
+  { id: 'm_f2_library', name: '청구기호 정렬', tags: ['coop'], room: 'f2_library', p: [-52.8, -35.3], floor: 'F2', hintZone: '도서실 중앙 서가' },
   { id: 'm_f3_broadcast', name: '방송실 비밀번호', tags: ['solo', 'voice'], room: 'f3_broadcast', p: [4.2, -42], floor: 'F3', hintZone: '3층 동익 방송실', doc: 'M01' },
   { id: 'm_f3_dance', name: '동시 스위치', tags: ['coop'], room: 'f3_dance', p: [-52.2, -38], floor: 'F3', hintZone: '무용실' },
   { id: 'm_f3_deck', name: '피뢰 계측기 보정', tags: ['coop'], p: [-24, -27.6], floor: 'F3', hintZone: '3층 남향 전망 데크' },
@@ -2276,11 +2305,11 @@ export const MISSION_SLOTS = [
  */
 export const TRAP_SLOTS = [
   { id: 't_f1_cor_n', p: [-30, -48.3], floor: 'F1', kind: 'gap', risk: 2 },
-  { id: 't_f1_kitchen', p: [-52.2, -29], floor: 'F1', kind: 'noise', risk: 3, note: '조리대 스테인리스 — 밟으면 두 층 위까지 울린다' },
+  { id: 't_f1_kitchen', p: [-53.5, -22.4], floor: 'F1', kind: 'noise', risk: 3, note: '중앙 작업섬 스테인리스 — 밟으면 두 층 위까지 울린다' },
   { id: 't_f1_tail_w', p: [-46.3, -8], floor: 'F1', kind: 'deadend', risk: 3, note: '서익 남단 — 계단실 문이 유일한 출구' },
   { id: 't_f2_bridge_w', p: [-40, -34], floor: 'F2', kind: 'shortcut', risk: 3, note: '브릿지 서단 — 건너면 빠르지만 3층 복도 전체에 노출' },
   { id: 't_f2_bridge_e', p: [-8, -34], floor: 'F2', kind: 'shortcut', risk: 3, note: '브릿지 동단 — 같은 대가' },
-  { id: 't_f2_lib', p: [-52.2, -38], floor: 'F2', kind: 'noise', risk: 2, note: '도서실 서가 — 밀면 넘어지고 소리가 길다' },
+  { id: 't_f2_lib', p: [-52.8, -32.9], floor: 'F2', kind: 'noise', risk: 2, note: '도서실 북측 서가 — 밀면 넘어지고 소리가 길다' },
   { id: 't_f3_deck', p: [-24, -27.6], floor: 'F3', kind: 'deadend', risk: 4, note: '전망 데크 — 되돌아 나오는 길뿐. 대신 운동장이 다 보인다' },
   { id: 't_f3_cor_w', p: [-46.3, -20], floor: 'F3', kind: 'gap', risk: 2, note: '방화문 구간 — 닫으면 시야가 끊긴다' },
   { id: 't_spiral', p: [-24, -34], floor: 'OUT', kind: 'vertical', risk: 3, note: '원형 계단 — 세 층이 한 점에서 만난다' },

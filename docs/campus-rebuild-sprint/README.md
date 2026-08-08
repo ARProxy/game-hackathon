@@ -16,3 +16,4 @@
 - [Batch 002 — 미션·프롭 표면 앵커 복구](./batch-002.md)
 - [Batch 003 — Rapier 문 갱신 안정화](./batch-003.md)
 - [Batch 004 — 특별실 공간 문법과 실제 문 접근 검사](./batch-004.md)
+- [Batch 005 — 기능실 suite와 캡슐 진입 여유](./batch-005.md)

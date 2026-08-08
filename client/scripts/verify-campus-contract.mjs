@@ -6,6 +6,7 @@ import {
   FLOOR_Y,
   MISSION_SLOTS,
   PROP_SLOTS,
+  REQUIRED_SUITE_EDGES,
 } from '../src/game/campusV4Data.js'
 import collisionContract from '../src/game/serverCollisionContract.json' with { type: 'json' }
 
@@ -13,13 +14,13 @@ const campus = buildCampus({ seed: 0 })
 const alternate = buildCampus({ seed: 1 })
 
 const expected = {
-  solids: 2377,
-  visuals: 5773,
+  solids: 2392,
+  visuals: 5814,
   plates: 549,
-  cyls: 1352,
+  cyls: 1355,
   fixtures: 150,
   rooms: 80,
-  doors: 122,
+  doors: 127,
 }
 
 for (const [key, count] of Object.entries(expected)) {
@@ -55,6 +56,12 @@ const roomById = Object.fromEntries(campus.rooms.map((room) => [room.id, room]))
 const localVisuals = campus.visuals.filter((item) => item.roomId && item.local)
 const localCylinders = campus.cyls.filter((item) => item.roomId && item.local)
 const localPrimitives = [...localVisuals, ...localCylinders]
+const localToWorld = (room, u, v) => {
+  if (room.wing === 'N') return [room.cx - u, room.z1 - v]
+  if (room.wing === 'S') return [room.cx + u, room.z0 + v]
+  if (room.wing === 'W') return [room.x1 - v, room.cz + u]
+  return [room.x0 + v, room.cz - u]
+}
 const localMetrics = (room, item) => {
   const localWidth = ['N', 'S'].includes(room.wing) ? room.x1 - room.x0 : room.z1 - room.z0
   const localDepth = ['N', 'S'].includes(room.wing) ? room.z1 - room.z0 : room.x1 - room.x0
@@ -69,8 +76,24 @@ for (const item of localPrimitives) {
   const room = roomById[item.roomId]
   assert.ok(room, `Tagged prop references missing room ${item.roomId}`)
   const { localWidth, localDepth, extentU, extentV } = localMetrics(room, item)
+  const [expectedX, expectedZ] = localToWorld(room, item.local[0], item.local[1])
+  assert.ok(Math.abs(item.p[0] - expectedX) <= 0.001 && Math.abs(item.p[2] - expectedZ) <= 0.001, `${room.id} prop local/world coordinates diverged`)
   assert.ok(Math.abs(item.local[0]) + extentU <= localWidth / 2 + 0.02, `${room.id} prop escaped room width`)
   assert.ok(item.local[1] - extentV >= -0.02 && item.local[1] + extentV <= localDepth + 0.02, `${room.id} prop escaped room depth`)
+  const primitiveHeight = item.s?.[1] ?? item.h
+  const floorBottom = item.p[1] - primitiveHeight / 2 - FLOOR_Y[room.floor]
+  const floorTop = item.p[1] + primitiveHeight / 2 - FLOOR_Y[room.floor]
+  if (item.navRole === 'floor-decal') assert.ok(floorTop <= 0.1, `${room.id} floor-decal is tall enough to block movement`)
+  if (item.navRole === 'ceiling-mounted') assert.ok(floorBottom >= 1.8, `${room.id} ceiling-mounted prop hangs into player volume`)
+  if (item.navRole === 'wall-mounted') {
+    const boundaryGap = Math.min(
+      Math.abs(item.local[0] - extentU + localWidth / 2),
+      Math.abs(item.local[0] + extentU - localWidth / 2),
+      Math.abs(item.local[1] - extentV),
+      Math.abs(item.local[1] + extentV - localDepth),
+    )
+    assert.ok(boundaryGap <= 0.25, `${room.id} wall-mounted prop is not attached to a wall`)
+  }
 }
 
 const doorById = Object.fromEntries(campus.doors.map((door) => [door.id, door]))
@@ -113,10 +136,11 @@ for (const room of campus.rooms.filter((item) => localPrimitives.some((visual) =
       const tangentOverlaps = side.tangentAxis === 'u'
         ? u1 > side.tangent - tangentHalf && u0 < side.tangent + tangentHalf
         : v1 > side.tangent - tangentHalf && v0 < side.tangent + tangentHalf
-      const inwardOverlaps = side.key === 'front' ? v1 > 0 && v0 < 1.5
-        : side.key === 'back' ? v0 < localDepth && v1 > localDepth - 1.5
-          : side.key === 'left' ? u1 > -localWidth / 2 && u0 < -localWidth / 2 + 1.5
-            : u0 < localWidth / 2 && u1 > localWidth / 2 - 1.5
+      const approachDepth = 1.5 + 0.4
+      const inwardOverlaps = side.key === 'front' ? v1 > 0 && v0 < approachDepth
+        : side.key === 'back' ? v0 < localDepth && v1 > localDepth - approachDepth
+          : side.key === 'left' ? u1 > -localWidth / 2 && u0 < -localWidth / 2 + approachDepth
+            : u0 < localWidth / 2 && u1 > localWidth / 2 - approachDepth
       assert.equal(
         tangentOverlaps && inwardOverlaps,
         false,
@@ -146,16 +170,18 @@ const conditionCounts = Object.values(campus.conditions).reduce((counts, conditi
 const normalRate = (conditionCounts.intact ?? 0) / Object.keys(campus.conditions).length
 assert.ok(normalRate >= 0.7 && normalRate <= 0.8, `Normal school baseline must stay at 70-80%, got ${normalRate}`)
 
-for (const [mainId, prepId] of [
-  ['f2_science', 'f2_sciprep'],
-  ['f2_music', 'f2_musicprep'],
-  ['f3_broadcast', 'f3_bcprep'],
-]) {
+for (const [mainId, prepId] of REQUIRED_SUITE_EDGES) {
   const main = roomById[mainId]
   const prep = roomById[prepId]
   assert.ok(main && prep, `${mainId}/${prepId} suite is missing`)
   assert.equal(main.floor, prep.floor, `${mainId}/${prepId} must stay on the same floor`)
-  assert.ok(Math.hypot(main.cx - prep.cx, main.cz - prep.cz) <= 12, `${mainId}/${prepId} suite is too far apart`)
+  const xGap = Math.max(0, main.x0 - prep.x1, prep.x0 - main.x1)
+  const zGap = Math.max(0, main.z0 - prep.z1, prep.z0 - main.z1)
+  assert.ok(Math.max(xGap, zGap) <= 0.25, `${mainId}/${prepId} suite does not share a boundary`)
+  const mainLinks = new Set(campus.cells.find((cell) => cell.id === mainId)?.links)
+  const prepLinks = new Set(campus.cells.find((cell) => cell.id === prepId)?.links)
+  const sharedDoors = [...mainLinks].filter((id) => prepLinks.has(id)).map((id) => doorById[id])
+  assert.ok(sharedDoors.some((door) => door?.kind === 'suite' && door.w >= 0.9), `${mainId}/${prepId} lacks a shared suite door`)
 }
 
 const alternateById = Object.fromEntries(alternate.rooms.map((room) => [room.id, room]))
