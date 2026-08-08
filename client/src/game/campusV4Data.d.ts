@@ -91,6 +91,7 @@ export interface CampusData {
 export const MAP_SIZE: number
 export const FLOOR_HEIGHT: number
 export const FLOOR_Y: Record<CampusFloor, number>
+export const EVS: Array<{ id: string; name: string; x: V2; z: V2; roof: boolean }>
 export const TONE: Record<string, string>
 export const SPAWNS: {
   human: { p: V2; floor: CampusFloor; note: string }
