@@ -96,11 +96,20 @@ class IntercomMission:
     completed: bool = False
 
     @staticmethod
-    def generate_sequence(count: int = 3, seed: int | None = None) -> list[dict]:
-        """도형+색 시퀀스를 생성한다."""
+    def generate_sequence(
+        count: int = 3,
+        seed: int | None = None,
+        forbidden_words: list[str] | None = None,
+    ) -> list[dict]:
+        """현재 금기어와 충돌하지 않는 도형+색 시퀀스를 생성한다."""
         rng = random.Random(seed)
-        shapes = rng.sample(SHAPE_POOL, min(count, len(SHAPE_POOL)))
-        colors = rng.sample(COLOR_POOL, min(count, len(COLOR_POOL)))
+        forbidden = set(forbidden_words or ())
+        safe_shapes = [shape for shape in SHAPE_POOL if shape not in forbidden]
+        safe_colors = [color for color in COLOR_POOL if color not in forbidden]
+        if len(safe_shapes) < count or len(safe_colors) < count:
+            raise ValueError("인터폰 정답 어휘를 금기어와 겹치지 않게 구성할 수 없다")
+        shapes = rng.sample(safe_shapes, count)
+        colors = rng.sample(safe_colors, count)
         return [
             {"shape": shapes[i], "color": colors[i]}
             for i in range(count)
@@ -335,7 +344,9 @@ def create_vertical_missions(
     """금기어 목록과 시드로 2층/1층/지하 미션을 초기화한다."""
     effective_seed = seed if seed is not None else 0
     intercom = IntercomMission(
-        sequence=IntercomMission.generate_sequence(3, seed=seed),
+        sequence=IntercomMission.generate_sequence(
+            3, seed=seed, forbidden_words=forbidden_words,
+        ),
     )
     simultaneous = SimultaneousMission()
     basement = create_basement_mission(seed=effective_seed)

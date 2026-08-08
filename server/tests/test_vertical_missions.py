@@ -311,6 +311,14 @@ class TestIntercomFlow:
         with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
             submit_intercom_answer(session, "human", "아무 말")
 
+    def test_generated_answer_vocabulary_excludes_current_forbidden_words(self) -> None:
+        forbidden = ["빨간", "파란", "초록"]
+        sequence = IntercomMission.generate_sequence(
+            3, seed=42, forbidden_words=forbidden,
+        )
+
+        assert not ({item["color"] for item in sequence} & set(forbidden))
+
     def test_submit_intercom_waits_for_ai_report(self) -> None:
         session, human = active_session()
         advance_to_floor(session, human, VerticalRoundPhase.FLOOR_2)

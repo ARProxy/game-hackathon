@@ -3,6 +3,7 @@
 import asyncio
 import json
 import unittest
+from unittest.mock import AsyncMock
 
 from app.ai.companion import TRAP_CONTRACT, advance_companion
 from app.game.map_slots import get_map_slot
@@ -185,6 +186,37 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         last = self.websocket.messages[-1]
         assert last.get("forbidden_avoidance") is True
         assert "빨간" not in last.get("message", "")
+
+    async def test_field_station_activation_does_not_depend_on_ai_speech_delivery(self) -> None:
+        from app.game.vertical_flow import final_station_position
+
+        self.session.round_data = None
+        self.session.vertical_round.phase = VerticalRoundPhase.FIELD_FINAL
+        self.session.vertical_round.final_route = FinalRoute.FIELD
+        partner = self.session.state.get_player("partner")
+        x, y, z = final_station_position("partner")
+        partner.position.x, partner.position.y, partner.position.z = x, y, z
+        partner.position.floor = WorldFloor.FIELD
+        self.session.companion_states["partner"].last_intent = {
+            "state": "EXPLORE_ZONE",
+            "target_id": "field_final",
+            "target": {"x": x, "z": z},
+            "reason": "vertical_stage_objective",
+        }
+        self.manager._broadcast_companion_speech = AsyncMock(return_value=False)
+
+        await self.manager._handle_companion_action(
+            self.room_id,
+            "partner",
+            {"type": "vertical_objective", "phase": "field_final"},
+        )
+
+        assert "partner" in self.session.final_station_actor_ids
+        assert any(
+            message["type"] == "final_station_activated"
+            and message["actor_id"] == "partner"
+            for message in self.websocket.messages
+        )
 
     async def test_ai_escape_is_server_validated_and_broadcast(self) -> None:
         partner = self.session.state.get_player("partner")

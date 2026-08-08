@@ -395,3 +395,24 @@ def test_intercom_companion_prepositions_but_waits_for_human_to_start_device() -
 
     assert report_action["type"] == "intercom_report"
     assert report_action["sequence"] == session.vertical_missions.intercom.sequence
+
+
+def test_companion_holds_active_floor_role_when_human_returns_to_previous_floor() -> None:
+    session = make_session("companion-hold-active-floor")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    partner = session.state.get_player("partner")
+    seeker = session.state.get_player("seeker")
+    partner.position.floor = WorldFloor.F2
+    seeker.position.floor = WorldFloor.ROOF
+    session.companion_states["partner"].player_floor_changed = {
+        "floor": "F3",
+        "position": {"x": -36.0, "y": 7.2, "z": -39.7, "floor": "F3", "zone": "f3_core_nw"},
+        "timestamp": time.monotonic(),
+    }
+
+    intent = decide_companion_intent(session, "partner")
+
+    assert intent["state"] != "FOLLOW_TO_FLOOR"
+    assert intent["reason"] == "intercom_ai_position"
+    assert session.companion_states["partner"].player_floor_changed is not None

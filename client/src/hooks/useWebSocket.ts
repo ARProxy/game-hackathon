@@ -228,6 +228,10 @@ export default function useWebSocket() {
           : '학교 안의 위협 상태가 바뀌었습니다.')
         break
 
+      case 'seeker_phase_event':
+        addSubtitle('system', data.message ?? '학교 안에서 술래의 움직임이 달라졌습니다.')
+        break
+
       case 'vertical_mission_feedback':
         useGameStore.getState().setActiveMissionPrompt(
           `다시 전달하세요. ${data.prompt ?? '도구·출입구·개방 행동을 모두 표현해야 합니다.'}`,
@@ -242,6 +246,22 @@ export default function useWebSocket() {
             ? `기호의 순서가 다릅니다. 남은 시도 ${Math.max(0, data.max_attempts - data.attempts)}회.`
             : `기호가 빠졌습니다. 남은 시도 ${Math.max(0, data.max_attempts - data.attempts)}회.`)
         break
+
+      case 'intercom_ai_ready':
+        addSubtitle(data.companion_id ?? 'partner', '인터폰 판독 위치에 도착했습니다. 기호 보고를 확인하세요.')
+        break
+
+      case 'simultaneous_ai_ready':
+        addSubtitle(data.companion_id ?? 'partner', '반대편 장치 준비 완료. A 장치에서 E를 누르세요.')
+        break
+
+      case 'basement_device_status': {
+        const status = data.device_status ?? {}
+        const stateLabel = status.state === 'standby' ? '대기 중'
+          : status.state === 'active' ? '작동 중' : '꺼짐'
+        addSubtitle(data.companion_id ?? 'partner', `${status.name ?? '지하 장치'} · ${stateLabel}`)
+        break
+      }
 
       case 'device_activated':
         addSubtitle('system', data.success

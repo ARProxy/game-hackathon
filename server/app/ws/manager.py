@@ -376,11 +376,7 @@ class ConnectionManager:
                 else:
                     session.companion_command = None
                     session.companion_goal_started = None
-                delivered = await self._broadcast_companion_speech(room_id, payload)
-                if not delivered:
-                    session.companion_command = None
-                    session.companion_goal_started = None
-                    return
+                await self._broadcast_companion_speech(room_id, payload)
                 if decision.target:
                     for companion_id in DEFAULT_AI_PARTNER_IDS:
                         command_companion(
@@ -409,6 +405,41 @@ class ConnectionManager:
         })
         if event["next_phase"] in {"field_final", "basement_final"}:
             await self._lock_dynamic_forbidden(room_id, session)
+
+        phase_event = {
+            "floor_3": {
+                "event": "first_reveal",
+                "message": "3층 계단실의 붉은 실루엣이 모습을 드러냈습니다.",
+                "audio_cue": "distant_metal_footsteps",
+            },
+            "floor_2": {
+                "event": "full_hunt",
+                "message": "사이렌이 가까워집니다. 술래의 완전 추격이 시작됐습니다.",
+                "audio_cue": "seeker_siren_start",
+            },
+            "floor_1": {
+                "event": "pincer_reveal",
+                "message": "지하 방화문에서 충격음이 울립니다. 서로 다른 두 실루엣이 1층에 나타났습니다.",
+                "audio_cue": "basement_fire_door_impact",
+            },
+            "field_final": {
+                "event": "enraged_field",
+                "message": "붉은 경광과 사이렌이 운동장을 뒤덮습니다. 두 술래가 광분했습니다.",
+                "audio_cue": "final_enraged_siren",
+            },
+            "basement_final": {
+                "event": "enraged_basement",
+                "message": "기계실 조명이 붉게 점멸합니다. 두 술래가 비상 터널을 봉쇄합니다.",
+                "audio_cue": "final_enraged_siren",
+            },
+        }.get(event["next_phase"])
+        if phase_event:
+            await self.broadcast(room_id, {
+                "type": "seeker_phase_event",
+                "phase": event["next_phase"],
+                "seeker_threat": session.vertical_progression_payload()["seeker_threat"],
+                **phase_event,
+            })
 
         if event["completed_phase"] == VerticalRoundPhase.ROOFTOP_INTRO.value:
             seeker = session.state.get_player("seeker")
@@ -1947,6 +1978,10 @@ class ConnectionManager:
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
             await self.broadcast(room_id, {
+                "type": "intercom_ai_ready",
+                "companion_id": companion_id,
+            })
+            await self.broadcast(room_id, {
                 "type": "rooftop_signal_progress",
                 "actor_id": companion_id,
                 **signal,
@@ -1982,13 +2017,13 @@ class ConnectionManager:
                 }.get(phase, "활성 장치를 찾았어. 주변을 확인할게.")
             # S4: 금기어 회피 적용
             message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
-            delivered = await self._broadcast_companion_speech(room_id, {
+            await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report", "companion_id": companion_id,
                 "message": message, "phase": phase,
                 "speech_intent": SpeechIntent.DECLARE_ACTION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
-            if delivered and phase == VerticalRoundPhase.FIELD_FINAL.value:
+            if phase == VerticalRoundPhase.FIELD_FINAL.value:
                 await self._handle_action(
                     room_id, companion_id, {"action_type": "interact_stage_mission"},
                 )
@@ -2012,12 +2047,16 @@ class ConnectionManager:
             # AI가 동시 조작 장치에 도착하여 준비 완료 보고
             message = "준비됐어! 동시에 작동하자!"
             message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
-            delivered = await self._broadcast_companion_speech(room_id, {
+            await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report", "companion_id": companion_id,
                 "message": message, "phase": action.get("phase", ""),
                 "speech_intent": SpeechIntent.DECLARE_ACTION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
+            await self.broadcast(room_id, {
+                "type": "simultaneous_ai_ready",
+                "companion_id": companion_id,
+            })
         elif action["type"] == "basement_device_report":
             # AI가 지하 장치에 도착하여 상태를 보고
             device_status = action.get("device_status", {})
@@ -2034,6 +2073,12 @@ class ConnectionManager:
                 "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
+            await self.broadcast(room_id, {
+                "type": "basement_device_status",
+                "companion_id": companion_id,
+                "device_id": action.get("device_id"),
+                "device_status": device_status,
+            })
 
     async def _complete_partner_rescue(self, room_id: str, target_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)
@@ -2090,7 +2135,6 @@ class ConnectionManager:
         """
         session = session_manager.get_or_create(room_id)
         partner = session.state.get_player(companion_id)
-        runtime = session.companion_states[companion_id]
         text = str(message.get("message") or message.get("reply") or "")
 
         # S4: 금기어 회피 연출 — 금기어가 포함되어 있으면 회피 표현으로 교체
@@ -2100,30 +2144,13 @@ class ConnectionManager:
 
         result = session.engine.check(text)
         if result.is_forbidden and partner and partner.status == PlayerStatus.ALIVE:
-            # v5에서 AI는 비공개 단어를 알고 피하는 조력자다. 회피 후에도
-            # 남은 위험 표현은 발화를 폐기하며 AI 빙결이나 단어 공개로 쓰지 않는다.
-            if session.dynamic_forbidden_enabled:
-                logger.info(
-                    "suppressed unsafe companion speech: room=%s companion=%s",
-                    room_id,
-                    companion_id,
-                )
-                return False
-            partner.freeze()
-            record_hunter_signal(
-                session, partner.player_id,
-                {"x": partner.position.x, "z": partner.position.z}, "freeze",
+            # v5 정본: AI는 비공개 단어를 알고 피하는 조력자다. 회피 후에도
+            # 위험 표현이 남으면 발화만 폐기하고 AI를 빙결시키거나 단어를 공개하지 않는다.
+            logger.info(
+                "suppressed unsafe companion speech: room=%s companion=%s",
+                room_id,
+                companion_id,
             )
-            await self.broadcast(room_id, {
-                "type": "freeze", "player_id": partner.player_id,
-                "matched_word": result.matched_word,
-                "matched_stage": "ai_speech", "confidence": result.confidence,
-                "position": {"x": partner.position.x, "z": partner.position.z},
-                "remaining_seconds": session.state.freeze_timeout_sec,
-                "danger": {"seeker_last_seen": runtime.last_seeker_seen},
-            })
-            self._schedule_freeze_timeout(room_id, partner.player_id)
-            await self._finish_if_team_frozen(room_id)
             return False
         await self.broadcast(room_id, message)
         return True

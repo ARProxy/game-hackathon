@@ -126,6 +126,15 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
             ):
                 has_reason_to_stay = True
 
+            # 현재 활성 층의 협동 역할을 맡은 AI는 인간이 단서 회수나 우회를
+            # 위해 직전 층으로 돌아가도 미션 위치를 버리고 따라가지 않는다.
+            if (
+                session.vertical_progression_enabled
+                and current_floor == session.vertical_round.policy.active_floor
+                and player_floor != current_floor
+            ):
+                has_reason_to_stay = True
+
             if not has_reason_to_stay:
                 # 플레이어를 따라 이동 (자발적 판단)
                 runtime.player_floor_changed = None  # 이벤트 소비

@@ -191,6 +191,11 @@ class TestVerticalStageInteraction:
             assert advanced["completed_phase"] == "rooftop_intro"
             assert advanced["next_phase"] == "floor_3"
             assert advanced["progression"]["active_floor"] == "F3"
+            reveal = ws.receive_json()
+            assert reveal["type"] == "seeker_phase_event"
+            assert reveal["event"] == "first_reveal"
+            assert reveal["seeker_threat"] == "omen"
+            assert ws.receive_json()["route"] == "seeker_reveal"
 
     def test_intercom_speech_advances_floor_two_with_ordered_clue(self, client):
         from app.game.progression import WorldFloor
@@ -311,6 +316,10 @@ class TestVerticalStageInteraction:
             assert advanced["type"] == "vertical_stage_advanced"
             assert advanced["next_phase"] == "field_final"
             assert advanced["clue"] == {"word": "탈출", "order": 3, "total": 3}
+            enraged = ws.receive_json()
+            assert enraged["type"] == "seeker_phase_event"
+            assert enraged["event"] == "enraged_field"
+            assert enraged["seeker_threat"] == "enraged"
 
     def test_field_final_ready_never_sends_completed_spell(self, client):
         from app.game.progression import WorldFloor
