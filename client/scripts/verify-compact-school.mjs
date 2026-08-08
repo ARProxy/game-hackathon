@@ -15,6 +15,7 @@ const EPSILON = 0.001
 const CAPSULE_RADIUS = 0.36
 const SERVER_BARRIER_ROLES = new Set([
   'wall', 'window', 'rail', 'parapet', 'equipmentCollider', 'hvac', 'missionConsole', 'entryPost',
+  'fieldFence',
 ])
 const isServerBarrier = (item) => {
   if (!item.collider || !SERVER_BARRIER_ROLES.has(item.role)) return false
@@ -37,6 +38,7 @@ assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').le
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'parapet').length, 8, '옥상 외곽과 중정에 연속 파라펫이 필요하다')
 
 const doorById = Object.fromEntries(COMPACT_SCHOOL.doors.map((door) => [door.id, door]))
+const slots = verticalMapContract.slots
 for (const id of ['roof_to_f3', 'roof_se_locked', 'stair_nw_F3', 'stair_se_F3', 'stair_nw_F2', 'stair_se_F2', 'main_entry']) {
   assert.ok(doorById[id], `수직 동선 문 ${id}가 없다`)
 }
@@ -54,9 +56,12 @@ const pointInsideBoxXZ = (x, z, box, padding = 0) => {
 const slabAt = (floor, x, z) => COMPACT_SCHOOL.boxes.some((item) => (
   item.f === floor && item.role === 'slab' && pointInsideBoxXZ(x, z, item)
 ))
-for (const floor of ['F1', 'F2', 'F3', 'ROOF']) {
+const walkableSurfaceAt = (floor, x, z) => floor === 'FIELD'
+  ? COMPACT_SCHOOL.boxes.some((item) => item.f === 'OUT' && item.role === 'fieldGround' && pointInsideBoxXZ(x, z, item))
+  : slabAt(floor, x, z)
+for (const floor of ['F1', 'F2', 'F3', 'ROOF', 'B1', 'FIELD']) {
   for (const node of COMPACT_SCHOOL.navNodes.filter((item) => item.floor === floor)) {
-    assert.ok(slabAt(floor, node.p[0], node.p[2]), `${node.id} 아래에 바닥이 없다`)
+    assert.ok(walkableSurfaceAt(floor, node.p[0], node.p[2]), `${node.id} 아래에 바닥이 없다`)
     const blocker = COMPACT_SCHOOL.boxes.find((item) => (
       item.f === floor && isServerBarrier(item)
       && pointInsideBoxXZ(node.p[0], node.p[2], item, CAPSULE_RADIUS)
@@ -64,13 +69,26 @@ for (const floor of ['F1', 'F2', 'F3', 'ROOF']) {
     assert.equal(blocker, undefined, `${node.id}가 ${blocker?.id ?? '장벽'}의 캡슐 여유 폭을 침범한다`)
   }
 }
+for (const id of ['b1_partition_1', 'b1_partition_2', 'b1_partition_3']) {
+  assert.ok(doorById[id], `지하 설비실을 연결하는 문 ${id}가 없다`)
+}
+for (const id of ['b1_device_valve', 'b1_device_panel', 'b1_device_generator']) {
+  assert.ok(COMPACT_SCHOOL.boxes.some((item) => item.id === id), `지하 파이널 설비 ${id}가 없다`)
+}
+for (const [slotId, stationId] of [
+  ['FIELD_FINAL_STATION_A', 'field_station_a'],
+  ['FIELD_FINAL_STATION_B', 'field_station_b'],
+  ['FIELD_FINAL_STATION_C', 'field_station_c'],
+]) {
+  const station = COMPACT_SCHOOL.boxes.find((item) => item.id === stationId)
+  assert.deepEqual([station?.p[0], station?.p[2]], [slots[slotId].position[0], slots[slotId].position[2]], `${slotId}와 실제 운동장 장치가 어긋났다`)
+}
 for (const floor of ['F2', 'F3', 'ROOF']) {
   assert.equal(slabAt(floor, -36, -44), false, `${floor} 북서 계단 보이드가 슬래브에 막혔다`)
   assert.equal(slabAt(floor, -12, -12), false, `${floor} 남동 계단 보이드가 슬래브에 막혔다`)
 }
 assert.equal(slabAt('ROOF', -24, -28), false, 'ㅁ자 건물의 중앙 중정이 지붕으로 덮였다')
 
-const slots = verticalMapContract.slots
 const missionConsole = COMPACT_SCHOOL.boxes.find((item) => item.id === 'roof_signal_center')
 assert.ok(missionConsole, '옥상 중앙 신호 콘솔이 없다')
 assert.deepEqual(

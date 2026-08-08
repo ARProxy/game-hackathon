@@ -1,4 +1,4 @@
-export type CompactFloor = 'OUT' | 'B1' | 'F1' | 'F2' | 'F3' | 'ROOF'
+export type CompactFloor = 'OUT' | 'FIELD' | 'B1' | 'F1' | 'F2' | 'F3' | 'ROOF'
 export type V3 = [number, number, number]
 
 export interface CompactBox {

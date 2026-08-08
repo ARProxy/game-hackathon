@@ -7,7 +7,7 @@
 import { PAL, TONE } from './campusV4Data.js'
 
 export const FLOOR_HEIGHT = 3.6
-export const FLOOR_Y = { OUT: 0, B1: -3.6, F1: 0, F2: 3.6, F3: 7.2, ROOF: 10.8 }
+export const FLOOR_Y = { OUT: 0, FIELD: 0, B1: -3.6, F1: 0, F2: 3.6, F3: 7.2, ROOF: 10.8 }
 export const FLOOR_ORDER = ['B1', 'F1', 'F2', 'F3', 'ROOF']
 
 export const BUILDING_BOUNDS = { x0: -48, x1: 0, z0: -48, z1: -8 }
@@ -508,7 +508,31 @@ function addBasementShell() {
   addFullWallSegment(floor, 'x', -40, -40, -8, { lower: 'machBase', upper: 'machWall' })
   addFullWallSegment(floor, 'z', -40, -48, -40, { lower: 'machBase', upper: 'machWall' })
   addFullWallSegment(floor, 'z', -8, -48, -40, { lower: 'machBase', upper: 'machWall' })
-  for (const x of [-32, -24, -16]) addFullWallSegment(floor, 'z', x, -48, -40, { lower: 'machBase', upper: 'machWall' })
+  for (const [index, x] of [-32, -24, -16].entries()) {
+    addWallRun(floor, 'z', x, -48, -40, [{
+      center: -43,
+      width: 1.45,
+      type: 'door',
+      id: `b1_partition_${index + 1}`,
+      kind: 'room',
+      head: 2.35,
+      material: 'extSteelDark',
+    }], { lower: 'machBase', upper: 'machWall' })
+  }
+
+  // 지하 파이널의 세 설비는 의미 슬롯 바로 뒤에 배치한다. 상호작용 지점은
+  // 통로에 남겨 플레이어와 서버 길찾기 actor가 장치 안으로 파고들지 않는다.
+  const devices = [
+    { id: 'b1_device_valve', x: -30, material: 'signBlue', width: 1.75 },
+    { id: 'b1_device_panel', x: -18, material: 'safetyYellow', width: 1.8 },
+    { id: 'b1_device_generator', x: -12, material: 'safetyRed', width: 2.1 },
+  ]
+  for (const device of devices) {
+    addBox({ id: device.id, floor, p: [device.x, y + 0.92, -45.55], s: [device.width, 1.84, 0.72], material: 'extSteelDark', role: 'equipmentCollider' })
+    addBox({ id: `${device.id}_display`, floor, p: [device.x, y + 1.15, -45.16], s: [device.width * 0.58, 0.45, 0.045], material: device.material, role: 'emissive', collider: false })
+    boxes[boxes.length - 1].emissive = true
+  }
+  addCylinder({ id: 'b1_device_valve_wheel', floor, p: [-30, y + 1.15, -45.08], r: 0.34, h: 0.12, material: 'safetyRed', role: 'valveWheel', rot: [Math.PI / 2, 0, 0] })
   for (let i = 0; i < 6; i++) {
     const x = -38 + i * 5.6
     addBox({ floor, p: [x, y + 2.9, -44], s: [1.1, 0.1, 0.25], material: TONE.dim, role: 'emissive', collider: false })
@@ -517,10 +541,60 @@ function addBasementShell() {
   }
 }
 
+function addFieldFence(id, axis, fixed, start, end) {
+  const floor = 'FIELD'
+  const length = end - start
+  const center = (start + end) / 2
+  addBox({
+    id: `${id}_collider`,
+    floor,
+    p: axis === 'x' ? [center, 0.8, fixed] : [fixed, 0.8, center],
+    s: axis === 'x' ? [length, 1.6, 0.12] : [0.12, 1.6, length],
+    material: 'extSteelDark', role: 'fieldFence', visible: false,
+  })
+  for (const [index, height] of [0.45, 0.95, 1.45].entries()) addBox({
+    id: `${id}_rail_${index + 1}`,
+    floor,
+    p: axis === 'x' ? [center, height, fixed] : [fixed, height, center],
+    s: axis === 'x' ? [length, 0.055, 0.055] : [0.055, 0.055, length],
+    material: 'extSteel', role: 'fenceRail', collider: false,
+  })
+  const count = Math.max(1, Math.floor(length / 4))
+  for (let index = 0; index <= count; index++) {
+    const offset = start + (length * index) / count
+    addBox({
+      id: `${id}_post_${index}`,
+      floor,
+      p: axis === 'x' ? [offset, 0.8, fixed] : [fixed, 0.8, offset],
+      s: [0.09, 1.6, 0.09], material: 'extSteel', role: 'fencePost', collider: false,
+    })
+  }
+}
+
 function addGrounds() {
   addBox({ floor: 'OUT', p: [-24, -0.22, -20], s: [72, 0.44, 80], material: 'asphalt', role: 'ground' })
   addBox({ floor: 'OUT', p: [-24, -0.08, -28], s: [C.x1 - C.x0, 0.16, C.z1 - C.z0], material: 'courtyardTile', role: 'courtyardGround' })
   addBox({ floor: 'OUT', p: [-24, -0.05, 12], s: [48, 0.1, 32], material: 'grass', role: 'fieldGround' })
+  // 운동장 파이널은 입구와 탈출구만 비운 안전 펜스 안에서 진행한다.
+  addFieldFence('field_fence_west', 'z', -48, -4, 28)
+  addFieldFence('field_fence_east', 'z', 0, -4, 28)
+  for (const [side, start, end] of [['west', -48, -27], ['east', -21, 0]]) {
+    addFieldFence(`field_fence_north_${side}`, 'x', -4, start, end)
+    addFieldFence(`field_fence_south_${side}`, 'x', 28, start, end)
+  }
+  for (const [index, inset] of [0, 1.2, 2.4].entries()) {
+    addBox({ id: `field_lane_${index + 1}`, floor: 'FIELD', p: [-24, 0.015 + inset * 0.001, 12], s: [48 - inset * 2, 0.025, 32 - inset * 2], material: 'white', role: 'fieldLine', collider: false })
+    addBox({ id: `field_lane_inlay_${index + 1}`, floor: 'FIELD', p: [-24, 0.025 + inset * 0.001, 12], s: [47.82 - inset * 2, 0.03, 31.82 - inset * 2], material: 'grass', role: 'fieldInlay', collider: false })
+  }
+  for (const [id, x, z, material] of [
+    ['field_station_a', -38, 8, 'safetyGreen'],
+    ['field_station_b', -24, 14, 'safetyYellow'],
+    ['field_station_c', -10, 8, 'signBlue'],
+  ]) {
+    addBox({ id, floor: 'FIELD', p: [x, 0.48, z], s: [1.25, 0.96, 0.72], material: 'extSteelDark', role: 'missionStation', collider: false })
+    addBox({ id: `${id}_display`, floor: 'FIELD', p: [x, 0.77, z - 0.38], s: [0.72, 0.3, 0.04], material, role: 'emissive', collider: false })
+    boxes[boxes.length - 1].emissive = true
+  }
   // 남측 현관 캐노피와 학교 이름 띠.
   addBox({ floor: 'OUT', p: [-24, 2.75, B.z1 + 1.4], s: [8.4, 0.24, 3.1], material: 'extConcrete', role: 'entryCanopy' })
   for (const x of [-27.2, -20.8]) addBox({ floor: 'OUT', p: [x, 1.35, B.z1 + 2.5], s: [0.24, 2.7, 0.24], material: 'extFrame', role: 'entryPost' })
@@ -573,6 +647,21 @@ function addNavigation() {
     }
     navNodes.push(corridorNode, roomNode)
   }
+
+  const basementSpine = [[-36, -43], [-28, -43], [-20, -43], [-12, -43], [-9.5, -43]]
+  basementSpine.forEach(([x, z], index) => navNodes.push({
+    id: `B1_ring_${index}`, floor: 'B1', p: [x, FY.B1, z],
+    links: [index > 0 ? `B1_ring_${index - 1}` : null, index + 1 < basementSpine.length ? `B1_ring_${index + 1}` : null].filter(Boolean),
+  }))
+
+  const fieldRing = [
+    [-42, 0], [-24, 0], [-6, 0], [-6, 14],
+    [-6, 24], [-24, 24], [-42, 24], [-42, 14],
+  ]
+  fieldRing.forEach(([x, z], index) => navNodes.push({
+    id: `FIELD_ring_${index}`, floor: 'FIELD', p: [x, FY.FIELD, z],
+    links: [`FIELD_ring_${(index + fieldRing.length - 1) % fieldRing.length}`, `FIELD_ring_${(index + 1) % fieldRing.length}`],
+  }))
 }
 
 addGrounds()

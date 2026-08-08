@@ -40,10 +40,15 @@ const SIGNAL_SLOT: Record<string, string> = {
 }
 const TRANSITION_SLOTS: Record<string, string[]> = {
   'ROOF>F3': ['ROOF_TO_F3_FIRE_DOOR'],
+  'F3>ROOF': ['F3_TO_F2_STAIR_WEST'],
   'F3>F2': ['F3_TO_F2_STAIR_WEST', 'F3_TO_F2_STAIR_EAST'],
+  'F2>F3': ['F2_TO_F1_STAIR_WEST', 'F2_TO_F1_STAIR_EAST'],
   'F2>F1': ['F2_TO_F1_STAIR_WEST', 'F2_TO_F1_STAIR_EAST'],
+  'F1>F2': ['F1_STAIR_ARRIVAL_WEST', 'F1_STAIR_ARRIVAL_EAST'],
   'F1>FIELD': ['F1_TO_FIELD_FIRE_DOOR'],
+  'FIELD>F1': ['FIELD_FINAL_ENTRY'],
   'F1>B1': ['F1_TO_BASEMENT_FIRE_DOOR'],
+  'B1>F1': ['BASEMENT_FINAL_ENTRY'],
 }
 
 function projector(view: ViewBounds) {
@@ -66,32 +71,38 @@ function currentObjectives(
   rooftopSignal: RooftopSignalState | null,
 ): MapPoint[] {
   if (!progression?.enabled) return []
+  const transitionPoints = (targetFloor: string, label: string) => (
+    TRANSITION_SLOTS[`${floor}>${targetFloor}`] ?? []
+  ).map((slotId) => slotPoint(slotId, label)).filter((point): point is MapPoint => point !== null)
+  if (progression.active_floor && floor !== progression.active_floor) {
+    return transitionPoints(progression.active_floor, `${progression.active_floor} 이동`)
+  }
+
+  let objectives: MapPoint[] = []
   if (progression.phase === 'escape_open') {
     const slotId = progression.final_route === 'basement' ? 'BASEMENT_ESCAPE_GATE' : 'FIELD_ESCAPE_GATE'
     const objective = slots[slotId]?.floor === floor ? slotPoint(slotId, '열린 탈출구') : null
-    return objective ? [objective] : []
-  }
-  if (progression.active_floor && floor !== progression.active_floor) {
-    return (TRANSITION_SLOTS[`${floor}>${progression.active_floor}`] ?? [])
-      .map((slotId) => slotPoint(slotId, `${progression.active_floor} 이동`))
-      .filter((point): point is MapPoint => point !== null)
-  }
-  if (progression.phase === 'rooftop_intro' && rooftopSignal?.nextSignalId) {
+    objectives = objective ? [objective] : []
+  } else if (progression.phase === 'rooftop_intro' && rooftopSignal?.nextSignalId) {
     const objective = slotPoint(SIGNAL_SLOT[rooftopSignal.nextSignalId], '현재 점등 신호')
-    return objective ? [objective] : []
-  }
-  if (progression.phase === 'basement_final') {
-    return [
+    objectives = objective ? [objective] : []
+  } else if (progression.phase === 'basement_final') {
+    objectives = [
       ['BASEMENT_DEVICE_PANEL', '배전반'],
       ['BASEMENT_DEVICE_VALVE', '급수 밸브'],
       ['BASEMENT_DEVICE_GENERATOR', '비상 발전기'],
     ].map(([slotId, label]) => slotPoint(slotId, label)).filter((point): point is MapPoint => point !== null)
+  } else {
+    const slotId = MISSION_SLOT[progression.phase]
+    const objective = slotId && slots[slotId]?.floor === floor
+      ? slotPoint(slotId, PHASE_LABEL[progression.phase] ?? '현재 미션')
+      : null
+    objectives = objective ? [objective] : []
   }
-  const slotId = MISSION_SLOT[progression.phase]
-  const objective = slotId && slots[slotId]?.floor === floor
-    ? slotPoint(slotId, PHASE_LABEL[progression.phase] ?? '현재 미션')
-    : null
-  return objective ? [objective] : []
+
+  const previousFloor = progression.accessible_floors.find((candidate) => candidate !== progression.active_floor)
+  if (previousFloor) objectives.push(...transitionPoints(previousFloor, `${previousFloor} 복귀`))
+  return objectives
 }
 
 function MapRect({ view, x0, z0, x1, z1, fill, stroke = '#587080' }: {

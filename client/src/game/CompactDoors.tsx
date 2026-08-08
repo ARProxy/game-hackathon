@@ -1,7 +1,7 @@
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { COMPACT_SCHOOL, type CompactDoor, type CompactFloor } from './compactSchoolData.js'
 import { useGameStore } from '../stores/gameStore'
@@ -9,17 +9,20 @@ import type { PlayerHandle } from './Player'
 
 const INTERACTION_DISTANCE = 1.75
 const MOTION_EPSILON = 0.0005
+const NO_ACCESSIBLE_FLOORS: string[] = []
 const _playerPosition = new THREE.Vector3()
 
-function stageDoorUnlocked(door: CompactDoor, activeFloor: string | null | undefined) {
-  return Boolean(door.unlockFloor && door.unlockFloor === activeFloor)
+function stageDoorUnlocked(door: CompactDoor, accessibleFloors: readonly string[]) {
+  if (!door.unlockFloor) return false
+  const accessible = new Set(accessibleFloors)
+  return accessible.has(door.f) && accessible.has(door.unlockFloor)
 }
 
 export default function CompactDoors({ visibleFloors, playerRef }: {
   visibleFloors?: CompactFloor[]
   playerRef: React.RefObject<PlayerHandle | null>
 }) {
-  const activeFloor = useGameStore((state) => state.verticalProgression?.active_floor)
+  const accessibleFloors = useGameStore((state) => state.verticalProgression?.accessible_floors ?? NO_ACCESSIBLE_FLOORS)
   const visible = useMemo(() => new Set(visibleFloors), [visibleFloors])
   const bodies = useRef(new Map<string, RapierRigidBody>())
   const openness = useRef(new Map<string, number>())
@@ -28,11 +31,11 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
   const nearbyRef = useRef<CompactDoor | null>(null)
   const [nearby, setNearby] = useState<CompactDoor | null>(null)
 
-  const isUnlocked = (door: CompactDoor) => {
+  const isUnlocked = useCallback((door: CompactDoor) => {
     if (door.permanentlyLocked) return false
-    if (door.unlockFloor) return stageDoorUnlocked(door, activeFloor)
+    if (door.unlockFloor) return stageDoorUnlocked(door, accessibleFloors)
     return true
-  }
+  }, [accessibleFloors])
 
   useEffect(() => {
     for (const door of COMPACT_SCHOOL.doors) {
@@ -42,8 +45,7 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
       targets.current.set(door.id, next)
       activeDoorIds.current.add(door.id)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFloor])
+  }, [isUnlocked])
 
   useEffect(() => {
     const toggle = (event: KeyboardEvent) => {
@@ -56,7 +58,7 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
     }
     window.addEventListener('keydown', toggle)
     return () => window.removeEventListener('keydown', toggle)
-  })
+  }, [isUnlocked])
 
   useFrame((_, delta) => {
     const player = playerRef.current?.getGroup()

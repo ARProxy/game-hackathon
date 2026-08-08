@@ -71,10 +71,10 @@ def next_navigation_waypoint(
             origin[1] + (end[1] - origin[1]) * travel_scale,
         )
 
-    if (
-        math.dist(start, end) <= 6.0
-        and has_clear_catch_line(start, stopping_point(start), floor)
-    ):
+    # 장거리라도 같은 열린 공간에 있으면 중간 노드를 억지로 되짚지 않는다.
+    # 이전 6m 제한은 운동장처럼 넓은 공간에서 가장 가까운 노드와 목표 사이를
+    # 앞뒤로 왕복하게 만들었다. 벽 교차 여부가 실제 안전 조건이다.
+    if has_clear_catch_line(start, stopping_point(start), floor):
         return end
     nodes = NAVIGATION_NODES_BY_FLOOR.get(floor, ())
     if not nodes:

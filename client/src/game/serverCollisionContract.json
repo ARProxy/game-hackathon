@@ -3,6 +3,90 @@
   "source": "compactSchoolData.js",
   "walls": [
     {
+      "floor": "FIELD",
+      "center": [
+        -48,
+        12
+      ],
+      "size": [
+        0.12,
+        32
+      ],
+      "rotationY": 0,
+      "sourceId": "field_fence_west_collider",
+      "role": "fieldFence"
+    },
+    {
+      "floor": "FIELD",
+      "center": [
+        0,
+        12
+      ],
+      "size": [
+        0.12,
+        32
+      ],
+      "rotationY": 0,
+      "sourceId": "field_fence_east_collider",
+      "role": "fieldFence"
+    },
+    {
+      "floor": "FIELD",
+      "center": [
+        -37.5,
+        -4
+      ],
+      "size": [
+        21,
+        0.12
+      ],
+      "rotationY": 0,
+      "sourceId": "field_fence_north_west_collider",
+      "role": "fieldFence"
+    },
+    {
+      "floor": "FIELD",
+      "center": [
+        -37.5,
+        28
+      ],
+      "size": [
+        21,
+        0.12
+      ],
+      "rotationY": 0,
+      "sourceId": "field_fence_south_west_collider",
+      "role": "fieldFence"
+    },
+    {
+      "floor": "FIELD",
+      "center": [
+        -10.5,
+        -4
+      ],
+      "size": [
+        21,
+        0.12
+      ],
+      "rotationY": 0,
+      "sourceId": "field_fence_north_east_collider",
+      "role": "fieldFence"
+    },
+    {
+      "floor": "FIELD",
+      "center": [
+        -10.5,
+        28
+      ],
+      "size": [
+        21,
+        0.12
+      ],
+      "rotationY": 0,
+      "sourceId": "field_fence_south_east_collider",
+      "role": "fieldFence"
+    },
+    {
       "floor": "OUT",
       "center": [
         -27.2,
@@ -9428,11 +9512,11 @@
       "floor": "B1",
       "center": [
         -32,
-        -44
+        -45.8625
       ],
       "size": [
         0.22,
-        8
+        4.274999999999999
       ],
       "rotationY": 0,
       "sourceId": "box_1846",
@@ -9442,11 +9526,11 @@
       "floor": "B1",
       "center": [
         -32,
-        -44
+        -45.8625
       ],
       "size": [
         0.22,
-        8
+        4.274999999999999
       ],
       "rotationY": 0,
       "sourceId": "box_1847",
@@ -9455,40 +9539,12 @@
     {
       "floor": "B1",
       "center": [
-        -24,
-        -44
+        -32,
+        -41.1375
       ],
       "size": [
         0.22,
-        8
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1848",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -24,
-        -44
-      ],
-      "size": [
-        0.22,
-        8
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1849",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -16,
-        -44
-      ],
-      "size": [
-        0.22,
-        8
+        2.2749999999999986
       ],
       "rotationY": 0,
       "sourceId": "box_1850",
@@ -9497,16 +9553,170 @@
     {
       "floor": "B1",
       "center": [
-        -16,
-        -44
+        -32,
+        -41.1375
       ],
       "size": [
         0.22,
-        8
+        2.2749999999999986
       ],
       "rotationY": 0,
       "sourceId": "box_1851",
       "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1852",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1853",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1856",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1857",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1858",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1859",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1862",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1863",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -30,
+        -45.55
+      ],
+      "size": [
+        1.75,
+        0.72
+      ],
+      "rotationY": 0,
+      "sourceId": "b1_device_valve",
+      "role": "equipmentCollider"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -18,
+        -45.55
+      ],
+      "size": [
+        1.8,
+        0.72
+      ],
+      "rotationY": 0,
+      "sourceId": "b1_device_panel",
+      "role": "equipmentCollider"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -12,
+        -45.55
+      ],
+      "size": [
+        2.1,
+        0.72
+      ],
+      "rotationY": 0,
+      "sourceId": "b1_device_generator",
+      "role": "equipmentCollider"
     }
   ],
   "navigationNodes": [
@@ -10568,6 +10778,160 @@
       ],
       "links": [
         "east_room_F3_1_nav_corridor"
+      ]
+    },
+    {
+      "id": "B1_ring_0",
+      "floor": "B1",
+      "position": [
+        -36,
+        -43
+      ],
+      "links": [
+        "B1_ring_1"
+      ]
+    },
+    {
+      "id": "B1_ring_1",
+      "floor": "B1",
+      "position": [
+        -28,
+        -43
+      ],
+      "links": [
+        "B1_ring_0",
+        "B1_ring_2"
+      ]
+    },
+    {
+      "id": "B1_ring_2",
+      "floor": "B1",
+      "position": [
+        -20,
+        -43
+      ],
+      "links": [
+        "B1_ring_1",
+        "B1_ring_3"
+      ]
+    },
+    {
+      "id": "B1_ring_3",
+      "floor": "B1",
+      "position": [
+        -12,
+        -43
+      ],
+      "links": [
+        "B1_ring_2",
+        "B1_ring_4"
+      ]
+    },
+    {
+      "id": "B1_ring_4",
+      "floor": "B1",
+      "position": [
+        -9.5,
+        -43
+      ],
+      "links": [
+        "B1_ring_3"
+      ]
+    },
+    {
+      "id": "FIELD_ring_0",
+      "floor": "FIELD",
+      "position": [
+        -42,
+        0
+      ],
+      "links": [
+        "FIELD_ring_7",
+        "FIELD_ring_1"
+      ]
+    },
+    {
+      "id": "FIELD_ring_1",
+      "floor": "FIELD",
+      "position": [
+        -24,
+        0
+      ],
+      "links": [
+        "FIELD_ring_0",
+        "FIELD_ring_2"
+      ]
+    },
+    {
+      "id": "FIELD_ring_2",
+      "floor": "FIELD",
+      "position": [
+        -6,
+        0
+      ],
+      "links": [
+        "FIELD_ring_1",
+        "FIELD_ring_3"
+      ]
+    },
+    {
+      "id": "FIELD_ring_3",
+      "floor": "FIELD",
+      "position": [
+        -6,
+        14
+      ],
+      "links": [
+        "FIELD_ring_2",
+        "FIELD_ring_4"
+      ]
+    },
+    {
+      "id": "FIELD_ring_4",
+      "floor": "FIELD",
+      "position": [
+        -6,
+        24
+      ],
+      "links": [
+        "FIELD_ring_3",
+        "FIELD_ring_5"
+      ]
+    },
+    {
+      "id": "FIELD_ring_5",
+      "floor": "FIELD",
+      "position": [
+        -24,
+        24
+      ],
+      "links": [
+        "FIELD_ring_4",
+        "FIELD_ring_6"
+      ]
+    },
+    {
+      "id": "FIELD_ring_6",
+      "floor": "FIELD",
+      "position": [
+        -42,
+        24
+      ],
+      "links": [
+        "FIELD_ring_5",
+        "FIELD_ring_7"
+      ]
+    },
+    {
+      "id": "FIELD_ring_7",
+      "floor": "FIELD",
+      "position": [
+        -42,
+        14
+      ],
+      "links": [
+        "FIELD_ring_6",
+        "FIELD_ring_0"
       ]
     }
   ]

@@ -60,6 +60,13 @@ def test_navigation_graph_links_only_use_clear_authored_openings() -> None:
                 ), f"blocked navigation edge: {node['id']} -> {neighbor_id}"
 
 
+def test_final_routes_have_authored_navigation_instead_of_legacy_fallbacks() -> None:
+    assert len(NAVIGATION_NODES_BY_FLOOR["B1"]) >= 5
+    assert len(NAVIGATION_NODES_BY_FLOOR["FIELD"]) >= 8
+    assert WALL_RECTS_BY_FLOOR["B1"]
+    assert WALL_RECTS_BY_FLOOR["FIELD"]
+
+
 def test_permanently_locked_room_door_has_no_navigation_portal() -> None:
     node_ids = {
         node["id"]
@@ -93,6 +100,59 @@ def test_navigation_reaches_vertical_mission_devices_without_crossing_walls(
             break
         next_position = _safe_hunter_step(*position, *target, 0.8, floor)
         assert has_clear_catch_line(position, next_position, floor)
+        position = next_position
+
+    assert math.dist(position, target) <= 1.5
+
+
+@pytest.mark.parametrize(
+    "slot_id",
+    [
+        "BASEMENT_DEVICE_VALVE",
+        "BASEMENT_DEVICE_PANEL",
+        "BASEMENT_DEVICE_GENERATOR",
+        "BASEMENT_ESCAPE_GATE",
+    ],
+)
+def test_basement_spine_reaches_every_device_and_escape_gate(slot_id: str) -> None:
+    start_slot = get_map_slot("BASEMENT_FINAL_ENTRY")
+    target_slot = get_map_slot(slot_id)
+    position = (float(start_slot["position"][0]), float(start_slot["position"][2]))
+    target_values = target_slot.get("interactionPosition") or target_slot["position"]
+    target = (float(target_values[0]), float(target_values[2]))
+
+    for _ in range(120):
+        if math.dist(position, target) <= 1.5:
+            break
+        next_position = _safe_hunter_step(*position, *target, 0.8, "B1")
+        assert has_clear_catch_line(position, next_position, "B1")
+        assert next_position != position
+        position = next_position
+
+    assert math.dist(position, target) <= 1.5
+
+
+@pytest.mark.parametrize(
+    "slot_id",
+    [
+        "FIELD_FINAL_STATION_A",
+        "FIELD_FINAL_STATION_B",
+        "FIELD_FINAL_STATION_C",
+        "FIELD_ESCAPE_GATE",
+    ],
+)
+def test_field_ring_reaches_every_station_and_escape_gate(slot_id: str) -> None:
+    start_slot = get_map_slot("FIELD_FINAL_ENTRY")
+    target_slot = get_map_slot(slot_id)
+    position = (float(start_slot["position"][0]), float(start_slot["position"][2]))
+    target = (float(target_slot["position"][0]), float(target_slot["position"][2]))
+
+    for _ in range(120):
+        if math.dist(position, target) <= 1.5:
+            break
+        next_position = _safe_hunter_step(*position, *target, 0.8, "FIELD")
+        assert has_clear_catch_line(position, next_position, "FIELD")
+        assert next_position != position
         position = next_position
 
     assert math.dist(position, target) <= 1.5
