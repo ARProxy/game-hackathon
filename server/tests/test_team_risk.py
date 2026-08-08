@@ -53,6 +53,49 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         assert self.websocket.messages[-1]["type"] == "freeze"
         assert self.websocket.messages[-1]["player_id"] == "partner"
 
+    async def test_rooftop_team_roles_advance_stage_without_human_running_all_signals(self) -> None:
+        self.session.round_data = None
+        self.session.vertical_progression_enabled = True
+        human = self.session.state.get_player(self.player_id)
+        partner = self.session.state.get_player("partner")
+        partner_two = self.session.state.get_player("partner-2")
+        seeker = self.session.state.get_player("seeker")
+        seeker.position.floor = WorldFloor.F1
+
+        center = get_map_slot("ROOF_SIGNAL_CENTER")["interactionPosition"]
+        east = get_map_slot("ROOF_SIGNAL_EAST")["interactionPosition"]
+        west = get_map_slot("ROOF_SIGNAL_WEST")["interactionPosition"]
+        human.position.x, human.position.y, human.position.z = center
+        partner.position.x, partner.position.y, partner.position.z = east
+        partner_two.position.x, partner_two.position.y, partner_two.position.z = west
+        human.position.floor = partner.position.floor = partner_two.position.floor = WorldFloor.ROOF
+
+        await self.manager.handle_message(self.room_id, self.player_id, {
+            "type": "action",
+            "payload": {"action_type": "interact_stage_mission", "signal_id": "center"},
+        })
+        _, east_action = advance_companion(self.session, "partner")
+        assert east_action == {"type": "rooftop_signal_ready", "signal_id": "east"}
+        await self.manager._handle_companion_action(self.room_id, "partner", east_action)
+
+        _, west_action = advance_companion(self.session, "partner-2")
+        assert west_action == {"type": "rooftop_signal_ready", "signal_id": "west"}
+        await self.manager._handle_companion_action(self.room_id, "partner-2", west_action)
+
+        signal_events = [
+            message for message in self.websocket.messages
+            if message["type"] == "rooftop_signal_progress"
+        ]
+        assert [event["actor_id"] for event in signal_events] == [
+            self.player_id, "partner", "partner-2",
+        ]
+        assert signal_events[-1]["completed"]
+        advanced = next(
+            message for message in reversed(self.websocket.messages)
+            if message["type"] == "vertical_stage_advanced"
+        )
+        assert advanced["next_phase"] == VerticalRoundPhase.FLOOR_3.value
+
     async def test_vertical_field_escape_records_each_runner_before_victory(self) -> None:
         exit_x, exit_y, exit_z = get_map_slot("FIELD_ESCAPE_GATE")["position"]
         self.session.round_data = None

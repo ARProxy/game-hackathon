@@ -158,6 +158,7 @@ interface GameStore {
   elapsedSeconds: number | null
   verticalProgression: VerticalProgressionState | null
   rooftopSignal: RooftopSignalState | null
+  activeMissionPrompt: string | null
   players: Record<string, PlayerState>
 
   // 라운드 데이터 (미션, 프롭)
@@ -209,6 +210,7 @@ interface GameStore {
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   setVerticalProgression: (progression: VerticalProgressionState) => void
   setRooftopSignal: (signal: RooftopSignalState) => void
+  setActiveMissionPrompt: (prompt: string | null) => void
   hydratePlayers: (players: Record<string, Omit<PlayerState, 'playerId'>>) => void
   setActiveGate: (gate: ActiveGate) => void
   setActiveTraps: (trapIds: string[]) => void
@@ -259,6 +261,7 @@ const initialState = {
   elapsedSeconds: null as number | null,
   verticalProgression: null as VerticalProgressionState | null,
   rooftopSignal: null as RooftopSignalState | null,
+  activeMissionPrompt: null as string | null,
   props: [] as PropData[],
   missions: [] as MissionData[],
   totalClues: 0,
@@ -365,6 +368,7 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setVerticalProgression: (verticalProgression) => set({ verticalProgression }),
   setRooftopSignal: (rooftopSignal) => set({ rooftopSignal }),
+  setActiveMissionPrompt: (activeMissionPrompt) => set({ activeMissionPrompt }),
 
   hydratePlayers: (players) => set((state) => {
     const hydratedPlayers = Object.fromEntries(

@@ -186,6 +186,7 @@ export default function useWebSocket() {
         break
 
       case 'vertical_stage_advanced':
+        useGameStore.getState().setActiveMissionPrompt(null)
         useGameStore.getState().setVerticalProgression({
           enabled: true,
           ...data.progression,
@@ -211,10 +212,14 @@ export default function useWebSocket() {
         break
 
       case 'vertical_mission_started':
+        useGameStore.getState().setActiveMissionPrompt(data.prompt ?? '장치가 활성화되었습니다.')
         addSubtitle('system', data.prompt ?? '장치가 활성화되었습니다.')
         break
 
       case 'vertical_mission_feedback':
+        useGameStore.getState().setActiveMissionPrompt(
+          `다시 전달하세요. ${data.prompt ?? '도구·출입구·개방 행동을 모두 표현해야 합니다.'}`,
+        )
         addSubtitle('system', '의미가 부족합니다. 도구·출입구·개방 행동을 모두 표현하세요.')
         break
 
@@ -421,7 +426,9 @@ export default function useWebSocket() {
         } else if (data.action_type === 'interact_stage_mission'
           || data.action_type === 'intercom_submit'
           || data.action_type === 'activate_device'
-          || data.action_type === 'activate_basement_device') {
+          || data.action_type === 'activate_basement_device'
+          || data.action_type === 'use_floor_transition'
+          || data.action_type === 'vertical_escape') {
           addSubtitle('system', data.reason ?? '현재 위치에서는 장치를 사용할 수 없습니다.')
         }
         break

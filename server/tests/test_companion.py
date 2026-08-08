@@ -276,3 +276,25 @@ def test_rooftop_companions_split_east_and_west_signal_scouts() -> None:
         east["target"]["z"] - partner.position.z,
     )
     assert distance_after_tick < distance_before_tick
+
+
+def test_rooftop_companion_waits_at_assigned_signal_until_its_turn() -> None:
+    session = make_session("companion-rooftop-signal-wait")
+    session.round_data = None
+    seeker = session.state.get_player("seeker")
+    seeker.position.floor = WorldFloor.F1
+    partner = session.state.get_player("partner")
+    east_position = get_map_slot("ROOF_SIGNAL_EAST")["interactionPosition"]
+    partner.position.x, partner.position.y, partner.position.z = east_position
+    partner.position.floor = WorldFloor.ROOF
+
+    _, early_action = advance_companion(session, "partner")
+
+    assert early_action is None
+    assert "roof_signal_scout_east" not in session.companion_states["partner"].memory
+
+    session.vertical_missions.rooftop.activate("center")
+    _, ready_action = advance_companion(session, "partner")
+
+    assert ready_action == {"type": "rooftop_signal_ready", "signal_id": "east"}
+    assert "roof_signal_scout_east" not in session.companion_states["partner"].memory

@@ -36,13 +36,29 @@ const COMPANION_LABELS: Record<string, string> = {
 }
 
 const VERTICAL_INSTRUCTIONS: Record<string, string> = {
-  rooftop_intro: '옥상 신호 장치로 이동해 E를 눌러 팀 출발 신호를 보내세요.',
+  rooftop_intro: '중앙 신호는 직접 맡고, 동쪽·서쪽 신호는 AI 동료가 순서대로 동기화합니다.',
   floor_3: '방송 장치에 E로 접속한 뒤 Q를 눌러 문구의 뜻을 우회해 전달하세요.',
   floor_2: '인터폰에서 E를 누른 뒤 AI가 읽은 색과 도형을 Q로 순서대로 전달하세요.',
   floor_1: 'AI가 반대편 장치에 준비되면 A 장치 앞에서 E를 눌러 동시에 작동하세요.',
   field_final: '각자 맡은 운동장 장치에 도착해 E로 활성화하세요.',
   basement_final: 'AI가 보고한 대기 장치를 찾아 배전반·밸브·발전기를 올바른 순서로 E 작동하세요.',
   escape_open: '선택된 파이널 출구의 빛기둥으로 이동해 E를 누르세요.',
+}
+
+const VERTICAL_PHASE_LABELS: Record<string, string> = {
+  rooftop_intro: '옥상 · 삼점 신호 협동',
+  floor_3: '3층 · 방송실 우회 전달',
+  floor_2: '2층 · 인터폰 기호 전달',
+  floor_1: '1층 · 동시 장치 조작',
+  field_final: '운동장 · 삼인 장치 가동',
+  basement_final: '지하 · 설비 복구',
+  escape_open: '최종 · 탈출구 개방',
+}
+
+const ROOFTOP_SIGNAL_LABELS: Record<string, string> = {
+  center: '플레이어 · 중앙',
+  east: 'AI 동료 1 · 동쪽',
+  west: 'AI 동료 2 · 서쪽',
 }
 
 function formatElapsed(totalSeconds: number): string {
@@ -353,6 +369,8 @@ export default function HUD() {
   const hunterState = useGameStore((s) => s.hunterIntent?.state ?? null)
   const companionState = useGameStore((s) => s.companionIntent?.state ?? null)
   const verticalProgression = useGameStore((s) => s.verticalProgression)
+  const rooftopSignal = useGameStore((s) => s.rooftopSignal)
+  const activeMissionPrompt = useGameStore((s) => s.activeMissionPrompt)
 
   return (
     <div style={{
@@ -463,10 +481,32 @@ export default function HUD() {
             background: 'rgba(8,28,36,.86)', fontSize: 12,
           }}>
             <div style={{ color: '#52E5FF', fontWeight: 900, marginBottom: 3 }}>
-              {verticalProgression.active_floor} · {verticalProgression.phase}
+              {VERTICAL_PHASE_LABELS[verticalProgression.phase]
+                ?? `${verticalProgression.active_floor} · 현재 미션`}
             </div>
-              {VERTICAL_INSTRUCTIONS[verticalProgression.phase]
+            <div style={{ lineHeight: 1.45 }}>
+              {activeMissionPrompt
+                ?? VERTICAL_INSTRUCTIONS[verticalProgression.phase]
                 ?? '현재 구역의 청색 목표를 찾아 E로 상호작용하세요.'}
+            </div>
+            {verticalProgression.phase === 'rooftop_intro' && rooftopSignal && (
+              <div style={{
+                marginTop: 7, paddingTop: 7,
+                borderTop: '1px solid rgba(82,229,255,.22)',
+                color: rooftopSignal.completed ? '#B6FF3D' : '#FFE7A3',
+              }}>
+                신호 동기화 {rooftopSignal.progress}/{rooftopSignal.total}
+                {' · '}
+                {rooftopSignal.nextSignalId
+                  ? `다음: ${ROOFTOP_SIGNAL_LABELS[rooftopSignal.nextSignalId]}`
+                  : '완료'}
+                {rooftopSignal.nextSignalId !== 'center' && rooftopSignal.nextSignalId !== null && (
+                  <div style={{ marginTop: 3, color: '#BDEFFF', opacity: .8 }}>
+                    동료가 막히면 점등된 신호 앞에서 E로 대신 조작할 수 있습니다.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

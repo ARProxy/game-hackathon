@@ -156,8 +156,8 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         from app.game.vertical_flow import final_station_position, mission_interaction_position
         from app.game.map_slots import get_map_slot as _get_map_slot
 
-        # 옥상 시작 시 두 동료가 중앙에서 멈춰 있지 않고 동·서 신호기를 각각 정찰한다.
-        # 실제 신호 동기화는 플레이어 몫으로 남겨 두되, 동료의 독립 동선을 즉시 보여 준다.
+        # 옥상 시작 시 플레이어는 중앙, 두 동료는 동·서 신호기를 맡는다.
+        # 먼저 도착한 동료는 순서가 올 때까지 현장에서 대기한다.
         if session.vertical_round.phase == VerticalRoundPhase.ROOFTOP_INTRO:
             signal_side = "east" if companion_id == "partner" else "west"
             signal_slot = _get_map_slot(f"ROOF_SIGNAL_{signal_side.upper()}")
@@ -406,6 +406,17 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
     elif intent["state"] == "AVOID_SEEKER" and sighting and not sighting.get("reported"):
         sighting["reported"] = True
         action = {"type": "seeker_report", "position": sighting["position"]}
+    elif (
+        intent["state"] == "EXPLORE_ZONE"
+        and arrived
+        and str(intent["target_id"]).startswith("roof_signal_scout_")
+    ):
+        signal_id = str(intent["target_id"]).removeprefix("roof_signal_scout_")
+        rooftop = session.vertical_missions.rooftop if session.vertical_missions is not None else None
+        # 너무 일찍 도착해도 목표를 소모하지 않는다. 담당 신호가 현재 순서가
+        # 되는 판단 틱에만 서버에 실제 조작을 요청한다.
+        if rooftop is not None and rooftop.next_signal_id == signal_id:
+            action = {"type": "rooftop_signal_ready", "signal_id": signal_id}
     elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] not in runtime.memory:
         if session.vertical_progression_enabled and session.round_data is None:
             runtime.memory[intent["target_id"]] = {
@@ -513,6 +524,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "escape": (SpeechIntent.DECLARE_ACTION, "탈출구로 달려갈게!"),
     "trap": (SpeechIntent.REPORT_OBSERVATION, "트랩에 걸렸어!"),
     "vertical_objective": (SpeechIntent.REPORT_OBSERVATION, "장치를 찾았어."),
+    "rooftop_signal_ready": (SpeechIntent.DECLARE_ACTION, "내 담당 신호를 지금 동기화할게!"),
     "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
     "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),
     "simultaneous_ready": (SpeechIntent.DECLARE_ACTION, "준비됐어! 동시에 작동하자!"),
