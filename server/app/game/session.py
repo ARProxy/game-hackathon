@@ -61,6 +61,7 @@ class CompanionRuntime:
     last_seeker_seen: dict | None = None
     candidate_memory: list[dict] = field(default_factory=list)
     speech_history: SpeechHistory = field(default_factory=SpeechHistory)  # B2: 발화 중복 억제
+    player_floor_changed: dict | None = None  # 플레이어 층 이동 알림
 
     def reset(self, now: float) -> None:
         self.memory.clear()
@@ -73,6 +74,7 @@ class CompanionRuntime:
         self.last_seeker_seen = None
         self.candidate_memory = []
         self.speech_history.reset()
+        self.player_floor_changed = None
 
 
 class GameSession:
@@ -102,6 +104,7 @@ class GameSession:
         self.triggered_trap_ids: set[str] = set()
         self.escaped_player_ids: set[str] = set()
         self.paused_at: float | None = None
+        self.vertical_missions: object | None = None  # VerticalMissions, lazy import
 
     @property
     def is_paused(self) -> bool:
@@ -196,6 +199,9 @@ class GameSession:
         self.engine.update_words(words)
         self.state.phase = GamePhase.PLAYING
         self.state.started_at = time.time()
+        if self.vertical_progression_enabled:
+            from app.ai.vertical_missions import create_vertical_missions
+            self.vertical_missions = create_vertical_missions(words, seed=random.randint(0, 9999))
         logger.info(
             "game setup: room=%s words=%s", self.state.room_id, words
         )

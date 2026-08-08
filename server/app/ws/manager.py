@@ -51,13 +51,16 @@ from app.game.session import (
     session_manager,
 )
 from app.game.map_slots import get_map_slot, secondary_seeker_slot, seeker_reveal_slot
-from app.game.progression import InvalidProgression, VerticalRoundPhase, WorldFloor
+from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import (
     BROADCAST_MISSION_PROMPT,
     activate_final_station,
+    activate_simultaneous_device,
     complete_current_stage,
     evaluate_broadcast_phrase,
+    start_intercom_mission,
+    submit_intercom_answer,
     use_open_floor_transition,
     use_elevator,
     validate_current_stage_interaction,
@@ -428,6 +431,21 @@ class ConnectionManager:
                     "prompt": BROADCAST_MISSION_PROMPT,
                 })
                 return
+            if session.vertical_round.phase == VerticalRoundPhase.FLOOR_2:
+                try:
+                    validate_current_stage_interaction(session, player_id)
+                    mission_info = start_intercom_mission(session)
+                except InvalidProgression as error:
+                    await self.send_to(room_id, player_id, {
+                        "type": "action_rejected", "action_type": action_type,
+                        "reason": str(error),
+                    })
+                    return
+                await self.send_to(room_id, player_id, {
+                    "type": "vertical_mission_started",
+                    **mission_info,
+                })
+                return
             try:
                 event = complete_current_stage(session, player_id)
             except InvalidProgression as error:
@@ -509,28 +527,16 @@ class ConnectionManager:
                 return
             await self.broadcast(room_id, {"type": "actor_floor_changed", **event})
             if player and player.role == PlayerRole.HUMAN:
-                for index, companion_id in enumerate(DEFAULT_AI_PARTNER_IDS):
-                    companion = session.state.get_player(companion_id)
-                    if not companion or companion.status != PlayerStatus.ALIVE:
-                        continue
-                    position = event["position"]
-                    companion.position.x = position["x"] + (index + 1) * 1.1
-                    companion.position.y = position["y"]
-                    companion.position.z = position["z"] + 0.7
-                    companion.position.floor = WorldFloor(position["floor"])
-                    companion.position.zone = position["zone"]
-                    await self.broadcast(room_id, {
-                        "type": "actor_floor_changed",
-                        "actor_id": companion_id,
-                        "route": event["route"],
-                        "position": {
-                            "x": companion.position.x,
-                            "y": companion.position.y,
-                            "z": companion.position.z,
-                            "floor": position["floor"],
-                            "zone": position["zone"],
-                        },
-                    })
+                # AI에게 플레이어 층 이동 이벤트 알림 (강제 이동 아님)
+                # AI는 자신의 현재 목표에 따라 독립적으로 층 이동을 판단한다.
+                for companion_id in DEFAULT_AI_PARTNER_IDS:
+                    runtime = session.companion_states.get(companion_id)
+                    if runtime:
+                        runtime.player_floor_changed = {
+                            "floor": event["position"]["floor"],
+                            "position": event["position"],
+                            "timestamp": time.monotonic(),
+                        }
 
         elif action_type == "vertical_escape":
             exit_slot = get_map_slot("FIELD_FINAL_ENTRY")
@@ -586,6 +592,74 @@ class ConnectionManager:
                     "position": ping["position"],
                     "source": "elevator_arrival",
                     "radius": ping["radius"],
+                })
+
+        elif action_type == "intercom_submit":
+            try:
+                result = submit_intercom_answer(
+                    session, player_id, str(payload.get("transcript", "")),
+                )
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type,
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {
+                "type": "intercom_result", **result,
+            })
+            if result.get("success"):
+                # 인터폰 정답 시 위치 검사 없이 직접 단계 진행
+                phase = session.vertical_round.phase
+                session.vertical_round.mark_mission_complete()
+                next_phase = session.vertical_round.advance()
+                if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
+                    next_phase = session.vertical_round.advance(final_route=FinalRoute.FIELD)
+                await self.broadcast(room_id, {
+                    "type": "vertical_stage_advanced",
+                    "actor_id": player_id,
+                    "completed_phase": phase.value,
+                    "next_phase": next_phase.value,
+                    "progression": session.vertical_round.to_dict(),
+                })
+
+        elif action_type == "activate_device":
+            device = str(payload.get("device", ""))
+            # 플레이어가 A를 작동하면 AI가 준비되어 있을 때 자동으로 B도 작동
+            if device == "A" and session.vertical_missions is not None:
+                vm = session.vertical_missions
+                if vm.simultaneous.ai_ready and not vm.simultaneous.completed:
+                    ai_id = vm.simultaneous.ai_companion_id
+                    ai_actor = session.state.get_player(ai_id)
+                    if ai_actor and ai_actor.status == PlayerStatus.ALIVE:
+                        try:
+                            activate_simultaneous_device(session, ai_id, "B")
+                        except InvalidProgression:
+                            pass
+            try:
+                result = activate_simultaneous_device(session, player_id, device)
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type,
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {
+                "type": "device_activated", **result,
+            })
+            if result.get("success"):
+                # 동시 조작 성공 시 위치 검사 없이 직접 단계 진행
+                phase = session.vertical_round.phase
+                session.vertical_round.mark_mission_complete()
+                next_phase = session.vertical_round.advance()
+                if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
+                    next_phase = session.vertical_round.advance(final_route=FinalRoute.FIELD)
+                await self.broadcast(room_id, {
+                    "type": "vertical_stage_advanced",
+                    "actor_id": player_id,
+                    "completed_phase": phase.value,
+                    "next_phase": next_phase.value,
+                    "progression": session.vertical_round.to_dict(),
                 })
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
@@ -1369,6 +1443,31 @@ class ConnectionManager:
             await self._freeze_companion_from_trap(room_id, action["trap_id"], companion_id)
         elif action["type"] == "escape":
             await self._complete_companion_escape(room_id, companion_id)
+        elif action["type"] == "floor_transition":
+            # AI의 자율 층 이동
+            target = action["target_floor"]
+            offset = (DEFAULT_AI_PARTNER_IDS.index(companion_id) + 1) * 1.1 if companion_id in DEFAULT_AI_PARTNER_IDS else 1.1
+            if partner:
+                partner.position.x = target["x"] + offset
+                partner.position.y = target["y"]
+                partner.position.z = target["z"] + 0.7
+                partner.position.floor = WorldFloor(target["floor"])
+                partner.position.zone = target.get("zone", partner.position.zone)
+                session.position_samples[partner.player_id] = MovementSample(
+                    partner.position.x, partner.position.z, time.monotonic(),
+                )
+                await self.broadcast(room_id, {
+                    "type": "actor_floor_changed",
+                    "actor_id": companion_id,
+                    "route": "companion_follow",
+                    "position": {
+                        "x": partner.position.x,
+                        "y": partner.position.y,
+                        "z": partner.position.z,
+                        "floor": target["floor"],
+                        "zone": partner.position.zone,
+                    },
+                })
         elif action["type"] == "vertical_objective":
             phase = action["phase"]
             if phase == VerticalRoundPhase.FLOOR_3.value:
@@ -1391,6 +1490,32 @@ class ConnectionManager:
                 await self._handle_action(
                     room_id, companion_id, {"action_type": "interact_stage_mission"},
                 )
+        elif action["type"] == "intercom_report":
+            # AI가 인터폰에서 시퀀스를 읽고 보고
+            sequence = action.get("sequence", [])
+            if session.vertical_missions is not None:
+                vm = session.vertical_missions
+                desc = vm.intercom.describe_for_ai(session.state.forbidden_words)
+                message = f"인터폰에 기호가 보여! {desc}"
+                message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
+            else:
+                message = "인터폰에 기호가 보여!"
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report", "companion_id": companion_id,
+                "message": message, "phase": action.get("phase", ""),
+                "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
+                "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
+            }, companion_id)
+        elif action["type"] == "simultaneous_ready":
+            # AI가 동시 조작 장치에 도착하여 준비 완료 보고
+            message = "준비됐어! 동시에 작동하자!"
+            message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
+            delivered = await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report", "companion_id": companion_id,
+                "message": message, "phase": action.get("phase", ""),
+                "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
+            }, companion_id)
 
     async def _complete_partner_rescue(self, room_id: str, target_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)

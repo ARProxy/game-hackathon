@@ -72,8 +72,16 @@ def test_actor_on_wrong_floor_cannot_complete_current_mission() -> None:
         complete_current_stage(session, "human")
 
 
+def _mark_vertical_missions_done(session: GameSession) -> None:
+    """2층/1층 미션을 완료 상태로 표시하여 stage advance를 허용한다."""
+    if session.vertical_missions is not None:
+        session.vertical_missions.intercom.completed = True
+        session.vertical_missions.simultaneous.completed = True
+
+
 def test_each_floor_uses_its_own_semantic_mission_position() -> None:
     session, human = active_session()
+    _mark_vertical_missions_done(session)
 
     expected = [
         VerticalRoundPhase.FLOOR_3,
@@ -144,6 +152,7 @@ def test_east_and_west_routes_open_after_third_floor_completion() -> None:
 
 def test_first_floor_completion_opens_field_transition() -> None:
     session, human = active_session()
+    _mark_vertical_missions_done(session)
     for _ in range(4):
         place_at_current_mission(session, human)
         result = complete_current_stage(session, "human")

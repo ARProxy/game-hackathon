@@ -205,6 +205,7 @@ def test_non_urgent_goal_is_held_long_enough_to_avoid_frame_thrashing() -> None:
 def test_vertical_companion_reports_when_it_reaches_active_objective() -> None:
     session = make_session("companion-vertical-objective")
     session.round_data = None
+    session.vertical_missions = None  # 층별 미션 없이 기본 동선 테스트
     session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
     partner = session.state.get_player("partner")
     seeker = session.state.get_player("seeker")

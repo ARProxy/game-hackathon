@@ -99,6 +99,50 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         if runtime.rescue_request == target.player_id or waited >= CONTRACT["autoRescueDelaySeconds"]:
             return _intent("RESCUE_TEAMMATE", target.player_id, target, "assigned_rescue")
 
+    # 플레이어가 다음 층으로 이동한 경우 — 독립 판단으로 따라갈지 결정
+    floor_event = runtime.player_floor_changed
+    if floor_event:
+        from app.game.progression import WorldFloor as _WF
+        player_floor = _WF(floor_event["floor"])
+        current_floor = partner.position.floor
+
+        if current_floor != player_floor:
+            has_reason_to_stay = False
+
+            # 이유 1: 빙결된 팀원이 현재 층에 있음
+            frozen_on_floor = [
+                p for p in session.state.players.values()
+                if p.status == PlayerStatus.FROZEN and p.position.floor == current_floor
+            ]
+            if frozen_on_floor:
+                has_reason_to_stay = True
+
+            # 이유 2: 현재 층에서 미션 진행 중 (inspect 중)
+            if (
+                runtime.goal_started
+                and runtime.last_intent
+                and runtime.last_intent.get("state") == "INSPECT_CANDIDATE"
+            ):
+                has_reason_to_stay = True
+
+            if not has_reason_to_stay:
+                # 플레이어를 따라 이동 (자발적 판단)
+                runtime.player_floor_changed = None  # 이벤트 소비
+                return {
+                    "state": "FOLLOW_TO_FLOOR",
+                    "target_id": None,
+                    "target": {
+                        "x": floor_event["position"]["x"],
+                        "z": floor_event["position"]["z"],
+                    },
+                    "reason": "player_descended",
+                    "_floor_event": floor_event,
+                }
+            # 이유가 있으면 현재 목표 유지 (독립 동선) — 이벤트는 유지
+        else:
+            # 이미 같은 층에 있으면 이벤트 소비
+            runtime.player_floor_changed = None
+
     if (
         session.vertical_progression_enabled
         and session.round_data is None
@@ -109,6 +153,49 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
             return _intent("REGROUP", None, partner, "waiting_for_floor_transition")
         from app.game.progression import VerticalRoundPhase
         from app.game.vertical_flow import final_station_position, mission_interaction_position
+        from app.game.map_slots import get_map_slot as _get_map_slot
+
+        # 2층 인터폰 미션: AI가 자신의 인터폰 위치로 이동
+        if (
+            session.vertical_round.phase == VerticalRoundPhase.FLOOR_2
+            and session.vertical_missions is not None
+        ):
+            vm = session.vertical_missions
+            intercom = vm.intercom
+            if not intercom.completed and intercom.ai_companion_id == companion_id:
+                ai_slot = _get_map_slot(intercom.ai_position_slot)
+                ax, _, az = ai_slot["position"]
+                arrived = math.hypot(partner.position.x - ax, partner.position.z - az) <= 1.5
+                if arrived and not intercom.ai_arrived:
+                    intercom.ai_arrived = True
+                return {
+                    "state": "EXPLORE_ZONE",
+                    "target_id": "intercom_mission",
+                    "target": {"x": ax, "z": az},
+                    "reason": "intercom_ai_position",
+                }
+
+        # 1층 동시 조작 미션: AI가 자신의 장치 위치로 이동
+        if (
+            session.vertical_round.phase == VerticalRoundPhase.FLOOR_1
+            and session.vertical_missions is not None
+        ):
+            vm = session.vertical_missions
+            sim = vm.simultaneous
+            if not sim.completed and sim.ai_companion_id == companion_id:
+                ai_slot = _get_map_slot(sim.device_b_slot)
+                bx, _, bz = ai_slot["position"]
+                arrived = math.hypot(partner.position.x - bx, partner.position.z - bz) <= 1.5
+                if arrived and not sim.ai_arrived:
+                    sim.ai_arrived = True
+                    sim.ai_ready = True
+                return {
+                    "state": "EXPLORE_ZONE",
+                    "target_id": "simultaneous_mission",
+                    "target": {"x": bx, "z": bz},
+                    "reason": "simultaneous_ai_position",
+                }
+
         x, _, z = (
             final_station_position(companion_id)
             if session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL
@@ -187,7 +274,7 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
     elapsed = now - runtime.last_tick
     proposed = decide_companion_intent(session, companion_id)
     previous = runtime.last_intent
-    urgent = proposed["state"] in {"AVOID_SEEKER", "RESCUE_TEAMMATE", "MOVE_TO_GATE", "ESCAPE"}
+    urgent = proposed["state"] in {"AVOID_SEEKER", "RESCUE_TEAMMATE", "MOVE_TO_GATE", "ESCAPE", "FOLLOW_TO_FLOOR"}
     if (
         previous and not urgent and runtime.goal_changed_at
         and now - runtime.goal_changed_at < CONTRACT["goalHoldSeconds"]
@@ -213,6 +300,7 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         "EXPLORE_ZONE": "exploreSpeed", "INSPECT_CANDIDATE": "missionSpeed",
         "AVOID_SEEKER": "avoidSpeed", "RESCUE_TEAMMATE": "rescueSpeed",
         "MOVE_TO_GATE": "gateSpeed", "ESCAPE": "gateSpeed",
+        "FOLLOW_TO_FLOOR": "gateSpeed",
     }.get(intent["state"])
     if speed_key and distance > CONTRACT["arrivalDistance"]:
         step = min(float(CONTRACT[speed_key]) * min(elapsed, 0.5), distance - CONTRACT["arrivalDistance"])
@@ -239,6 +327,10 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         action = {"type": "trap", "trap_id": triggered_trap["id"]}
     elif intent["state"] == "ESCAPE" and arrived:
         action = {"type": "escape"}
+    elif intent["state"] == "FOLLOW_TO_FLOOR" and arrived:
+        floor_event = intent.get("_floor_event")
+        if floor_event:
+            action = {"type": "floor_transition", "target_floor": floor_event["position"]}
     elif intent["state"] == "AVOID_SEEKER" and sighting and not sighting.get("reported"):
         sighting["reported"] = True
         action = {"type": "seeker_report", "position": sighting["position"]}
@@ -249,10 +341,25 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
                 "position": intent["target"],
                 "zone": session.vertical_round.phase.value,
             }
-            action = {
-                "type": "vertical_objective",
-                "phase": session.vertical_round.phase.value,
-            }
+            # 인터폰 미션: AI가 도착하면 시퀀스 보고 액션 발생
+            if intent["target_id"] == "intercom_mission" and session.vertical_missions is not None:
+                vm = session.vertical_missions
+                action = {
+                    "type": "intercom_report",
+                    "phase": session.vertical_round.phase.value,
+                    "sequence": vm.intercom.sequence,
+                }
+            # 동시 조작 미션: AI가 도착하면 준비 완료 액션 발생
+            elif intent["target_id"] == "simultaneous_mission" and session.vertical_missions is not None:
+                action = {
+                    "type": "simultaneous_ready",
+                    "phase": session.vertical_round.phase.value,
+                }
+            else:
+                action = {
+                    "type": "vertical_objective",
+                    "phase": session.vertical_round.phase.value,
+                }
         else:
             mission = session.current_mission()
             prop = next(
@@ -321,6 +428,9 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "escape": (SpeechIntent.DECLARE_ACTION, "탈출구로 달려갈게!"),
     "trap": (SpeechIntent.REPORT_OBSERVATION, "트랩에 걸렸어!"),
     "vertical_objective": (SpeechIntent.REPORT_OBSERVATION, "장치를 찾았어."),
+    "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
+    "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),
+    "simultaneous_ready": (SpeechIntent.DECLARE_ACTION, "준비됐어! 동시에 작동하자!"),
 }
 
 

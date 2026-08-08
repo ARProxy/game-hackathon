@@ -123,8 +123,23 @@ def validate_current_stage_interaction(session: Any, actor_id: str) -> None:
 
 def complete_current_stage(session: Any, actor_id: str) -> dict:
     validate_current_stage_interaction(session, actor_id)
-    actor = session.state.get_player(actor_id)
+
     phase = session.vertical_round.phase
+
+    # 2층: 인터폰 미션 완료 여부 검사
+    if phase == VerticalRoundPhase.FLOOR_2 and session.vertical_missions is not None:
+        from app.ai.vertical_missions import VerticalMissions
+        vm: VerticalMissions = session.vertical_missions
+        if not vm.intercom.completed:
+            raise InvalidProgression("2층 인터폰 미션을 먼저 완료해야 한다")
+
+    # 1층: 동시 조작 미션 완료 여부 검사
+    if phase == VerticalRoundPhase.FLOOR_1 and session.vertical_missions is not None:
+        from app.ai.vertical_missions import VerticalMissions
+        vm_f1: VerticalMissions = session.vertical_missions
+        if not vm_f1.simultaneous.completed:
+            raise InvalidProgression("1층 동시 조작 미션을 먼저 완료해야 한다")
+
     session.vertical_round.mark_mission_complete()
     next_phase = session.vertical_round.advance()
     if next_phase == VerticalRoundPhase.FINAL_ROUTE_REVEAL:
@@ -133,6 +148,84 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
         "completed_phase": phase.value,
         "next_phase": next_phase.value,
         "progression": session.vertical_round.to_dict(),
+    }
+
+
+def start_intercom_mission(session: Any) -> dict:
+    """2층 인터폰 미션을 시작한다. AI를 인터폰 위치로 보낸다."""
+    if session.vertical_missions is None:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+    from app.ai.vertical_missions import VerticalMissions
+    vm: VerticalMissions = session.vertical_missions
+    intercom = vm.intercom
+    if intercom.completed:
+        raise InvalidProgression("인터폰 미션은 이미 완료되었다")
+    import time as _time
+    intercom.started_at = _time.time()
+    ai_slot = get_map_slot(intercom.ai_position_slot)
+    human_slot = get_map_slot(intercom.human_position_slot)
+    return {
+        "mission": "floor_2_intercom",
+        "ai_position": ai_slot["position"],
+        "human_position": human_slot["position"],
+        "ai_companion_id": intercom.ai_companion_id,
+        "sequence_count": len(intercom.sequence),
+    }
+
+
+def submit_intercom_answer(session: Any, actor_id: str, transcript: str) -> dict:
+    """플레이어 음성 답변을 판정한다."""
+    if session.vertical_missions is None:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+    from app.ai.vertical_missions import VerticalMissions
+    vm: VerticalMissions = session.vertical_missions
+    intercom = vm.intercom
+    if intercom.completed:
+        raise InvalidProgression("인터폰 미션은 이미 완료되었다")
+
+    actor = session.state.get_player(actor_id)
+    if actor is None or actor.status != PlayerStatus.ALIVE:
+        raise InvalidProgression("살아 있는 도망자만 답변할 수 있다")
+
+    human_slot = get_map_slot(intercom.human_position_slot)
+    hx, _, hz = human_slot["position"]
+    if math.hypot(actor.position.x - hx, actor.position.z - hz) > MISSION_INTERACTION_RADIUS:
+        raise InvalidProgression("인터폰 장치와 거리가 너무 멀다")
+
+    result = intercom.check_answer(transcript)
+    return {
+        "mission": "floor_2_intercom",
+        "actor_id": actor_id,
+        **result,
+    }
+
+
+def activate_simultaneous_device(session: Any, actor_id: str, device: str) -> dict:
+    """동시 조작 장치를 활성화하고 동시성을 검증한다."""
+    if session.vertical_missions is None:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+    from app.ai.vertical_missions import VerticalMissions
+    vm: VerticalMissions = session.vertical_missions
+    sim = vm.simultaneous
+    if sim.completed:
+        raise InvalidProgression("동시 조작 미션은 이미 완료되었다")
+
+    actor = session.state.get_player(actor_id)
+    if actor is None or actor.status != PlayerStatus.ALIVE:
+        raise InvalidProgression("살아 있는 도망자만 장치를 작동할 수 있다")
+
+    slot_id = sim.device_a_slot if device == "A" else sim.device_b_slot
+    slot = get_map_slot(slot_id)
+    sx, _, sz = slot["position"]
+    if math.hypot(actor.position.x - sx, actor.position.z - sz) > MISSION_INTERACTION_RADIUS:
+        raise InvalidProgression("장치와 거리가 너무 멀다")
+
+    result = sim.activate_device(device)
+    return {
+        "mission": "floor_1_simultaneous",
+        "actor_id": actor_id,
+        "device": device,
+        **result,
     }
 
 
