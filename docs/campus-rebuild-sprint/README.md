@@ -18,3 +18,6 @@
 - [Batch 004 — 특별실 공간 문법과 실제 문 접근 검사](./batch-004.md)
 - [Batch 005 — 기능실 suite와 캡슐 진입 여유](./batch-005.md)
 - [Batch 006 — 방송 suite와 v4 트랩 정본](./batch-006.md)
+- [Batch 007 — 지하 설비실과 탈출 계약 정본](./batch-007.md)
+- [Batch 008 — 1층 행정 4실의 공간 문법 분리](./batch-008.md)
+- [Batch 009 — 적대 QA와 외부 환경 정본 제안](./batch-009.md)

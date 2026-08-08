@@ -5,6 +5,7 @@ import { buildCampus } from '../src/game/campusV4Data.js'
 
 const structural = (item) => {
   const [x, y, z] = item.s
+  if (item.forceCollider) return true
   if (item.hide && item.ramp) return true
   return (y <= 0.75 && x >= 2 && z >= 2) || (y >= 1.75 && (x >= 1.5 || z >= 1.5))
 }
@@ -12,7 +13,7 @@ const structural = (item) => {
 const campus = buildCampus({ seed: 0 })
 const walls = campus.solids
   .filter(structural)
-  .filter((item) => item.s[1] >= 1.75)
+  .filter((item) => item.s[1] >= 1.75 || item.forceCollider)
   .map((item) => ({
     floor: item.f,
     center: [item.p[0], item.p[2]],

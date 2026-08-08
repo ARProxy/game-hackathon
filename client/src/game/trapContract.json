@@ -1,18 +1,20 @@
 {
   "triggerDistance": 1.0,
   "activeCount": 5,
+  "perRound": [4, 5],
+  "mix": { "gap": [1, 2], "shortcut": [1, 2], "deadend": [1, 2], "vertical": [0, 1] },
   "traps": [
-    { "id": "trap_1f_corridor", "floor": "F1", "x": -30.0, "z": -48.3 },
-    { "id": "trap_2f_science", "floor": "F2", "x": -1.7, "z": -42.0 },
-    { "id": "trap_1f_kitchen", "floor": "F1", "x": -53.5, "z": -22.4 },
-    { "id": "trap_field_gate", "floor": "OUT", "x": -24.0, "z": 38.0 },
-    { "id": "trap_field_diag", "floor": "OUT", "x": -24.0, "z": -5.0 },
-    { "id": "trap_alley_curve", "floor": "OUT", "x": -55.0, "z": -56.0 },
-    { "id": "trap_gym_stage", "floor": "F2", "x": -40.0, "z": -34.0 },
-    { "id": "trap_1f_storage", "floor": "F1", "x": -46.3, "z": -8.0 },
-    { "id": "trap_gym_bleacher", "floor": "F3", "x": -24.0, "z": -27.6 },
-    { "id": "trap_3f_end", "floor": "F3", "x": -46.3, "z": -20.0 },
-    { "id": "trap_play_bridge", "floor": "OUT", "x": -24.0, "z": -34.0 },
-    { "id": "trap_roof_tank", "floor": "ROOF", "x": -24.0, "z": -40.0 }
+    { "id": "trap_1f_corridor", "floor": "F1", "x": -30.0, "z": -48.3, "kind": "gap", "risk": 2, "note": "1층 북측 복도 병목" },
+    { "id": "trap_2f_science", "floor": "F2", "x": -1.7, "z": -42.0, "kind": "gap", "risk": 3, "note": "2층 과학실 앞 필수 동선" },
+    { "id": "trap_1f_kitchen", "floor": "F1", "x": -53.5, "z": -22.4, "kind": "gap", "risk": 2, "note": "1층 조리실 앞 병목" },
+    { "id": "trap_field_gate", "floor": "OUT", "x": -24.0, "z": 38.0, "kind": "gap", "risk": 2, "note": "운동장 정문 개구부" },
+    { "id": "trap_field_diag", "floor": "OUT", "x": -24.0, "z": -5.0, "kind": "shortcut", "risk": 1, "note": "운동장 중앙 지름길" },
+    { "id": "trap_alley_curve", "floor": "OUT", "x": -55.0, "z": -56.0, "kind": "shortcut", "risk": 2, "note": "북서 외곽 시야 사각" },
+    { "id": "trap_gym_stage", "floor": "F2", "x": -40.0, "z": -34.0, "kind": "shortcut", "risk": 2, "note": "2층 브릿지 서단 횡단" },
+    { "id": "trap_1f_storage", "floor": "F1", "x": -46.3, "z": -8.0, "kind": "deadend", "risk": 3, "note": "서익 남단 계단실 앞" },
+    { "id": "trap_gym_bleacher", "floor": "F3", "x": -24.0, "z": -27.6, "kind": "deadend", "risk": 3, "note": "3층 전망 데크 막다른 구간" },
+    { "id": "trap_3f_end", "floor": "F3", "x": -46.3, "z": -20.0, "kind": "deadend", "risk": 3, "note": "3층 서익 복도 끝" },
+    { "id": "trap_play_bridge", "floor": "OUT", "x": -24.0, "z": -34.0, "kind": "vertical", "risk": 2, "note": "앞마당 원형 계단" },
+    { "id": "trap_roof_tank", "floor": "ROOF", "x": -24.0, "z": -40.0, "kind": "vertical", "risk": 3, "note": "옥상 헬리포트 노출 구간" }
   ]
 }

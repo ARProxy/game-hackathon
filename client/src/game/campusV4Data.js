@@ -1,5 +1,6 @@
 /* oxlint-disable no-unused-vars */
 import gameplayTrapContract from './trapContract.json' with { type: 'json' }
+import gameplayGateContract from './gateContract.json' with { type: 'json' }
 /**
  * campus.js — 야간 학교 캠퍼스 v4 (120×120)
  * 본관: ㅁ자 3층 + 지하 1층 + 옥상 / 중정 40×24 / 순환 복도 4.2m
@@ -386,7 +387,10 @@ export function buildCampus(opts = {}) {
     const canEmpty = (e) => !protectedSuiteRooms.has(e.meta.id) && e.meta.kind !== 'classroom'
     // 1층 붕괴는 지하가 있는 북측 윙에서만 — 아래가 없는 곳은 뚫을 수 없다
     const b1Under = (e) => e.f === 'F1' && e.rect.z1 <= -50.5 && e.rect.x0 >= -55.9 && e.rect.x1 <= 7.9
-    for (const e of pick(1, (e) => safe(e) && b1Under(e))) COND[e.meta.id] = 'collapse'
+    // 필수 전화/캐비닛 anchor가 seed에 따라 사라지지 않도록 1층 붕괴실은 교장실로 고정한다.
+    // 교장실은 전용 안전 lane과 고정 hole 문법을 가지므로 임의 가구가 다리가 되는 문제도 피한다.
+    const fixedF1Collapse = all.find((e) => e.meta.id === 'f1_principal' && b1Under(e))
+    if (fixedF1Collapse) COND[fixedF1Collapse.meta.id] = 'collapse'
     for (const e of pick(QUOTA.collapse - 1, (e) => safe(e) && (e.f === 'F2' || e.f === 'F3'))) COND[e.meta.id] = 'collapse'
     for (const e of pick(QUOTA.breach, safe)) COND[e.meta.id] = 'breach'
     for (const e of pick(QUOTA.messy, canEmpty)) COND[e.meta.id] = 'messy'
@@ -403,8 +407,8 @@ export function buildCampus(opts = {}) {
         const rr = rngFrom(hash32('hole:' + SEED + ':' + meta.id))
         const wR = rect.x1 - rect.x0, dR = rect.z1 - rect.z0
         const hw = Math.min(3.4, wR * 0.44), hd = Math.min(3.0, dR * 0.44)
-        const hx = rect.x0 + 1.1 + rr() * Math.max(0.1, wR - hw - 2.2) + hw / 2
-        const hz = rect.z0 + 1.1 + rr() * Math.max(0.1, dR - hd - 2.2) + hd / 2
+        const hx = meta.id === 'f1_principal' ? -16.1 : rect.x0 + 1.1 + rr() * Math.max(0.1, wR - hw - 2.2) + hw / 2
+        const hz = meta.id === 'f1_principal' ? -55.0 : rect.z0 + 1.1 + rr() * Math.max(0.1, dR - hd - 2.2) + hd / 2
         const below = FLOOR_ORDER[FLOOR_ORDER.indexOf(f) - 1]
         HOLES.push({
           f, room: meta.id, below,
@@ -774,15 +778,106 @@ export function buildCampus(opts = {}) {
       V(f, [cx + 0.6, y + 0.4, r.z1 - 1.2], [1.3, 0.7, 0.6], PAL.deskLeg)
       V(f, [cx + 1.9, y + 0.05, r.z1 - 1.2], [0.4, 0.1, 0.5], '#b8bec2')  // 체중계
     } else if (kind === 'admin') {
-      grid(2, 3, 3.2, 1.9, (x, z) => {
-        V(f, [x, y + 0.72, z], [2.6, 0.06, 1.4], PAL.desk)
-        V(f, [x, y + 0.36, z], [2.4, 0.68, 1.2], PAL.deskLeg)
-        V(f, [x, y + 1.05, z], [2.6, 0.6, 0.05], '#8d9aa5')   // 파티션
-        for (const sx of [-0.65, 0.65]) { V(f, [x + sx, y + 0.44, z], [0.44, 0.05, 0.44], PAL.chair); V(f, [x + sx, y + 0.68, z - 0.22], [0.44, 0.44, 0.05], PAL.chair) }
-      })
-      cabinet(cx, r.z0 + 0.35, Math.min(w - 2, 4.6), false)
-      V(f, [r.x1 - 0.9, y + 0.55, r.z1 - 1.0], [0.9, 1.1, 0.7], '#43494e') // 복사기
-      V(f, [r.x1 - 0.9, y + 1.15, r.z1 - 1.0], [0.7, 0.1, 0.55], '#71787d')
+      // 같은 '사무실' 템플릿을 반복하지 않는다. 네 행정실은 실루엣·동선·상호작용이 모두 다르다.
+      if (meta.id === 'f1_staff') {
+        // 교무실: 동측 문에서 중앙 당직 전화까지 1.9m 진입축, 뒤에는 세 개의 교사 pod.
+        localBox(0, 3.6, 0.74, [1.6, 0.08, 0.65], PAL.desk, 0, {
+          landmarkRole: 'staff-phone-desk', anchorIds: ['p_f1_staff_desk'],
+        })
+        localBox(0, 3.6, 0.37, [1.45, 0.7, 0.55], PAL.deskLeg)
+        localSolid(0, 3.6, 0.39, [1.6, 0.78, 0.65], PAL.desk, 0, {
+          landmarkRole: 'staff-phone-desk-collider', hide: true, forceCollider: true,
+        })
+        localBox(0, 3.55, 0.88, [0.32, 0.2, 0.22], '#30373c', 0, { landmarkRole: 'staff-phone' })
+        for (const u of [-4.2, 0, 4.2]) {
+          localBox(u, 5.45, 0.75, [2.5, 0.08, 1.25], PAL.desk, 0, { landmarkRole: 'teacher-pod' })
+          localBox(u, 5.45, 0.37, [2.35, 0.7, 1.08], PAL.deskLeg)
+          localSolid(u, 5.45, 0.375, [2.5, 0.75, 1.25], PAL.desk, 0, {
+            landmarkRole: 'teacher-pod-collider', hide: true, forceCollider: true,
+          })
+          localBox(u, 5.15, 1.18, [0.62, 0.52, 0.08], '#252d33')
+        }
+        localBox(5.8, 7.08, 1.75, [2.3, 1.1, 0.06], '#667b63', 0, {
+          landmarkRole: 'attendance-board', navRole: 'wall-mounted',
+        })
+        localBox(-5.1, 6.92, 0.83, [3.5, 1.65, 0.48], PAL.locker, 0, { landmarkRole: 'staff-pigeonholes' })
+        localBox(6.65, 5.4, 0.55, [0.9, 1.1, 0.72], '#43494e', 0, { landmarkRole: 'staff-copier' })
+        localBox(6.65, 5.18, 1.14, [0.7, 0.1, 0.5], '#71787d')
+        localSolid(-5.1, 6.92, 0.825, [3.5, 1.65, 0.48], PAL.locker, 0, {
+          landmarkRole: 'staff-pigeonholes-collider', hide: true, forceCollider: true,
+        })
+        localSolid(6.65, 5.4, 0.55, [0.9, 1.1, 0.72], '#43494e', 0, {
+          landmarkRole: 'staff-copier-collider', hide: true, forceCollider: true,
+        })
+      } else if (meta.id === 'f1_admin') {
+        // 행정실: 민원인 전실과 직원 기록 구역을 긴 카운터로 분리한다.
+        localBox(0.95, 3.1, 0.82, [4.6, 0.12, 0.75], '#9b8062', 0, {
+          landmarkRole: 'admin-service-counter',
+        })
+        localBox(0.95, 3.1, 0.4, [4.4, 0.8, 0.65], PAL.deskLeg)
+        localSolid(0.95, 3.1, 0.41, [4.6, 0.82, 0.75], '#9b8062', 0, {
+          landmarkRole: 'admin-service-counter-collider', hide: true, forceCollider: true,
+        })
+        localBox(1.7, 2.68, 0.93, [0.55, 0.14, 0.28], PAL.paper, 0, { landmarkRole: 'document-tray' })
+        localBox(0.15, 3.1, 0.92, [0.7, 0.18, 0.4], '#8f4035', 0, { landmarkRole: 'approval-stamp' })
+        for (const u of [1.55, 2.75]) {
+          localBox(u, 6.68, 0.9, [1.05, 1.8, 0.45], PAL.locker, 0, {
+            landmarkRole: u === 2.75 ? 'records-cabinet-anchor' : 'records-cabinet',
+            ...(u === 2.75 ? { anchorIds: ['p_f1_admin_cab', 'm_f1_admin'] } : {}),
+          })
+          localSolid(u, 6.68, 0.9, [1.05, 1.8, 0.45], PAL.locker, 0, {
+            landmarkRole: 'records-cabinet-collider', hide: true, forceCollider: true,
+          })
+        }
+        localBox(-0.9, 6.4, 0.58, [0.9, 1.15, 0.72], '#43494e', 0, { landmarkRole: 'admin-copier' })
+        localSolid(-0.9, 6.4, 0.575, [0.9, 1.15, 0.72], '#43494e', 0, {
+          landmarkRole: 'admin-copier-collider', hide: true, forceCollider: true,
+        })
+        if (cond !== 'stripped') localBox(2.55, 1.35, 0.44, [1.55, 0.48, 0.48], PAL.chair, 0, { landmarkRole: 'waiting-bench' })
+        for (const u of [0.4, 1.2, 2.0]) localBox(u, 1.85, 0.025, [0.55, 0.03, 0.08], '#d6b65f', 0, { navRole: 'floor-decal' })
+      } else if (meta.id === 'f1_principal') {
+        // 교장실: 중앙 붕괴공을 가구로 덮지 않고 동측 1.5m 안전 lane만 사용한다.
+        localBox(-3.0, 6.72, 0.8, [1.6, 0.1, 0.65], '#71563f', 0, { landmarkRole: 'principal-desk' })
+        localBox(-3.0, 6.72, 0.39, [1.45, 0.75, 0.55], PAL.deskLeg)
+        localSolid(-3.0, 6.72, 0.4, [1.6, 0.8, 0.65], '#71563f', 0, {
+          landmarkRole: 'principal-desk-collider', hide: true, forceCollider: true,
+        })
+        localBox(-3.0, 6.48, 0.91, [0.55, 0.16, 0.18], '#b99455', 0, { landmarkRole: 'principal-nameplate' })
+        localBox(-3.72, 2.25, 1.34, [0.16, 0.56, 0.55], '#5f6870', 0, {
+          landmarkRole: 'principal-keybox', navRole: 'wall-mounted',
+        })
+        localBox(2.3, 7.08, 1.8, [2.1, 1.2, 0.06], '#7b654f', 0, {
+          landmarkRole: 'principal-portrait', navRole: 'wall-mounted',
+        })
+        localBox(2.65, 2.15, 0.2, [0.55, 0.35, 0.55], PAL.chair, 0.18, { landmarkRole: 'fallen-visitor-chair' })
+      } else {
+        // 상담실: 낮은 대화 가구는 양의 u측에, 음의 u측 문→뒤벽 축은 비운다.
+        localBox(1.45, 4.35, 0.39, [2.2, 0.1, 0.85], '#738899', 0, {
+          landmarkRole: 'counsel-sofa', anchorIds: ['p_f1_counsel_sofa'],
+        })
+        localBox(1.45, 4.35, 0.2, [2.1, 0.38, 0.78], '#657887')
+        localSolid(1.45, 4.35, 0.22, [2.2, 0.44, 0.85], '#738899', 0, {
+          landmarkRole: 'counsel-sofa-collider', hide: true, forceCollider: true,
+        })
+        localBox(1.45, 4.68, 0.76, [2.2, 0.65, 0.18], '#657887')
+        localBox(1.45, 2.15, 0.44, [0.7, 0.48, 0.7], PAL.chair, 0, { landmarkRole: 'counsel-chair' })
+        localSolid(1.45, 2.15, 0.22, [0.7, 0.44, 0.7], PAL.chair, 0, {
+          landmarkRole: 'counsel-chair-collider', hide: true, forceCollider: true,
+        })
+        localCylinder(0.5, 3.15, 0.26, 0.5, 0.52, '#9a7e5b', { landmarkRole: 'emotion-card-table' })
+        localSolid(0.5, 3.15, 0.26, [1.0, 0.52, 1.0], '#9a7e5b', 0, {
+          landmarkRole: 'emotion-card-table-collider', hide: true, forceCollider: true,
+        })
+        localBox(0.5, 3.15, 0.55, [0.58, 0.04, 0.32], '#e9d8ac', 0, { landmarkRole: 'emotion-cards' })
+        localBox(3.05, 4.9, 1.8, [0.06, 1.8, 1.2], '#7d997b', 0, {
+          landmarkRole: 'feeling-board', navRole: 'wall-mounted',
+        })
+        localBox(1.1, 6.75, 0.58, [3.6, 1.15, 0.45], PAL.wood, 0, { landmarkRole: 'counsel-books' })
+        localSolid(1.1, 6.75, 0.575, [3.6, 1.15, 0.45], PAL.wood, 0, {
+          landmarkRole: 'counsel-books-collider', hide: true, forceCollider: true,
+        })
+        localCylinder(0.85, 3.55, 0.01, 1.55, 0.02, '#8e7772', { navRole: 'floor-decal' })
+      }
     } else if (kind === 'library') {
       // 16m 긴 축을 실제 서가 탐색축으로 쓴다. +u측은 출입문에서 열람대로 이어지는 주통로다.
       for (const u of [-5.0, -2.6, -0.2]) localShelf(u, 4.2, 3.8, 0.45, Math.PI / 2)
@@ -854,7 +949,10 @@ export function buildCampus(opts = {}) {
         localBox(0.825, 5.05, 1.55, [5.85, 1.5, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass', navRole: 'collision-visual' })
         localSolid(0.825, 5.05, 1.55, [5.85, 1.8, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass-collider', hide: true })
         localBox(-3.475, 5.05, 1.55, [0.55, 1.5, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass-stub', navRole: 'collision-visual' })
-        localSolid(-3.475, 5.05, 1.55, [0.55, 1.8, 0.06], PAL.glass, 0, { landmarkRole: 'booth-glass-stub-collider', hide: true })
+        // 구조물 휴리스틱의 최소 길이 1.5m를 만족시키되, 여분은 방 경계 밖으로만 확장한다.
+        localSolid(-3.95, 5.05, 1.55, [1.5, 1.8, 0.06], PAL.glass, 0, {
+          landmarkRole: 'booth-glass-stub-collider', hide: true, boundaryCollider: true,
+        })
         localBox(0.8, 6.15, 0.8, [1.5, 0.06, 0.8], PAL.desk)
         localCylinder(0.8, 6.15, 1.15, 0.02, 0.4, PAL.steel)
         localBox(0.8, 6.15, 1.4, [0.1, 0.14, 0.1], '#1c2126', 0, { landmarkRole: 'studio-mic' })
@@ -1115,15 +1213,49 @@ export function buildCampus(opts = {}) {
       V(f, [r.x1 - 1.4, y + 0.44, cz + 0.0], [0.44, 0.05, 0.44], PAL.chair)
       cabinet(cx, r.z1 - 0.4, 1.8, false)
     } else if (kind === 'machine') {
-      for (let i = 0; i < 3; i++) {
-        const x = r.x0 + 2.0 + i * 3.4
-        V(f, [x, y + 0.8, cz], [1.6, 1.6, 1.6], '#4e565c')
-        CY(f, [x, y + 1.75, cz], 0.35, 0.35, '#6d767c')
-        CY(f, [x, y + 2.6, cz], 0.12, 1.4, '#5e666c')
+      if (meta.id === 'b1_tank') {
+        for (const u of [-2.15, 2.15]) {
+          localCylinder(u, 6.15, 1.225, 1.05, 2.45, '#506b78', { landmarkRole: 'water-tank' })
+          localSolid(u, 6.15, 1.225, [2.1, 2.45, 2.1], '#506b78', 0, { landmarkRole: 'water-tank-collider', hide: true })
+          localBox(u, 5.95, 2.45, [0.2, 0.2, 1.0], '#6f7a80', 0, { navRole: 'ceiling-mounted' })
+        }
+        localBox(0, 6.62, 0.78, [1.35, 1.55, 0.55], '#657178', 0, { landmarkRole: 'tank-manifold' })
+        for (const u of [-0.42, 0, 0.42]) localCylinder(u, 6.3, 1.62, 0.13, 0.08, '#d7dde0', { landmarkRole: 'pressure-gauge' })
+        localBox(0, 3.15, 0.02, [0.55, 0.02, 0.55], '#3e474d', 0, { navRole: 'floor-decal' })
+      } else if (meta.id === 'b1_mach') {
+        for (const [u, v] of [[-3.55, 3.05], [3.55, 3.05], [-3.55, 5.45], [3.55, 5.45]]) {
+          localBox(u, v, 0.575, [2.35, 1.15, 1.1], '#855d35', 0, { landmarkRole: 'pump-skid' })
+          localSolid(u, v, 0.9, [2.35, 1.8, 1.1], '#855d35', 0, { landmarkRole: 'pump-skid-collider', hide: true })
+          localCylinder(u, v, 1.34, 0.24, 0.4, '#6f7a80', { landmarkRole: 'pump-motor' })
+        }
+        localBox(0, 6.66, 0.825, [2.5, 1.65, 0.52], '#444e56', 0, { landmarkRole: 'machine-control' })
+        localBox(-5.3, 1.35, 0.425, [1.25, 0.85, 0.65], PAL.steel, 0, { landmarkRole: 'maintenance-bench' })
+        for (const u of [-2, 2]) localBox(u, 3.9, 2.72, [0.28, 0.28, 5.8], '#6f7a80', 0, { landmarkRole: 'main-pipe', navRole: 'ceiling-mounted' })
+        localBox(5.35, 1.45, 0.625, [0.22, 1.25, 0.22], '#8c3030', 0, { landmarkRole: 'emergency-stop' })
+      } else if (meta.id === 'b1_elec') {
+        for (const u of [-2.55, -0.85, 0.85, 2.55]) {
+          localBox(u, 6.75, 1.05, [1.45, 2.1, 0.5], '#4c555d', 0, { landmarkRole: 'switchgear' })
+          localSolid(u, 6.75, 1.05, [1.5, 2.1, 0.5], '#4c555d', 0, { landmarkRole: 'switchgear-collider', hide: true })
+          for (let i = 0; i < 3; i++) localBox(u, 6.48, 0.52 + i * 0.5, [1.05, 0.12, 0.04], i === 2 ? '#c6a13b' : '#20272d')
+        }
+        for (const u of [-3.55, 3.55]) {
+          localBox(u, 3.55, 0.925, [1.1, 1.85, 1.25], '#555e65', 0, { landmarkRole: 'ups-bank' })
+          localSolid(u, 3.55, 0.925, [1.1, 1.85, 1.5], '#555e65', 0, { landmarkRole: 'ups-bank-collider', hide: true })
+        }
+        localBox(0, 4.75, 0.015, [1.4, 0.03, 2.6], '#b69a36', 0, { navRole: 'floor-decal' })
+        localBox(0, 7.12, 2.35, [2.4, 0.55, 0.04], '#d2b144', 0, { landmarkRole: 'high-voltage', navRole: 'wall-mounted' })
+        localBox(-3.85, 1.25, 0.45, [0.28, 0.9, 0.28], '#a5352e', 0, { landmarkRole: 'extinguisher' })
+      } else {
+        // 남측 펌프실은 별도 수직동선 클러스터에서 재설계한다.
+        for (let i = 0; i < 3; i++) {
+          const x = r.x0 + 2.0 + i * 3.4
+          V(f, [x, y + 0.8, cz], [1.6, 1.6, 1.6], '#4e565c')
+          CY(f, [x, y + 1.75, cz], 0.35, 0.35, '#6d767c')
+          CY(f, [x, y + 2.6, cz], 0.12, 1.4, '#5e666c')
+        }
+        V(f, [r.x1 - 0.5, y + 1.5, cz], [0.5, 2.0, 3.0], '#3f474d')
+        for (let i = 0; i < 5; i++) CY(f, [cx, y + 2.9, r.z0 + 0.9 + i * 1.3], 0.09, w - 1.0, '#6a7278', [0, 0, Math.PI / 2])
       }
-      V(f, [r.x1 - 0.5, y + 1.5, cz], [0.5, 2.0, 3.0], '#3f474d')       // 배전반
-      for (let i = 0; i < 6; i++) V(f, [r.x1 - 0.76, y + 2.2 - i * 0.24, cz - 1.0 + (i % 3) * 1.0], [0.04, 0.1, 0.6], '#8b939a')
-      for (let i = 0; i < 5; i++) CY(f, [cx, y + 2.9, r.z0 + 0.9 + i * 1.3], 0.09, w - 1.0, '#6a7278', [0, 0, Math.PI / 2])
     } else if (kind === 'toilet') {
       const cells = 4
       for (let i = 0; i < cells; i++) {
@@ -2208,8 +2340,9 @@ export function buildCampus(opts = {}) {
     const zones = []
     for (const d of doors) {
       if (d.kind === 'elevator') continue
-      const cx = d.axis === 'x' ? d.hinge[0] + d.w / 2 : d.fixed
-      const cz = d.axis === 'x' ? d.fixed : d.hinge[2] + d.w / 2
+      const leafDirection = d.flip ? -1 : 1
+      const cx = d.axis === 'x' ? d.hinge[0] + leafDirection * d.w / 2 : d.fixed
+      const cz = d.axis === 'x' ? d.fixed : d.hinge[2] + leafDirection * d.w / 2
       zones.push({ f: d.f, axis: d.axis, fixed: d.fixed, c: d.axis === 'x' ? cx : cz, w: d.w, y: FLOOR_Y[d.f] })
     }
     // 승강기 승강장 앞도 같은 규칙
@@ -2293,13 +2426,13 @@ export function buildCampus(opts = {}) {
  */
 export const PROP_SLOTS = [
   { id: 'p_f1_staff_desk', room: 'f1_staff', p: [-36, -54.2], floor: 'F1', surfaceY: 0.78, note: '교무실 책상 서류함' },
-  { id: 'p_f1_admin_cab', room: 'f1_admin', p: [-24, -54.2], floor: 'F1', surfaceY: 1.8, note: '행정실 캐비닛 위' },
+  { id: 'p_f1_admin_cab', room: 'f1_admin', p: [-26.75, -57.28], floor: 'F1', surfaceY: 1.8, note: '행정실 기록 캐비닛 위' },
   { id: 'p_f1_health_bed', room: 'f1_health', p: [-8, -54.2], floor: 'F1', surfaceY: 0.62, note: '보건실 침대 옆' },
   { id: 'p_f1_cafe_tray', room: 'f1_cafeteria', p: [-54.4, -33.08], floor: 'F1', surfaceY: 1.05, note: '급식실 suite측 배식대' },
   { id: 'p_f1_kitchen_rack', room: 'f1_kitchen', p: [-55.15, -22.38], floor: 'F1', surfaceY: 0.95, note: '외벽 조리대 상단' },
   { id: 'p_f1_council_box', room: 'f1_council', p: [4.2, -22], floor: 'F1', surfaceY: 0.75, note: '학생회실 의견함' },
   { id: 'p_f1_lobby_shoe', room: 'f1_core_se_b', p: [3.6, -1.8], floor: 'F1', surfaceY: 1.8, note: '중앙 현관 신발장 위' },
-  { id: 'p_f1_counsel_sofa', room: 'f1_counsel', p: [4.2, -42], floor: 'F1', surfaceY: 0.44, note: '상담실 소파 쿠션 밑' },
+  { id: 'p_f1_counsel_sofa', room: 'f1_counsel', p: [4.95, -44.075], floor: 'F1', surfaceY: 0.44, note: '상담실 소파 쿠션 밑' },
   { id: 'p_f2_c22_locker', room: 'f2_c22', p: [-32, -54.2], floor: 'F2', surfaceY: 5.4, note: '2-2 사물함 위' },
   { id: 'p_f2_c24_podium', room: 'f2_c24', p: [-16, -54.2], floor: 'F2', surfaceY: 4.55, note: '2-4 교탁 서랍' },
   { id: 'p_f2_sci_hood', room: 'f2_science', p: [4.2, -42], floor: 'F2', surfaceY: 4.5, note: '흄후드 안' },
@@ -2321,7 +2454,7 @@ export const PROP_SLOTS = [
 /** 미션지 슬롯 10 — 한 판 3개 활성. doc 필드는 room-mission-design.md 후보 번호 */
 export const MISSION_SLOTS = [
   { id: 'm_f1_kitchen', name: '배전반 퓨즈 복구', tags: ['solo'], room: 'f1_kitchen', p: [-55.1, -22.4], floor: 'F1', hintZone: '1층 서익 조리실 외벽' },
-  { id: 'm_f1_admin', name: '캐비닛 암호', tags: ['solo'], room: 'f1_admin', p: [-24, -54.2], floor: 'F1', hintZone: '1층 북측 행정실' },
+  { id: 'm_f1_admin', name: '캐비닛 암호', tags: ['solo'], room: 'f1_admin', p: [-26.75, -57.28], floor: 'F1', hintZone: '1층 북측 행정실 기록 캐비닛' },
   { id: 'm_f1_security', name: 'CCTV 음성 관제', tags: ['coop', 'voice'], room: 'f1_security', p: [4.2, -14], floor: 'F1', hintZone: '1층 동익 경비·방재실', doc: 'M16' },
   { id: 'm_f2_interphone', name: '교실 인터폰 릴레이', tags: ['coop', 'voice'], room: 'f2_c23', p: [-24, -54.2], floor: 'F2', hintZone: '2층 북측 교실 · 송수신 2실', doc: 'M06' },
   { id: 'm_f2_science', name: '약품 배열 순서', tags: ['solo'], room: 'f2_science', p: [4.2, -42], floor: 'F2', hintZone: '과학실' },
@@ -2332,36 +2465,19 @@ export const MISSION_SLOTS = [
   { id: 'm_b1_mach', name: '급수 밸브 압력', tags: ['coop'], room: 'b1_mach', p: [-39, -54], floor: 'B1', hintZone: '지하 기계실' },
 ]
 
-/** 런타임과 생성기가 공유하는 12개 트랩 정본. 좌표·층은 trapContract.json만 소유한다. */
-const TRAP_METADATA = {
-  trap_1f_corridor: { kind: 'gap', risk: 2, note: '1층 북측 복도 병목' },
-  trap_2f_science: { kind: 'gap', risk: 3, note: '2층 과학실 앞 필수 동선' },
-  trap_1f_kitchen: { kind: 'gap', risk: 2, note: '1층 조리실 앞 병목' },
-  trap_field_gate: { kind: 'gap', risk: 2, note: '운동장 정문 개구부' },
-  trap_field_diag: { kind: 'shortcut', risk: 1, note: '운동장 중앙 지름길' },
-  trap_alley_curve: { kind: 'shortcut', risk: 2, note: '북서 외곽 시야 사각' },
-  trap_gym_stage: { kind: 'shortcut', risk: 2, note: '2층 브릿지 서단 횡단' },
-  trap_1f_storage: { kind: 'deadend', risk: 3, note: '서익 남단 계단실 앞' },
-  trap_gym_bleacher: { kind: 'deadend', risk: 3, note: '3층 전망 데크 막다른 구간' },
-  trap_3f_end: { kind: 'deadend', risk: 3, note: '3층 서익 복도 끝' },
-  trap_play_bridge: { kind: 'vertical', risk: 2, note: '앞마당 원형 계단' },
-  trap_roof_tank: { kind: 'vertical', risk: 3, note: '옥상 헬리포트 노출 구간' },
-}
-export const TRAP_SLOTS = gameplayTrapContract.traps.map(({ id, floor, x, z }) => {
-  const metadata = TRAP_METADATA[id]
-  if (!metadata) throw new Error(`Missing generated trap metadata: ${id}`)
-  return { id, p: [x, z], floor, ...metadata }
-})
+/** 런타임과 생성기가 공유하는 12개 트랩 정본. 좌표·층·의미는 JSON만 소유한다. */
+export const TRAP_SLOTS = gameplayTrapContract.traps.map(({ id, floor, x, z, kind, risk, note }) => ({
+  id, p: [x, z], floor, kind, risk, note,
+}))
 
-/** 탈출 게이트 4 — 한 판 1개 */
-export const GATE_SLOTS = [
-  { id: 'g_main', name: '정문', p: [-24, 38], rotY: 0, floor: 'OUT' },
-  { id: 'g_back', name: '후문 골목', p: [-58, -56], rotY: 0, floor: 'OUT' },
-  { id: 'g_west', name: '서익 남단 비상구', p: [-52.2, 2.2], rotY: 0, floor: 'OUT' },
-  { id: 'g_east', name: '동익 남단 비상구', p: [4.2, 2.2], rotY: 0, floor: 'OUT' },
-  // 위로 가는 탈출구 — 미션을 끝낸 뒤 옥상으로 올라갈 이유를 만든다
-  { id: 'g_roof', name: '옥상 헬리포트', p: [-24, -40], rotY: 0, floor: 'ROOF', note: '외부 비상계단으로도 닿는다' },
-]
+/** 실제 런타임이 선택하는 탈출 게이트. 좌표·회전은 gateContract.json만 소유한다. */
+export const GATE_SLOTS = gameplayGateContract.gates.map((gate) => ({
+  id: gate.id,
+  name: gate.name,
+  p: gate.position,
+  rotY: gate.rotationY,
+  floor: gate.floor,
+}))
 
 /**
  * 델타 슬롯 — 같은 좌표가 '정상'과 '이상' 두 상태를 갖는다.
@@ -2452,8 +2568,8 @@ export function buildContracts(opts = {}) {
       cores: CORES.map((c) => ({ id: c.id, name: c.name, x: c.x, z: c.z })),
     },
     'actorContract.json': { spawns: SPAWNS, patrol: PATROL },
-    'trapContract.json': { traps: TRAP_SLOTS, perRound: [4, 5], mix: { gap: [1, 2], shortcut: [1, 2], deadend: [1, 2], vertical: [0, 1] } },
-    'gateContract.json': { gates: GATE_SLOTS, sensorLocalZ: 1.2, lockedBlockerHalfSize: [2.0, 1.6, 0.2] },
+    'trapContract.json': gameplayTrapContract,
+    'gateContract.json': gameplayGateContract,
     'missionContract.json': { props: PROP_SLOTS, missions: MISSION_SLOTS, perRound: 3 },
     'deltaContract.json': { deltas: DELTA_SLOTS, channels: CHANNELS, camera: CAMERA, perRound: [0, 3], rule: 'anchor 는 기존 슬롯만 참조한다. 신규 좌표 금지.' },
   }

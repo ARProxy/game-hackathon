@@ -185,6 +185,7 @@ function groupByFamily<T extends { c: string }>(items: T[]) {
 /** 큰 구조물만 물리 충돌체로 만들고 작은 장식은 시각 전용으로 유지한다. */
 function isStructural(item: CampusBox) {
   const [x, y, z] = item.s
+  if (item.forceCollider) return true
   if (item.hide && item.ramp) return true
   const isWalkableSlab = y <= 0.75 && x >= 2 && z >= 2
   const isWall = y >= 1.75 && (x >= 1.5 || z >= 1.5)

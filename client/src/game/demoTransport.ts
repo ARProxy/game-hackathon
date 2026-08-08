@@ -19,7 +19,7 @@ const PROP_POOL = [
   { word: '우산', prop_id: 'demo-umbrella', name: '접힌 우산', color: '#466a8c', mesh: 'cylinder', scale: 0.45 },
   { word: '책', prop_id: 'demo-book', name: '낡은 책', color: '#6d5038', mesh: 'box', scale: 0.4 },
 ]
-const GATE = { gate_id: 'gate_back', position: { x: -7, z: 38 } }
+const GATE = { gate_id: 'gate_back', position: { x: -58, z: -56 } }
 
 export default class DemoTransport {
   private playerId: string

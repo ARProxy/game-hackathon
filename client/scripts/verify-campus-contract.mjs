@@ -6,6 +6,7 @@ import {
   CLASSROOM_LAYOUTS,
   DELTA_SLOTS,
   FLOOR_Y,
+  GATE_SLOTS,
   MAP_SIZE,
   MISSION_SLOTS,
   PROP_SLOTS,
@@ -14,15 +15,17 @@ import {
 } from '../src/game/campusV4Data.js'
 import collisionContract from '../src/game/serverCollisionContract.json' with { type: 'json' }
 import gameplayTrapContract from '../src/game/trapContract.json' with { type: 'json' }
+import gameplayGateContract from '../src/game/gateContract.json' with { type: 'json' }
+import verticalMapContract from '../src/game/verticalMapContract.json' with { type: 'json' }
 
 const campus = buildCampus({ seed: 0 })
 const alternate = buildCampus({ seed: 1 })
 
 const expected = {
-  solids: 2394,
-  visuals: 5804,
-  plates: 549,
-  cyls: 1357,
+  solids: 2422,
+  visuals: 5675,
+  plates: 543,
+  cyls: 1331,
   fixtures: 150,
   rooms: 80,
   doors: 127,
@@ -84,7 +87,7 @@ for (const item of localPrimitives) {
   const { localWidth, localDepth, extentU, extentV } = localMetrics(room, item)
   const [expectedX, expectedZ] = localToWorld(room, item.local[0], item.local[1])
   assert.ok(Math.abs(item.p[0] - expectedX) <= 0.001 && Math.abs(item.p[2] - expectedZ) <= 0.001, `${room.id} prop local/world coordinates diverged`)
-  assert.ok(Math.abs(item.local[0]) + extentU <= localWidth / 2 + 0.02, `${room.id} prop escaped room width`)
+  if (!item.boundaryCollider) assert.ok(Math.abs(item.local[0]) + extentU <= localWidth / 2 + 0.02, `${room.id} prop escaped room width`)
   assert.ok(item.local[1] - extentV >= -0.02 && item.local[1] + extentV <= localDepth + 0.02, `${room.id} prop escaped room depth`)
   const primitiveHeight = item.s?.[1] ?? item.h
   const floorBottom = item.p[1] - primitiveHeight / 2 - FLOOR_Y[room.floor]
@@ -110,7 +113,10 @@ for (const item of anchoredPrimitives) {
   for (const anchorId of item.anchorIds) {
     const anchor = anchorById[anchorId]
     assert.ok(anchor, `${item.landmarkRole} references missing anchor ${anchorId}`)
-    assert.deepEqual(anchor.p, [item.p[0], item.p[2]], `${anchorId} drifted from ${item.landmarkRole}`)
+    assert.ok(
+      Math.abs(anchor.p[0] - item.p[0]) <= 0.001 && Math.abs(anchor.p[1] - item.p[2]) <= 0.001,
+      `${anchorId} drifted from ${item.landmarkRole}`,
+    )
     if (anchor.surfaceY != null) {
       const top = item.p[1] + item.s[1] / 2
       assert.ok(Math.abs(anchor.surfaceY - top) <= 0.001, `${anchorId} surface height drifted from ${item.landmarkRole}`)
@@ -124,6 +130,9 @@ assert.equal(boothColliders.length, 2, 'Broadcast booth visuals and physical occ
 const [leftPanel, rightPanel] = boothGlass.sort((a, b) => a.local[0] - b.local[0])
 const boothOpening = (rightPanel.local[0] - rightPanel.s[0] / 2) - (leftPanel.local[0] + leftPanel.s[0] / 2)
 assert.ok(Math.abs(boothOpening - 1.1) <= 0.001, `Broadcast booth opening must be 1.10m, got ${boothOpening}`)
+const [leftCollider, rightCollider] = boothColliders.sort((a, b) => a.local[0] - b.local[0])
+const physicalBoothOpening = (rightCollider.local[0] - rightCollider.s[0] / 2) - (leftCollider.local[0] + leftCollider.s[0] / 2)
+assert.ok(Math.abs(physicalBoothOpening - boothOpening) <= 0.001, `Broadcast visual/physical openings diverged: ${boothOpening} vs ${physicalBoothOpening}`)
 
 const doorById = Object.fromEntries(campus.doors.map((door) => [door.id, door]))
 const worldToLocal = (room, x, z) => {
@@ -223,7 +232,7 @@ for (const room of campus.rooms.filter((item) => ['F2', 'F3'].includes(item.floo
   assert.deepEqual([other?.floor, other?.cx, other?.cz], [room.floor, room.cx, room.cz], `${room.id} architecture moved with seed`)
 }
 const protectedSuiteIds = new Set(REQUIRED_SUITE_EDGES.flat())
-for (let seed = 0; seed < 16; seed++) {
+for (let seed = 0; seed < 200; seed++) {
   const sample = buildCampus({ seed })
   for (const roomId of protectedSuiteIds) assert.equal(sample.conditions[roomId], 'intact', `${roomId} lost suite grammar at seed ${seed}`)
   const sampleCounts = Object.values(sample.conditions).reduce((counts, condition) => {
@@ -235,31 +244,149 @@ for (let seed = 0; seed < 16; seed++) {
     expectedQuota,
     `Seed ${seed} failed the fixed damage quota`,
   )
+  assert.notEqual(sample.conditions.f1_staff, 'collapse', `Seed ${seed} removed the required staff phone assembly`)
+  assert.notEqual(sample.conditions.f1_admin, 'collapse', `Seed ${seed} removed the required admin cabinet assembly`)
+  assert.equal(sample.conditions.f1_principal, 'collapse', `Seed ${seed} moved the authored principal-room collapse`)
+  for (const anchorId of ['p_f1_staff_desk', 'p_f1_admin_cab', 'p_f1_counsel_sofa', 'm_f1_admin']) {
+    const survives = [...sample.visuals, ...sample.cyls, ...sample.solids]
+      .some((item) => item.anchorIds?.includes(anchorId))
+    assert.equal(survives, true, `Seed ${seed} deleted essential anchor assembly ${anchorId}`)
+  }
 }
 
 const structural = (item) => {
   const [x, y, z] = item.s
+  if (item.forceCollider) return true
   if (item.hide && item.ramp) return true
   return (y <= 0.75 && x >= 2 && z >= 2) || (y >= 1.75 && (x >= 1.5 || z >= 1.5))
 }
-const exportedWalls = campus.solids.filter(structural).filter((item) => item.s[1] >= 1.75).map((item) => ({
+const exportedWalls = campus.solids.filter(structural).filter((item) => item.s[1] >= 1.75 || item.forceCollider).map((item) => ({
   floor: item.f,
   center: [item.p[0], item.p[2]],
   size: [item.s[0], item.s[2]],
   rotationY: Array.isArray(item.rot) ? (item.rot[1] ?? 0) : (item.rot?.rot?.[1] ?? 0),
 }))
 assert.deepEqual(collisionContract.walls, exportedWalls, 'Server collision export is stale')
+const utilityRequirements = {
+  b1_tank: { roles: ['water-tank', 'tank-manifold'], proxies: { 'water-tank-collider': 2 } },
+  b1_mach: { roles: ['pump-skid', 'machine-control'], proxies: { 'pump-skid-collider': 4 } },
+  b1_elec: { roles: ['switchgear', 'ups-bank', 'high-voltage'], proxies: { 'switchgear-collider': 4, 'ups-bank-collider': 2 } },
+}
+const seenUtilityRoles = new Set()
+for (const [roomId, requirement] of Object.entries(utilityRequirements)) {
+  const owned = localPrimitives.filter((item) => item.roomId === roomId)
+  for (const role of requirement.roles) {
+    assert.ok(owned.some((item) => item.landmarkRole === role), `${roomId} lost landmark ${role}`)
+    assert.equal(seenUtilityRoles.has(role), false, `${role} was reused across the B1 utility triad`)
+    seenUtilityRoles.add(role)
+  }
+  for (const [role, count] of Object.entries(requirement.proxies)) {
+    const proxies = localSolids.filter((item) => item.roomId === roomId && item.landmarkRole === role)
+    assert.equal(proxies.length, count, `${roomId} proxy count drifted for ${role}`)
+    assert.ok(proxies.every(structural), `${roomId} contains a proxy that Rapier would drop`)
+  }
+  const corridorBlockers = localSolids.filter((item) => item.roomId === roomId && structural(item)).filter((item) => {
+    const room = roomById[roomId]
+    const { extentU, extentV } = localMetrics(room, item)
+    return item.local[0] + extentU > -0.7 && item.local[0] - extentU < 0.7
+      && item.local[1] + extentV > 1.9 && item.local[1] - extentV < 6.5
+  })
+  assert.deepEqual(corridorBlockers, [], `${roomId} blocked the 1.40m central service aisle`)
+}
+const parityPairs = [
+  ['b1_tank', 'water-tank', 'water-tank-collider'],
+  ['b1_mach', 'pump-skid', 'pump-skid-collider'],
+  ['b1_elec', 'switchgear', 'switchgear-collider'],
+  ['b1_elec', 'ups-bank', 'ups-bank-collider'],
+]
+for (const [roomId, visualRole, colliderRole] of parityPairs) {
+  const visualLocations = localPrimitives.filter((item) => item.roomId === roomId && item.landmarkRole === visualRole)
+    .map((item) => item.local).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  const colliderLocations = localSolids.filter((item) => item.roomId === roomId && item.landmarkRole === colliderRole)
+    .map((item) => item.local).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  assert.deepEqual(colliderLocations, visualLocations, `${roomId} ${visualRole} visual/proxy locations diverged`)
+}
+const adminRequirements = {
+  f1_staff: {
+    landmarks: ['staff-phone-desk', 'teacher-pod', 'attendance-board', 'staff-pigeonholes'],
+    proxies: { 'staff-phone-desk-collider': 1, 'teacher-pod-collider': 3, 'staff-pigeonholes-collider': 1, 'staff-copier-collider': 1 },
+  },
+  f1_admin: {
+    landmarks: ['admin-service-counter', 'records-cabinet-anchor', 'approval-stamp'],
+    proxies: { 'admin-service-counter-collider': 1, 'records-cabinet-collider': 2, 'admin-copier-collider': 1 },
+  },
+  f1_principal: {
+    landmarks: ['principal-desk', 'principal-keybox', 'principal-portrait'],
+    proxies: { 'principal-desk-collider': 1 },
+  },
+  f1_counsel: {
+    landmarks: ['counsel-sofa', 'counsel-chair', 'emotion-card-table', 'feeling-board'],
+    proxies: { 'counsel-sofa-collider': 1, 'counsel-chair-collider': 1, 'emotion-card-table-collider': 1, 'counsel-books-collider': 1 },
+  },
+}
+for (const [roomId, requirement] of Object.entries(adminRequirements)) {
+  const owned = localPrimitives.filter((item) => item.roomId === roomId)
+  for (const landmarkRole of requirement.landmarks) {
+    assert.ok(owned.some((item) => item.landmarkRole === landmarkRole), `${roomId} lost authored landmark ${landmarkRole}`)
+  }
+  for (const [colliderRole, count] of Object.entries(requirement.proxies)) {
+    const proxies = localSolids.filter((item) => item.roomId === roomId && item.landmarkRole === colliderRole)
+    assert.equal(proxies.length, count, `${roomId} collider count drifted for ${colliderRole}`)
+    assert.ok(proxies.every((item) => item.forceCollider && structural(item)), `${roomId} ${colliderRole} is not a forced Rapier collider`)
+  }
+}
+const adminParity = [
+  ['f1_staff', 'staff-phone-desk', 'staff-phone-desk-collider'],
+  ['f1_staff', 'teacher-pod', 'teacher-pod-collider'],
+  ['f1_staff', 'staff-pigeonholes', 'staff-pigeonholes-collider'],
+  ['f1_staff', 'staff-copier', 'staff-copier-collider'],
+  ['f1_admin', 'admin-service-counter', 'admin-service-counter-collider'],
+  ['f1_principal', 'principal-desk', 'principal-desk-collider'],
+  ['f1_counsel', 'counsel-sofa', 'counsel-sofa-collider'],
+  ['f1_counsel', 'counsel-chair', 'counsel-chair-collider'],
+  ['f1_counsel', 'emotion-card-table', 'emotion-card-table-collider'],
+  ['f1_counsel', 'counsel-books', 'counsel-books-collider'],
+]
+for (const [roomId, visualRole, colliderRole] of adminParity) {
+  const visualLocations = localPrimitives.filter((item) => item.roomId === roomId && item.landmarkRole === visualRole)
+    .map((item) => item.local).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  const colliderLocations = localSolids.filter((item) => item.roomId === roomId && item.landmarkRole === colliderRole)
+    .map((item) => item.local).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
+  assert.deepEqual(colliderLocations, visualLocations, `${roomId} ${visualRole} visual/collider centers diverged`)
+}
+const principalHole = campus.holes.find((hole) => hole.room === 'f1_principal')
+const principalDeskCollider = localSolids.find((item) => item.roomId === 'f1_principal' && item.landmarkRole === 'principal-desk-collider')
+assert.ok(principalHole && principalDeskCollider, 'Principal collapse safety contract is incomplete')
+const deskYaw = principalDeskCollider.rot?.[1] ?? 0
+const deskHalfX = (Math.abs(Math.cos(deskYaw)) * principalDeskCollider.s[0] + Math.abs(Math.sin(deskYaw)) * principalDeskCollider.s[2]) / 2
+const deskHalfZ = (Math.abs(Math.sin(deskYaw)) * principalDeskCollider.s[0] + Math.abs(Math.cos(deskYaw)) * principalDeskCollider.s[2]) / 2
+const deskOverlapsBufferedHole = principalDeskCollider.p[0] + deskHalfX > principalHole.x0 - 0.4
+  && principalDeskCollider.p[0] - deskHalfX < principalHole.x1 + 0.4
+  && principalDeskCollider.p[2] + deskHalfZ > principalHole.z0 - 0.4
+  && principalDeskCollider.p[2] - deskHalfZ < principalHole.z1 + 0.4
+assert.equal(deskOverlapsBufferedHole, false, 'Principal desk creates a bridge across the collapse safety buffer')
+const staffBreach = campus.leaks.find((leak) => leak.id === 'leak_f1_staff')
+assert.ok(staffBreach, 'Seed 0 staff breach portal disappeared')
+const staffRoom = roomById.f1_staff
+const breachU = staffRoom.cx - staffBreach.p[0]
+const breachV = staffRoom.z1 - staffBreach.p[1]
+const staffPortalBlockers = localSolids.filter((item) => item.roomId === 'f1_staff' && item.forceCollider).filter((item) => {
+  const { extentU, extentV } = localMetrics(staffRoom, item)
+  return item.local[0] + extentU > breachU - 0.7 && item.local[0] - extentU < breachU + 0.7
+    && item.local[1] + extentV > breachV && item.local[1] - extentV < breachV + 1.9
+})
+assert.deepEqual(staffPortalBlockers, [], 'Staff furniture blocks the authored breach approach apron')
 assert.equal(gameplayTrapContract.activeCount, 5, 'Runtime trap activation count must remain within the 4-5 rule')
 assert.equal(new Set(gameplayTrapContract.traps.map((trap) => trap.id)).size, gameplayTrapContract.traps.length, 'Runtime trap ids must be unique')
 assert.equal(TRAP_SLOTS.length, gameplayTrapContract.traps.length, 'Generated and runtime trap candidate counts diverged')
 assert.deepEqual(
-  TRAP_SLOTS.map(({ id, floor, p }) => ({ id, floor, x: p[0], z: p[1] })),
+  TRAP_SLOTS.map(({ id, floor, p, kind, risk, note }) => ({ id, floor, x: p[0], z: p[1], kind, risk, note })),
   gameplayTrapContract.traps,
-  'Generated and runtime traps no longer share one coordinate contract',
+  'Generated and runtime traps no longer share one complete contract',
 )
 const trapPoints = [
   ...gameplayTrapContract.traps,
-  ...generatedContracts['trapContract.json'].traps.map((trap) => ({ id: trap.id, floor: trap.floor, x: trap.p[0], z: trap.p[1] })),
+  ...generatedContracts['trapContract.json'].traps,
 ]
 for (const trap of trapPoints) {
   assert.ok(Math.abs(trap.x) <= MAP_SIZE / 2 && Math.abs(trap.z) <= MAP_SIZE / 2, `${trap.id} escaped the v4 map`)
@@ -267,6 +394,29 @@ for (const trap of trapPoints) {
     && Math.abs(trap.x - wall.center[0]) < wall.size[0] / 2
     && Math.abs(trap.z - wall.center[1]) < wall.size[1] / 2)
   assert.equal(embedded, false, `${trap.id} is embedded in a v4 structural wall`)
+}
+assert.deepEqual(generatedContracts['gateContract.json'], gameplayGateContract, 'Generated and runtime gates no longer share one contract')
+assert.deepEqual(
+  GATE_SLOTS.map(({ id, name, floor, p, rotY }) => ({ id, name, floor, position: p, rotationY: rotY })),
+  gameplayGateContract.gates,
+  'Rendered and runtime gate slots diverged',
+)
+for (const gate of gameplayGateContract.gates) {
+  const [x, z] = gate.position
+  assert.ok(Math.abs(x) <= MAP_SIZE / 2 && Math.abs(z) <= MAP_SIZE / 2, `${gate.id} escaped the v4 map`)
+  const embedded = collisionContract.walls.some((wall) => wall.floor === gate.floor
+    && Math.abs(x - wall.center[0]) < wall.size[0] / 2
+    && Math.abs(z - wall.center[1]) < wall.size[1] / 2)
+  assert.equal(embedded, false, `${gate.id} is embedded in a v4 structural wall`)
+}
+const generatedDeviceById = Object.fromEntries(campus.devices.map((device) => [device.id, device]))
+for (const [slotId, slot] of Object.entries(verticalMapContract.slots).filter(([, item]) => item.kind === 'device')) {
+  const device = generatedDeviceById[slot.deviceId]
+  assert.ok(device, `${slotId} references missing generated device ${slot.deviceId}`)
+  assert.equal(slot.anchorRoom, device.room, `${slotId} anchor room diverged from ${slot.deviceId}`)
+  assert.equal(slot.floor, device.floor, `${slotId} floor diverged from ${slot.deviceId}`)
+  const expectedPosition = [device.p[0], device.y, device.p[1]]
+  assert.ok(slot.position.every((value, index) => Math.abs(value - expectedPosition[index]) <= 0.001), `${slotId} position drifted from ${slot.deviceId}`)
 }
 assert.deepEqual(campus.slots.props.map((slot) => slot.p), PROP_SLOTS.map((slot) => slot.p), 'Prop anchors were moved from their surfaces')
 assert.deepEqual(campus.slots.missions.map((slot) => slot.p), MISSION_SLOTS.map((slot) => slot.p), 'Mission anchors were moved from their fixtures')

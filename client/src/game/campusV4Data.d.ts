@@ -14,6 +14,7 @@ export interface CampusBox {
   e?: number
   hide?: boolean
   ramp?: boolean
+  forceCollider?: boolean
 }
 
 export interface CampusPlate {

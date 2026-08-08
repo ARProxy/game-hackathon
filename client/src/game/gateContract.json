@@ -1,8 +1,8 @@
 {
   "gates": [
-    { "id": "gate_back", "position": [-7, 38], "rotationY": 0 },
-    { "id": "gate_main", "position": [38.5, 27.5], "rotationY": 1.5707963267948966 },
-    { "id": "gate_gym", "position": [38, -22.5], "rotationY": 1.5707963267948966 }
+    { "id": "gate_back", "name": "후문 골목", "floor": "OUT", "position": [-58, -56], "rotationY": 3.141592653589793 },
+    { "id": "gate_main", "name": "정문", "floor": "OUT", "position": [-24, 38], "rotationY": 0 },
+    { "id": "gate_gym", "name": "동익 비상구", "floor": "OUT", "position": [4.2, 2.2], "rotationY": 0 }
   ],
   "arrivalSensorLocalZ": -1.1,
   "escapeSensorLocalZ": 1.1,
