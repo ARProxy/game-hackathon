@@ -42,6 +42,10 @@ export default class DemoTransport {
   private gateArrived = false
   private playerPosition = actorSpawnPosition('human')
   private seekerPosition = actorSpawnPosition('seeker')
+  private companionPositions = {
+    partner: actorSpawnPosition('partner'),
+    'partner-2': actorSpawnPosition('partner-2'),
+  }
   private pendingInspection = false
   private paused = false
   private observedUtterances: string[] = []
@@ -78,6 +82,25 @@ export default class DemoTransport {
     queueMicrotask(() => this.emit(message))
   }
 
+  private advanceCompanion(
+    companionId: 'partner' | 'partner-2',
+    target: { x: number; z: number },
+  ) {
+    const position = this.companionPositions[companionId]
+    const dx = target.x - position.x
+    const dz = target.z - position.z
+    const distance = Math.hypot(dx, dz)
+    if (distance <= 0.8) return position
+    const step = Math.min(3.4 * 0.25, distance - 0.8)
+    const next = {
+      ...position,
+      x: position.x + dx / distance * step,
+      z: position.z + dz / distance * step,
+    }
+    this.companionPositions[companionId] = next
+    return next
+  }
+
   private later(callback: () => void, delay: number) {
     const timer = window.setTimeout(() => {
       this.timers.delete(timer)
@@ -98,6 +121,10 @@ export default class DemoTransport {
     this.lastShiftAt = 0
     this.playerPosition = actorSpawnPosition('human')
     this.seekerPosition = actorSpawnPosition('seeker')
+    this.companionPositions = {
+      partner: actorSpawnPosition('partner'),
+      'partner-2': actorSpawnPosition('partner-2'),
+    }
     this.rooftopSignalIndex = 0
     this.send({
       type: 'game_started',
@@ -266,15 +293,17 @@ export default class DemoTransport {
         director_tension: 0.42, speed_multiplier: 0.88,
       })
     } else if (action === 'companion_think') {
+      const firstTarget = this.phase === 'escape' ? GATE.position : { x: -5.5, z: -27.8 }
+      const secondTarget = this.phase === 'escape' ? GATE.position : { x: -42.5, z: -27.8 }
       this.send({
         type: 'companion_intent', companion_id: 'partner', state: this.phase === 'escape' ? 'MOVE_TO_GATE' : 'EXPLORE_ZONE',
-        target_id: null, target: this.phase === 'escape' ? GATE.position : { x: -9, z: -5 },
-        partner_position: actorSpawnPosition('partner'), reason: 'demo_script',
+        target_id: this.phase === 'escape' ? null : 'roof_signal_scout_east', target: firstTarget,
+        partner_position: this.advanceCompanion('partner', firstTarget), reason: 'demo_script',
       })
       this.send({
         type: 'companion_intent', companion_id: 'partner-2', state: this.phase === 'escape' ? 'MOVE_TO_GATE' : 'EXPLORE_ZONE',
-        target_id: null, target: this.phase === 'escape' ? GATE.position : { x: 13, z: 8 },
-        partner_position: actorSpawnPosition('partner-2'), reason: 'demo_script',
+        target_id: this.phase === 'escape' ? null : 'roof_signal_scout_west', target: secondTarget,
+        partner_position: this.advanceCompanion('partner-2', secondTarget), reason: 'demo_script',
       })
     } else if (action === 'gate_arrived' && this.phase === 'final_spell') {
       this.gateArrived = true

@@ -156,6 +156,19 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         from app.game.vertical_flow import final_station_position, mission_interaction_position
         from app.game.map_slots import get_map_slot as _get_map_slot
 
+        # 옥상 시작 시 두 동료가 중앙에서 멈춰 있지 않고 동·서 신호기를 각각 정찰한다.
+        # 실제 신호 동기화는 플레이어 몫으로 남겨 두되, 동료의 독립 동선을 즉시 보여 준다.
+        if session.vertical_round.phase == VerticalRoundPhase.ROOFTOP_INTRO:
+            signal_side = "east" if companion_id == "partner" else "west"
+            signal_slot = _get_map_slot(f"ROOF_SIGNAL_{signal_side.upper()}")
+            sx, _, sz = signal_slot["position"]
+            return {
+                "state": "EXPLORE_ZONE",
+                "target_id": f"roof_signal_scout_{signal_side}",
+                "target": {"x": sx, "z": sz},
+                "reason": "rooftop_signal_scout",
+            }
+
         # 2층 인터폰 미션: AI가 자신의 인터폰 위치로 이동
         if (
             session.vertical_round.phase == VerticalRoundPhase.FLOOR_2

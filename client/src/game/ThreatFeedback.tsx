@@ -7,6 +7,7 @@ import { useGameStore } from '../stores/gameStore'
 
 const THREAT_RANGE = 18
 const rootStyle = document.documentElement.style
+const _playerPosition = new THREE.Vector3()
 
 function clearThreatFeedback() {
   rootStyle.setProperty('--threat-opacity', '0')
@@ -34,8 +35,9 @@ export default function ThreatFeedback({
       return
     }
 
-    const dx = intent.seekerPosition.x - player.position.x
-    const dz = intent.seekerPosition.z - player.position.z
+    const playerPosition = player.getWorldPosition(_playerPosition)
+    const dx = intent.seekerPosition.x - playerPosition.x
+    const dz = intent.seekerPosition.z - playerPosition.z
     const distance = Math.hypot(dx, dz)
     const proximity = THREE.MathUtils.clamp(1 - distance / THREAT_RANGE, 0, 1)
     const detected = intent.state === 'DETECTED' || intent.state === 'CHASE'

@@ -22,6 +22,7 @@ const WIDTH = 1.42
 const HEIGHT = 2.08
 const INTERACTION_DISTANCE = 1.65
 const SLIDE_DISTANCE = 1.34
+const _playerPosition = new THREE.Vector3()
 
 /** 한국 학교 교실에서 익숙한 수동 미닫이문. E를 눌러 열고 닫는다. */
 function Door({ slot, playerRef }: { slot: DoorSlot; playerRef: React.RefObject<THREE.Group | null> }) {
@@ -45,8 +46,9 @@ function Door({ slot, playerRef }: { slot: DoorSlot; playerRef: React.RefObject<
     const player = playerRef.current
     const body = bodyRef.current
     if (!player || !body) return
-    const sameFloor = Math.abs(player.position.y - slot.y) < 1.35
-    const distance = Math.hypot(player.position.x - slot.x, player.position.z - slot.z)
+    player.getWorldPosition(_playerPosition)
+    const sameFloor = Math.abs(_playerPosition.y - slot.y) < 1.35
+    const distance = Math.hypot(_playerPosition.x - slot.x, _playerPosition.z - slot.z)
     const nextNearby = sameFloor && distance < INTERACTION_DISTANCE
     if (nextNearby !== nearbyRef.current) {
       nearbyRef.current = nextNearby

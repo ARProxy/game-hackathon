@@ -11,6 +11,7 @@ const CAMPUS_DOORS = buildCampus({ seed: 0 }).doors
 const CAMPUS_DOOR_BY_ID = new Map(CAMPUS_DOORS.map((door) => [door.id, door]))
 const INTERACTION_DISTANCE = 1.8
 const MOTION_EPSILON = 0.0005
+const _playerPosition = new THREE.Vector3()
 
 export default function OriginalDoors({ visibleFloors, playerRef }: {
   visibleFloors?: CampusFloor[]
@@ -43,9 +44,10 @@ export default function OriginalDoors({ visibleFloors, playerRef }: {
     let closest: CampusDoor | null = null
     let closestDistance = INTERACTION_DISTANCE
     if (player) {
+      player.getWorldPosition(_playerPosition)
       for (const door of doors) {
-        const distance = Math.hypot(player.position.x - door.hinge[0], player.position.z - door.hinge[2])
-        if (Math.abs(player.position.y - door.hinge[1]) < 1.4 && distance < closestDistance) {
+        const distance = Math.hypot(_playerPosition.x - door.hinge[0], _playerPosition.z - door.hinge[2])
+        if (Math.abs(_playerPosition.y - door.hinge[1]) < 1.4 && distance < closestDistance) {
           closest = door
           closestDistance = distance
         }

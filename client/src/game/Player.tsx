@@ -21,7 +21,6 @@ const JUMP_FORCE = 6
 const GROUND_THRESHOLD = 0.3
 const MOVE_ACCELERATION = 12
 const MOVE_DECELERATION = 20
-const VISUAL_FOLLOW_SPEED = 24
 const ROTATION_SPEED = 14
 const FALL_RECOVERY_Y = -8
 // 캐릭터 모델의 원점은 발바닥이다. 물리 바디 원점과 캡슐 하단의 차이를 보정한다.
@@ -31,7 +30,6 @@ const _forward = new THREE.Vector3()
 const _right = new THREE.Vector3()
 const _move = new THREE.Vector3()
 const _up = new THREE.Vector3(0, 1, 0)
-const _visualTarget = new THREE.Vector3()
 
 interface PlayerProps {
   position?: [number, number, number]
@@ -107,9 +105,6 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       rigidBodyRef.current.setLinvel({ x: 0, y: rigidBodyRef.current.linvel().y, z: 0 }, true)
       const pos = rigidBodyRef.current.translation()
       lastMotionPosition.current.set(pos.x, pos.y, pos.z)
-      const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
-      _visualTarget.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
-      visualRef.current.position.lerp(_visualTarget, follow)
       return
     }
 
@@ -145,7 +140,7 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
     const nextVelX = THREE.MathUtils.damp(currentVel.x, moveX * MOVE_SPEED, velocityResponse, delta)
     const nextVelZ = THREE.MathUtils.damp(currentVel.z, moveZ * MOVE_SPEED, velocityResponse, delta)
     rigidBodyRef.current.setLinvel({ x: nextVelX, y: velY, z: nextVelZ }, true)
-    // visual을 rigid body 위치에 동기화
+    // 위치 렌더링은 RigidBody 자식 계층에서 Rapier의 고정 틱 보간을 그대로 사용한다.
     const pos = rigidBodyRef.current.translation()
     if (pos.y < FALL_RECOVERY_Y) {
       rigidBodyRef.current.setTranslation(lastSafePosition.current, true)
@@ -168,10 +163,6 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       playPlayerFootstep(rightFootstep.current, movementRef.current)
       lastFootstep.current = clock.elapsedTime
     }
-    const follow = 1 - Math.exp(-VISUAL_FOLLOW_SPEED * delta)
-    _visualTarget.set(pos.x, pos.y + COLLIDER_BOTTOM_Y, pos.z)
-    visualRef.current.position.lerp(_visualTarget, follow)
-
     // 서버가 빙결 핑과 청각 이벤트에 실제 좌표를 사용하도록 10Hz로 동기화한다.
     const now = clock.elapsedTime
     if (now - lastPositionSync.current >= 0.1) {
@@ -225,12 +216,11 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
         gravityScale={2.2}
       >
         <CapsuleCollider args={[COLLIDER.halfHeight, COLLIDER.radius]} position={[0, COLLIDER.offsetY, 0]} />
+        {/* Rapier가 물리 고정 틱 사이를 보간한 transform을 비주얼과 카메라가 함께 사용한다. */}
+        <group ref={visualRef} position={[0, COLLIDER_BOTTOM_Y, 0]}>
+          <CharacterModel id={characterId} frozen={isFrozen} movementRef={movementRef} />
+        </group>
       </RigidBody>
-
-      {/* 비주얼 — CharacterModel */}
-      <group ref={visualRef} position={position}>
-        <CharacterModel id={characterId} frozen={isFrozen} movementRef={movementRef} />
-      </group>
     </>
   )
 })

@@ -3,6 +3,8 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+const _playerPosition = new THREE.Vector3()
+
 interface PlayerLightProps {
   targetRef: React.RefObject<THREE.Group | null>
 }
@@ -15,7 +17,7 @@ export default function PlayerLight({ targetRef }: PlayerLightProps) {
   useFrame(() => {
     if (!targetRef.current || !lightRef.current || !fillRef.current || !aimRef.current) return
     const player = targetRef.current
-    const pos = player.position
+    const pos = player.getWorldPosition(_playerPosition)
     const yaw = player.rotation.y
     const forwardX = Math.sin(yaw)
     const forwardZ = Math.cos(yaw)

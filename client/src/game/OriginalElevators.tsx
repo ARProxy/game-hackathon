@@ -13,6 +13,7 @@ import { sendGameMessage } from '../hooks/useWebSocket'
 const ORDER = ['B1', 'F1', 'F2', 'F3']
 const DEFAULT_ACCESSIBLE_FLOORS = ['F1']
 const LABEL: Record<string, string> = { B1: 'B1', F1: '1', F2: '2', F3: '3' }
+const _playerPosition = new THREE.Vector3()
 type ElevatorMode = 'idle' | 'closing' | 'moving' | 'opening'
 type Runtime = {
   at: string
@@ -105,14 +106,15 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
     let near: number | null = null
     let inside: number | null = null
     if (player && playerFloor && ORDER.includes(playerFloor)) {
+      player.getWorldPosition(_playerPosition)
       EVS.forEach((elevator, index) => {
         const centerX = (elevator.x[0] + elevator.x[1]) / 2
         const landingZ = elevator.z[1] + 0.7
-        if (Math.hypot(player.position.x - centerX, player.position.z - landingZ) <= 2.1) near = index
+        if (Math.hypot(_playerPosition.x - centerX, _playerPosition.z - landingZ) <= 2.1) near = index
         if (
-          player.position.x > elevator.x[0] && player.position.x < elevator.x[1]
-          && player.position.z > elevator.z[0] && player.position.z < elevator.z[1]
-          && Math.abs(player.position.y - runtimes.current[index].y) < 1.4
+          _playerPosition.x > elevator.x[0] && _playerPosition.x < elevator.x[1]
+          && _playerPosition.z > elevator.z[0] && _playerPosition.z < elevator.z[1]
+          && Math.abs(_playerPosition.y - runtimes.current[index].y) < 1.4
         ) inside = index
       })
     }

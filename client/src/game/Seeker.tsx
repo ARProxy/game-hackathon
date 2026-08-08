@@ -1,18 +1,21 @@
 /** 서버가 선택한 의도를 수행하는 능동 술래 캐릭터. */
-import { useMemo, useRef } from 'react'
+import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { useRapier } from '@react-three/rapier'
 import * as THREE from 'three'
 import { useGameStore, type HunterState } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import useSound from '../hooks/useSound'
 import { CharacterModel } from './Characters'
-import { planAvoidedStep } from './aiNavigation'
+import { floorHeight } from './spawnContract'
+import { useCollisionAwarePlanarMotion } from './useCollisionAwarePlanarMotion'
+import { projectAuthorityPosition } from './aiNavigation'
 import hunter from './hunterContract.json'
 
 const CATCH_RETRY_SECONDS = 0.35
 const PROXIMITY_SOUND_RANGE = 18
 const ACTOR_CORRECTION_SPEED = 7
+const _playerPosition = new THREE.Vector3()
+const _displayTarget = { x: 0, z: 0 }
 
 interface SeekerProps {
   playerRef: React.RefObject<THREE.Group | null>
@@ -32,38 +35,21 @@ const SPEEDS: Record<HunterState, number> = {
 
 export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requestsThink = true }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
-  const { world, rapier } = useRapier()
-  const navigationShape = useMemo(() => new rapier.Ball(0.36), [rapier])
+  const moveToward = useCollisionAwarePlanarMotion()
   const { playSeekerProximity, playSeekerDetected, playSeekerFootstep, playSeekerSiren } = useSound()
   // 이동 좌표는 useFrame에서 읽고, React 렌더는 경광등 상태 전환만 구독한다.
-  const dangerLightActive = useGameStore((store) => (
-    store.hunterIntent?.state === 'DETECTED' || store.hunterIntent?.state === 'CHASE'
-  ))
+  const dangerLightActive = useGameStore((store) => {
+    const intent = seekerId === 'seeker' ? store.hunterIntent : store.secondaryHunterIntent
+    return intent?.state === 'DETECTED' || intent?.state === 'CHASE'
+  })
   const redLightRef = useRef<THREE.PointLight>(null)
   const previousState = useRef<HunterState | null>(null)
   const lastThink = useRef(-Infinity)
-  const lastAuthorityPosition = useRef<{ x: number; z: number } | null>(null)
   const lastCatchAttempt = useRef(-Infinity)
   const lastProximitySound = useRef(-Infinity)
   const lastFootstepSound = useRef(-Infinity)
   const lastSirenSound = useRef(-Infinity)
-  const baseY = spawn[1]
   const lastPos = useRef(new THREE.Vector3(...spawn))
-  const avoidanceSide = useRef(1)
-  const solidFilters = rapier.QueryFilterFlags.EXCLUDE_SENSORS
-    | rapier.QueryFilterFlags.EXCLUDE_DYNAMIC
-
-  const moveToward = (pos: THREE.Vector3, dx: number, dz: number, maxStep: number) => {
-    const step = planAvoidedStep(dx, dz, maxStep, (direction, distance) => Boolean(world.castShape(
-      { x: pos.x, y: baseY + 0.78, z: pos.z },
-      { x: 0, y: 0, z: 0, w: 1 },
-      { x: direction.x, y: 0, z: direction.z },
-      navigationShape, 0.02, distance + 0.08, false, solidFilters,
-    )), avoidanceSide.current)
-    if (step.x === 0 && step.z === 0) avoidanceSide.current *= -1
-    pos.x += step.x
-    pos.z += step.z
-  }
 
   useFrame(({ clock }, delta) => {
     const group = groupRef.current
@@ -71,7 +57,11 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     const store = useGameStore.getState()
     if (store.isPaused) return
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
-    if (!active) { group.position.y = baseY; return }
+    const seekerState = store.players[seekerId]
+    const actorBaseY = seekerState?.position.floor
+      ? seekerState.position.y ?? floorHeight(seekerState.position.floor)
+      : spawn[1]
+    if (!active) { group.position.y = actorBaseY; return }
 
     const pos = group.position
     if (requestsThink && clock.elapsedTime - lastThink.current >= hunter.thinkIntervalSeconds) {
@@ -86,26 +76,37 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         playSeekerDetected()
       }
       previousState.current = intent.state
-      const authorityDx = intent.seekerPosition.x - pos.x
-      const authorityDz = intent.seekerPosition.z - pos.z
-      const authorityDistance = Math.hypot(authorityDx, authorityDz)
-      const correctingAuthority = authorityDistance > 0.12
-      if (correctingAuthority) {
-        moveToward(pos, authorityDx, authorityDz, Math.min(ACTOR_CORRECTION_SPEED * delta, authorityDistance))
-      }
-      lastAuthorityPosition.current = intent.seekerPosition
       const dx = intent.target.x - pos.x
       const dz = intent.target.z - pos.z
       const distance = Math.hypot(dx, dz)
+      const stopDistance = intent.state === 'RUSH_GATE' ? 1.4 : 0.5
+      const speed = intent.state === 'DETECTED'
+        ? 0
+        : SPEEDS[intent.state] * intent.speedMultiplier * intent.stageSpeedMultiplier
+      const predictionDistance = projectAuthorityPosition(
+        intent.seekerPosition,
+        intent.target,
+        speed,
+        hunter.thinkIntervalSeconds,
+        stopDistance,
+        _displayTarget,
+      )
+      const displayDx = _displayTarget.x - pos.x
+      const displayDz = _displayTarget.z - pos.z
+      const displayDistance = Math.hypot(displayDx, displayDz)
+      if (displayDistance > 0.001) {
+        const synchronizing = displayDistance > Math.max(0.6, predictionDistance + 0.2)
+        const displaySpeed = synchronizing || speed <= 0 ? ACTOR_CORRECTION_SPEED : speed
+        moveToward(
+          pos,
+          displayDx,
+          displayDz,
+          Math.min(displaySpeed * delta, displayDistance),
+          actorBaseY,
+        )
+      }
       if (distance > 0.15) {
         group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, Math.atan2(dx, dz), 0.16)
-        const stopDistance = intent.state === 'RUSH_GATE' ? 1.4 : 0.5
-        if (!correctingAuthority && intent.state !== 'DETECTED' && distance > stopDistance) {
-          moveToward(pos, dx, dz, Math.min(
-            SPEEDS[intent.state] * intent.speedMultiplier * intent.stageSpeedMultiplier * delta,
-            distance - stopDistance,
-          ))
-        }
       }
 
       if (
@@ -118,7 +119,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       }
     }
 
-    const playerPos = playerRef.current?.position
+    const playerPos = playerRef.current?.getWorldPosition(_playerPosition)
     if (playerPos) {
       const threatX = pos.x - playerPos.x
       const threatZ = pos.z - playerPos.z
@@ -147,8 +148,8 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       }
     }
 
-    const moved = pos.distanceTo(lastPos.current) > 0.01
-    lastPos.current.copy(pos)
+    const moved = Math.hypot(pos.x - lastPos.current.x, pos.z - lastPos.current.z) > 0.01
+    lastPos.current.set(pos.x, actorBaseY, pos.z)
     const running = intent?.state === 'CHASE' || intent?.state === 'RUSH_GATE'
     if (moved && playerPos) {
       const threatX = pos.x - playerPos.x
@@ -166,7 +167,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         lastFootstepSound.current = clock.elapsedTime
       }
     }
-    pos.y = baseY + (moved ? Math.abs(Math.sin(clock.elapsedTime * (running ? 6 : 3))) * (running ? 0.08 : 0.04) : 0)
+    pos.y = actorBaseY + (moved ? Math.abs(Math.sin(clock.elapsedTime * (running ? 6 : 3))) * (running ? 0.08 : 0.04) : 0)
     if (redLightRef.current) {
       redLightRef.current.intensity = 32 + Math.sin(clock.elapsedTime * 12) * 22
     }

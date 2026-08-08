@@ -8,6 +8,7 @@ import contract from './verticalMapContract.json'
 
 type Slot = { position?: number[]; interactionPosition?: number[]; floor: string; zone?: string }
 const slots = contract.slots as unknown as Record<string, Slot>
+const _playerPosition = new THREE.Vector3()
 const MISSION_SLOT: Record<string, string> = {
   rooftop_intro: 'ROOF_INTRO_MISSION',
   floor_3: 'F3_MISSION_ROOM_POOL',
@@ -110,9 +111,10 @@ function RooftopSignalObjectives({ playerRef }: {
     const player = playerRef.current
     const signal = ROOFTOP_SIGNALS.find((item) => item.id === nextSignalId)
     const position = signal ? positionOf(slots[signal.slotId]) : null
+    if (player) player.getWorldPosition(_playerPosition)
     nearbyRef.current = Boolean(player && position
-      && Math.abs(player.position.y - position[1]) < 1.6
-      && Math.hypot(player.position.x - position[0], player.position.z - position[2]) <= 2.25)
+      && Math.abs(_playerPosition.y - position[1]) < 1.6
+      && Math.hypot(_playerPosition.x - position[0], _playerPosition.z - position[2]) <= 2.25)
   })
 
   useEffect(() => {
@@ -155,9 +157,10 @@ function BasementDeviceObjective({ playerRef, slotId, deviceId, label }: {
 
   useFrame(() => {
     const player = playerRef.current
+    if (player) player.getWorldPosition(_playerPosition)
     const nextNearby = Boolean(player
-      && Math.abs(player.position.y - position[1]) < 1.6
-      && Math.hypot(player.position.x - position[0], player.position.z - position[2]) <= 2.25)
+      && Math.abs(_playerPosition.y - position[1]) < 1.6
+      && Math.hypot(_playerPosition.x - position[0], _playerPosition.z - position[2]) <= 2.25)
     if (nextNearby !== nearbyRef.current) {
       nearbyRef.current = nextNearby
       setNearby(nextNearby)
@@ -223,9 +226,20 @@ export default function VerticalObjectives({ playerRef }: {
   const nearestTransition = choices.reduce<{ source: string; route: string } | null>((best, choice) => {
     const player = playerRef.current
     if (!player) return best ?? choice
-    const distance = new THREE.Vector3(...positionOf(slots[choice.source])).distanceTo(player.position)
+    player.getWorldPosition(_playerPosition)
+    const choicePosition = positionOf(slots[choice.source])
+    const distance = Math.hypot(
+      choicePosition[0] - _playerPosition.x,
+      choicePosition[1] - _playerPosition.y,
+      choicePosition[2] - _playerPosition.z,
+    )
     if (!best) return choice
-    const bestDistance = new THREE.Vector3(...positionOf(slots[best.source])).distanceTo(player.position)
+    const bestPosition = positionOf(slots[best.source])
+    const bestDistance = Math.hypot(
+      bestPosition[0] - _playerPosition.x,
+      bestPosition[1] - _playerPosition.y,
+      bestPosition[2] - _playerPosition.z,
+    )
     return distance < bestDistance ? choice : best
   }, null)
   const escapeSlotId = progression?.final_route === 'basement'
@@ -242,9 +256,10 @@ export default function VerticalObjectives({ playerRef }: {
 
   useFrame(() => {
     const player = playerRef.current
+    if (player) player.getWorldPosition(_playerPosition)
     const nextNearby = Boolean(player && objectivePosition
-      && Math.abs(player.position.y - objectivePosition[1]) < 1.6
-      && Math.hypot(player.position.x - objectivePosition[0], player.position.z - objectivePosition[2]) <= 2.25)
+      && Math.abs(_playerPosition.y - objectivePosition[1]) < 1.6
+      && Math.hypot(_playerPosition.x - objectivePosition[0], _playerPosition.z - objectivePosition[2]) <= 2.25)
     if (nextNearby !== nearbyRef.current) {
       nearbyRef.current = nextNearby
       setNearby(nextNearby)

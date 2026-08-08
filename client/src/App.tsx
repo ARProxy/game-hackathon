@@ -25,7 +25,6 @@ import { useGameStore } from './stores/gameStore'
 import useWebSocket from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
 import { sendGameMessage } from './hooks/useWebSocket'
-import { floorHeight } from './game/spawnContract'
 import './App.css'
 
 /* ─────────────────────────────────────────────
@@ -52,6 +51,7 @@ const FLOOR_PRESETS: Record<string, FloorKey[] | undefined> = {
 }
 
 const runnerIds = CHARACTERS.filter((character) => character.role === 'runner').map((character) => character.id)
+const _trapPlayerPosition = new THREE.Vector3()
 
 const CLAUDE_ORBIT = {
   target: new THREE.Vector3(-24, 2, -30),
@@ -181,18 +181,6 @@ function Scene({
   const activeTrapIds = useGameStore((state) => state.activeTrapIds)
   const isPaused = useGameStore((state) => state.isPaused)
   const playerId = useGameStore((state) => state.playerId)
-  const players = useGameStore((state) => state.players)
-  const actorPosition = (actorId: string, fallback: readonly [number, number, number]): [number, number, number] => {
-    const position = players[actorId]?.position
-    return position
-      ? [position.x, position.y ?? floorHeight(position.floor), position.z]
-      : [...fallback]
-  }
-  const playerSpawn = actorPosition(playerId, SPAWNS.player)
-  const partnerSpawn = actorPosition('partner', SPAWNS.ai)
-  const partnerTwoSpawn = actorPosition('partner-2', SPAWNS.ai2)
-  const seekerSpawn = actorPosition('seeker', SPAWNS.seeker)
-  const secondarySeekerSpawn = actorPosition('seeker-2', SPAWNS.seeker2)
   const seekerCount = useGameStore((state) => state.verticalProgression?.seeker_count ?? 1)
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
@@ -232,7 +220,8 @@ function Scene({
           onTrapEnter={(id) => {
             const store = useGameStore.getState()
             if (store.phase === 'playing') {
-              const pos = playerRef.current?.getGroup()?.position
+              const player = playerRef.current?.getGroup()
+              const pos = player?.getWorldPosition(_trapPlayerPosition)
               sendGameMessage({
                 type: 'action',
                 payload: {
@@ -249,25 +238,25 @@ function Scene({
         <group visible={cameraMode === '3d'}>
           <Props />
           <VerticalObjectives playerRef={playerGroupRef} />
-          <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={playerSpawn} characterId={playerCharacterId} />
+          <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={SPAWNS.player} characterId={playerCharacterId} />
           <Partner
             playerRef={playerGroupRef}
             playerId="partner"
             characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
-            spawn={partnerSpawn}
+            spawn={SPAWNS.ai}
             requestsThink
           />
           <Partner
             playerRef={playerGroupRef}
             playerId="partner-2"
             characterId={runnerIds.filter((id) => id !== playerCharacterId)[1] ?? 'R06'}
-            spawn={partnerTwoSpawn}
+            spawn={SPAWNS.ai2}
           />
-          {seekerCount >= 1 && <Seeker playerRef={playerGroupRef} spawn={seekerSpawn} />}
+          {seekerCount >= 1 && <Seeker playerRef={playerGroupRef} spawn={SPAWNS.seeker} />}
           {seekerCount >= 2 && (
             <Seeker
               playerRef={playerGroupRef}
-              spawn={secondarySeekerSpawn}
+              spawn={SPAWNS.seeker2}
               seekerId="seeker-2"
               requestsThink={false}
             />

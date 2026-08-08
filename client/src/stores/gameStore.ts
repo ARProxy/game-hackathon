@@ -123,7 +123,8 @@ export interface HunterIntent {
 }
 
 export type CompanionState = 'EXPLORE_ZONE' | 'INSPECT_CANDIDATE' | 'REPORT_FINDING'
-  | 'AVOID_SEEKER' | 'RESCUE_TEAMMATE' | 'REGROUP' | 'MOVE_TO_GATE' | 'ESCAPE' | 'INCAPACITATED'
+  | 'AVOID_SEEKER' | 'RESCUE_TEAMMATE' | 'REGROUP' | 'FOLLOW_TO_FLOOR'
+  | 'MOVE_TO_GATE' | 'ESCAPE' | 'INCAPACITATED'
 export interface CompanionIntent {
   companionId?: string
   state: CompanionState

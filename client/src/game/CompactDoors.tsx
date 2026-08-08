@@ -9,6 +9,7 @@ import type { PlayerHandle } from './Player'
 
 const INTERACTION_DISTANCE = 1.75
 const MOTION_EPSILON = 0.0005
+const _playerPosition = new THREE.Vector3()
 
 function stageDoorUnlocked(door: CompactDoor, activeFloor: string | null | undefined) {
   return Boolean(door.unlockFloor && door.unlockFloor === activeFloor)
@@ -62,11 +63,12 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
     let closest: CompactDoor | null = null
     let closestDistance = INTERACTION_DISTANCE
     if (player) {
+      player.getWorldPosition(_playerPosition)
       for (const door of COMPACT_SCHOOL.doors) {
         const centerX = door.axis === 'x' ? door.hinge[0] + door.w / 2 : door.hinge[0]
         const centerZ = door.axis === 'x' ? door.hinge[2] : door.hinge[2] + door.w / 2
-        const distance = Math.hypot(player.position.x - centerX, player.position.z - centerZ)
-        if (Math.abs(player.position.y - door.hinge[1]) < 1.35 && distance < closestDistance) {
+        const distance = Math.hypot(_playerPosition.x - centerX, _playerPosition.z - centerZ)
+        if (Math.abs(_playerPosition.y - door.hinge[1]) < 1.35 && distance < closestDistance) {
           closest = door
           closestDistance = distance
         }

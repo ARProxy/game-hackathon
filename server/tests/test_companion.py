@@ -10,6 +10,7 @@ from app.ai.companion import (
     request_companion_rescue,
 )
 from app.ai.mission import generate_round
+from app.game.map_slots import get_map_slot
 from app.game.session import GameSession
 from app.game.progression import FinalRoute, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, PlayerRole
@@ -243,3 +244,35 @@ def test_vertical_companion_reports_when_it_reaches_active_objective() -> None:
     assert intent["reason"] == "vertical_stage_objective"
     assert action == {"type": "vertical_objective", "phase": "floor_2"}
     assert "floor_2" in session.companion_states["partner"].memory
+
+
+def test_rooftop_companions_split_east_and_west_signal_scouts() -> None:
+    session = make_session("companion-rooftop-scouts")
+    session.round_data = None
+    seeker = session.state.get_player("seeker")
+    seeker.position.floor = WorldFloor.F1
+
+    east = decide_companion_intent(session, "partner")
+    west = decide_companion_intent(session, "partner-2")
+    east_position = get_map_slot("ROOF_SIGNAL_EAST")["position"]
+    west_position = get_map_slot("ROOF_SIGNAL_WEST")["position"]
+
+    assert east["reason"] == west["reason"] == "rooftop_signal_scout"
+    assert east["target_id"] == "roof_signal_scout_east"
+    assert west["target_id"] == "roof_signal_scout_west"
+    assert east["target"] == {"x": east_position[0], "z": east_position[2]}
+    assert west["target"] == {"x": west_position[0], "z": west_position[2]}
+    assert east["target"] != west["target"]
+
+    partner = session.state.get_player("partner")
+    distance_before_tick = math.hypot(
+        east["target"]["x"] - partner.position.x,
+        east["target"]["z"] - partner.position.z,
+    )
+    session.companion_states["partner"].last_tick = time.monotonic() - 0.25
+    advance_companion(session, "partner")
+    distance_after_tick = math.hypot(
+        east["target"]["x"] - partner.position.x,
+        east["target"]["z"] - partner.position.z,
+    )
+    assert distance_after_tick < distance_before_tick
