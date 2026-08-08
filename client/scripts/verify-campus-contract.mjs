@@ -14,9 +14,9 @@ const alternate = buildCampus({ seed: 1 })
 
 const expected = {
   solids: 2377,
-  visuals: 5784,
-  plates: 550,
-  cyls: 1355,
+  visuals: 5773,
+  plates: 549,
+  cyls: 1352,
   fixtures: 150,
   rooms: 80,
   doors: 122,
@@ -51,18 +51,85 @@ assert.ok(
 )
 assert.ok(classrooms.every((room) => room.cond === 'intact'), 'Classroom baseline QA requires intact rooms')
 
-const classroomVisuals = campus.visuals.filter((item) => item.roomId && item.local)
-const layoutSignatures = new Map()
-for (const room of classrooms) {
+const roomById = Object.fromEntries(campus.rooms.map((room) => [room.id, room]))
+const localVisuals = campus.visuals.filter((item) => item.roomId && item.local)
+const localCylinders = campus.cyls.filter((item) => item.roomId && item.local)
+const localPrimitives = [...localVisuals, ...localCylinders]
+const localMetrics = (room, item) => {
   const localWidth = ['N', 'S'].includes(room.wing) ? room.x1 - room.x0 : room.z1 - room.z0
   const localDepth = ['N', 'S'].includes(room.wing) ? room.z1 - room.z0 : room.x1 - room.x0
+  if (item.r != null) return { localWidth, localDepth, turn: 0, extentU: item.r, extentV: item.r }
   const baseYaw = room.wing === 'N' ? Math.PI : room.wing === 'S' ? 0 : room.wing === 'W' ? -Math.PI / 2 : Math.PI / 2
-  const footprint = classroomVisuals.filter((item) => item.roomId === room.id).map((item) => {
-    const turn = (item.rot?.[1] ?? 0) - baseYaw
-    const extentU = Math.abs(Math.cos(turn)) * item.s[0] / 2 + Math.abs(Math.sin(turn)) * item.s[2] / 2
-    const extentV = Math.abs(Math.sin(turn)) * item.s[0] / 2 + Math.abs(Math.cos(turn)) * item.s[2] / 2
-    assert.ok(Math.abs(item.local[0]) + extentU <= localWidth / 2 + 0.02, `${room.id} prop escaped room width`)
-    assert.ok(item.local[1] - extentV >= -0.02 && item.local[1] + extentV <= localDepth + 0.02, `${room.id} prop escaped room depth`)
+  const turn = (item.rot?.[1] ?? 0) - baseYaw
+  const extentU = Math.abs(Math.cos(turn)) * item.s[0] / 2 + Math.abs(Math.sin(turn)) * item.s[2] / 2
+  const extentV = Math.abs(Math.sin(turn)) * item.s[0] / 2 + Math.abs(Math.cos(turn)) * item.s[2] / 2
+  return { localWidth, localDepth, turn, extentU, extentV }
+}
+for (const item of localPrimitives) {
+  const room = roomById[item.roomId]
+  assert.ok(room, `Tagged prop references missing room ${item.roomId}`)
+  const { localWidth, localDepth, extentU, extentV } = localMetrics(room, item)
+  assert.ok(Math.abs(item.local[0]) + extentU <= localWidth / 2 + 0.02, `${room.id} prop escaped room width`)
+  assert.ok(item.local[1] - extentV >= -0.02 && item.local[1] + extentV <= localDepth + 0.02, `${room.id} prop escaped room depth`)
+}
+
+const doorById = Object.fromEntries(campus.doors.map((door) => [door.id, door]))
+const worldToLocal = (room, x, z) => {
+  if (room.wing === 'N') return [room.cx - x, room.z1 - z]
+  if (room.wing === 'S') return [x - room.cx, z - room.z0]
+  if (room.wing === 'W') return [z - room.cz, room.x1 - x]
+  return [room.cz - z, x - room.x0]
+}
+for (const room of campus.rooms.filter((item) => localPrimitives.some((visual) => visual.roomId === item.id))) {
+  const cell = campus.cells.find((item) => item.id === room.id)
+  assert.ok(cell, `${room.id} cell is missing`)
+  const owned = localPrimitives.filter((item) => item.roomId === room.id)
+  for (const doorId of cell.links) {
+    const door = doorById[doorId]
+    assert.ok(door, `${room.id} references missing door ${doorId}`)
+    const direction = door.flip ? -1 : 1
+    const centerX = door.axis === 'x' ? door.hinge[0] + direction * door.w / 2 : door.fixed
+    const centerZ = door.axis === 'x' ? door.fixed : door.hinge[2] + direction * door.w / 2
+    const [doorU, doorV] = worldToLocal(room, centerX, centerZ)
+    const { localWidth, localDepth } = localMetrics(room, owned[0])
+    const sides = [
+      { key: 'front', distance: Math.abs(doorV), tangent: doorU, normal: doorV, tangentAxis: 'u' },
+      { key: 'back', distance: Math.abs(localDepth - doorV), tangent: doorU, normal: localDepth - doorV, tangentAxis: 'u' },
+      { key: 'left', distance: Math.abs(doorU + localWidth / 2), tangent: doorV, normal: doorU + localWidth / 2, tangentAxis: 'v' },
+      { key: 'right', distance: Math.abs(localWidth / 2 - doorU), tangent: doorV, normal: localWidth / 2 - doorU, tangentAxis: 'v' },
+    ].sort((a, b) => a.distance - b.distance)
+    const side = sides[0]
+    assert.ok(side.distance <= 0.35, `${doorId} is not on ${room.id} boundary`)
+    for (const item of owned) {
+      if (item.navRole === 'wall-mounted' || item.navRole === 'ceiling-mounted' || item.navRole === 'floor-decal') continue
+      const { extentU, extentV } = localMetrics(room, item)
+      const primitiveHeight = item.s?.[1] ?? item.h
+      const bottom = item.p[1] - primitiveHeight / 2 - FLOOR_Y[room.floor]
+      const top = item.p[1] + primitiveHeight / 2 - FLOOR_Y[room.floor]
+      if (bottom > 1.8 || top < 0.05) continue
+      const u0 = item.local[0] - extentU, u1 = item.local[0] + extentU
+      const v0 = item.local[1] - extentV, v1 = item.local[1] + extentV
+      const tangentHalf = door.w / 2 + 0.4
+      const tangentOverlaps = side.tangentAxis === 'u'
+        ? u1 > side.tangent - tangentHalf && u0 < side.tangent + tangentHalf
+        : v1 > side.tangent - tangentHalf && v0 < side.tangent + tangentHalf
+      const inwardOverlaps = side.key === 'front' ? v1 > 0 && v0 < 1.5
+        : side.key === 'back' ? v0 < localDepth && v1 > localDepth - 1.5
+          : side.key === 'left' ? u1 > -localWidth / 2 && u0 < -localWidth / 2 + 1.5
+            : u0 < localWidth / 2 && u1 > localWidth / 2 - 1.5
+      assert.equal(
+        tangentOverlaps && inwardOverlaps,
+        false,
+        `${room.id} prop ${JSON.stringify({ local: item.local, size: item.s ?? [item.r * 2, item.h, item.r * 2], navRole: item.navRole })} blocks actual door approach ${doorId}`,
+      )
+    }
+  }
+}
+
+const layoutSignatures = new Map()
+for (const room of classrooms) {
+  const footprint = localVisuals.filter((item) => item.roomId === room.id).map((item) => {
+    const { localWidth, turn, extentU } = localMetrics(room, item)
     const localHeight = item.p[1] - FLOOR_Y[room.floor]
     const entersDoorZone = localHeight < 1.2 && item.local[1] < 1.7 && Math.abs(item.local[0]) + extentU > localWidth / 2 - 1.5
     assert.equal(entersDoorZone, false, `${room.id} low prop intrudes into a door approach`)
@@ -79,7 +146,6 @@ const conditionCounts = Object.values(campus.conditions).reduce((counts, conditi
 const normalRate = (conditionCounts.intact ?? 0) / Object.keys(campus.conditions).length
 assert.ok(normalRate >= 0.7 && normalRate <= 0.8, `Normal school baseline must stay at 70-80%, got ${normalRate}`)
 
-const roomById = Object.fromEntries(campus.rooms.map((room) => [room.id, room]))
 for (const [mainId, prepId] of [
   ['f2_science', 'f2_sciprep'],
   ['f2_music', 'f2_musicprep'],

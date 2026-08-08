@@ -15,3 +15,4 @@
 - [Batch 001 — 구조 정본과 교실 5개 서명](./batch-001.md)
 - [Batch 002 — 미션·프롭 표면 앵커 복구](./batch-002.md)
 - [Batch 003 — Rapier 문 갱신 안정화](./batch-003.md)
+- [Batch 004 — 특별실 공간 문법과 실제 문 접근 검사](./batch-004.md)

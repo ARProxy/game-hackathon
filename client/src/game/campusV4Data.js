@@ -230,7 +230,7 @@ export function buildCampus(opts = {}) {
   const S = (f, p, s, c, extra) => solids.push(Object.assign({ f, p, s, c }, extra))
   const V = (f, p, s, c, extra) => visuals.push(Object.assign({ f, p, s, c }, extra))
   const P = (f, p, s, c, rot, ceil) => plates.push({ f, p, s, c, rot, ceil })
-  const CY = (f, p, r, h, c, rot) => cyls.push({ f, p, r, h, c, rot })
+  const CY = (f, p, r, h, c, rot, extra) => cyls.push(Object.assign({ f, p, r, h, c, rot }, extra))
   const FX = (f, p, c, tone, dynamic) => fixtures.push({ f, p, c, tone, dynamic: !!dynamic })
 
   /* ── 방 상태 · 슬래브 구멍 ─────────────────────────────── */
@@ -529,9 +529,18 @@ export function buildCampus(opts = {}) {
         local: [u, v],
       })
     }
-    const localCylinder = (u, v, height, radius, cylinderHeight, color) => {
+    const localCylinder = (u, v, height, radius, cylinderHeight, color, opt = {}) => {
       const [x, z] = toWorld(u, v)
-      if (!inHole(x, z)) CY(f, [x, y + height, z], radius, cylinderHeight, color)
+      if (!inHole(x, z)) CY(f, [x, y + height, z], radius, cylinderHeight, color, undefined, {
+        ...opt,
+        roomId: meta.id,
+        layoutId: meta.layoutId,
+        local: [u, v],
+      })
+    }
+    const localShelf = (u, v, length, depth, turn = 0) => {
+      localBox(u, v, 1.05, [length, 2.1, depth], PAL.wood, turn, { landmarkRole: 'storage' })
+      for (let i = 1; i <= 4; i++) localBox(u, v, i * 0.42, [length - 0.06, 0.04, depth + 0.04], PAL.paper, turn)
     }
 
     /** 가구를 뺀 자리에 남는 눌림 자국 */
@@ -635,14 +644,14 @@ export function buildCampus(opts = {}) {
       const boardWidth = Math.min(4.2, localWidth - 1.6)
 
       // 모든 교실이 공유하는 70%의 학교 문법: 칠판·교탁·뒤 사물함·게시판·청소 코너.
-      localBox(0, 0.12, 1.85, [boardWidth, 1.3, 0.08], PAL.chalk)
-      localBox(0, 0.2, 1.15, [boardWidth, 0.09, 0.18], PAL.wood)
+      localBox(0, 0.12, 1.85, [boardWidth, 1.3, 0.08], PAL.chalk, 0, { navRole: 'wall-mounted' })
+      localBox(0, 0.2, 1.15, [boardWidth, 0.09, 0.18], PAL.wood, 0, { navRole: 'wall-mounted' })
       localBox(0, 1.15, 0.78, [1.1, 0.06, 0.55], PAL.wood)
       localBox(0, 1.15, 0.4, [1.0, 0.72, 0.45], PAL.desk)
       // 뒤벽 전체를 막지 않고 한쪽 코너만 쓴다. 뒷문과 회전 공간을 남기는 학교식 수납이다.
       localBox(localWidth * 0.2, localDepth - 0.3, 0.9, [2.0, 1.8, 0.45], PAL.locker)
-      localBox(-localWidth / 2 + 0.12, localDepth * 0.62, 1.6, [0.08, 1.1, 2.2], PAL.paper)
-      localBox(localWidth / 2 - 0.26, 1.05, 2.35, [0.5, 0.35, 0.55], '#232a30')
+      localBox(-localWidth / 2 + 0.12, localDepth * 0.62, 1.6, [0.08, 1.1, 2.2], PAL.paper, 0, { navRole: 'wall-mounted' })
+      localBox(localWidth / 2 - 0.26, 1.05, 2.35, [0.5, 0.35, 0.55], '#232a30', 0, { navRole: 'wall-mounted' })
       localBox(-localWidth / 2 + 0.42, localDepth - 0.72, 0.4, [0.5, 0.8, 0.5], PAL.locker)
       localCylinder(localWidth / 2 - 0.55, localDepth - 0.62, 0.18, 0.17, 0.36, '#5c6165')
 
@@ -683,7 +692,7 @@ export function buildCampus(opts = {}) {
       } else if (layoutId === 'exam') {
         // 간격을 넓힌 시험 대형. 중앙 세로 통로가 정면에서 뒷문까지 열린다.
         for (const u of [-2.15, 0, 2.15]) for (const v of [2.05, 3.25, 4.45, 5.65]) deskLocal(u, v)
-        localBox(-localWidth / 2 + 0.38, 2.0, 1.15, [0.22, 0.75, 1.2], '#d6cfaa')
+        localBox(-localWidth / 2 + 0.38, 3.0, 1.15, [0.22, 0.75, 1.2], '#d6cfaa')
       } else if (layoutId === 'horseshoe') {
         // 발표·토론형 U자. 중앙 3.4×3.1 m를 완전히 비운다.
         for (const v of [2.35, 3.55, 4.75]) {
@@ -691,7 +700,7 @@ export function buildCampus(opts = {}) {
           deskLocal(2.45, v, -Math.PI / 2)
         }
         for (const u of [-2.25, -0.75, 0.75, 2.25]) deskLocal(u, 5.55, 0)
-        localBox(0, 3.75, 0.03, [2.2, 0.03, 1.4], '#7b8f91')
+        localBox(0, 3.75, 0.03, [2.2, 0.03, 1.4], '#7b8f91', 0, { navRole: 'floor-decal' })
       } else if (layoutId === 'project') {
         // 제작 수업형: 양옆 벤치 + 중앙 공동 작업대, 앞뒤 회유 동선.
         for (const v of [2.15, 3.25, 4.35, 5.45]) {
@@ -750,15 +759,15 @@ export function buildCampus(opts = {}) {
       V(f, [r.x1 - 0.9, y + 0.55, r.z1 - 1.0], [0.9, 1.1, 0.7], '#43494e') // 복사기
       V(f, [r.x1 - 0.9, y + 1.15, r.z1 - 1.0], [0.7, 0.1, 0.55], '#71787d')
     } else if (kind === 'library') {
-      const n = Math.floor((w - 3) / 2.2)
-      for (let i = 0; i < n; i++) shelf(r.x0 + 1.6 + i * 2.2, r.z0 + 2.4, 3.2, 0.5, true)
-      for (let i = 0; i < 3; i++) {
-        const x = r.x0 + 3 + i * 3.4
-        V(f, [x, y + 0.74, r.z1 - 2.0], [2.6, 0.07, 1.2], PAL.wood)
-        V(f, [x, y + 0.37, r.z1 - 2.0], [2.4, 0.7, 1.0], PAL.deskLeg)
-        for (const sz of [-0.95, 0.95]) for (const sx of [-0.7, 0.7]) V(f, [x + sx, y + 0.44, r.z1 - 2.0 + sz], [0.42, 0.05, 0.42], PAL.chair)
+      // 16m 긴 축을 실제 서가 탐색축으로 쓴다. +u측은 출입문에서 열람대로 이어지는 주통로다.
+      for (const u of [-5.0, -2.6, -0.2]) localShelf(u, 4.2, 3.8, 0.45, Math.PI / 2)
+      for (const u of [2.0, 4.6]) {
+        localBox(u, 3.4, 0.74, [1.8, 0.07, 0.8], PAL.wood)
+        localBox(u, 3.4, 0.37, [1.6, 0.7, 0.65], PAL.deskLeg)
+        for (const dv of [-0.7, 0.7]) for (const du of [-0.55, 0.55]) localBox(u + du, 3.4 + dv, 0.44, [0.42, 0.05, 0.42], PAL.chair)
       }
-      V(f, [r.x1 - 1.6, y + 0.6, r.z0 + 1.0], [2.4, 1.2, 0.7], PAL.wood)  // 대출대
+      localBox(5.2, 6.45, 0.6, [2.0, 1.2, 0.65], PAL.wood, 0, { landmarkRole: 'checkout' })
+      localBox(0.9, 1.95, 0.5, [0.8, 1.0, 0.5], '#6b7378', 0, { landmarkRole: 'book-return' })
     } else if (kind === 'music') {
       V(f, [cx - 1.5, y + 0.55, r.z1 - 1.8], [1.5, 1.1, 1.4], '#1c1f24')  // 그랜드 피아노
       V(f, [cx - 1.5, y + 1.12, r.z1 - 1.8], [1.7, 0.08, 1.6], '#2a2f36')
@@ -798,12 +807,15 @@ export function buildCampus(opts = {}) {
       }
     } else if (kind === 'av' || kind === 'broadcast') {
       if (kind === 'av') {
-        V(f, [cx, y + 1.7, r.z0 + 0.2], [Math.min(w - 2, 5), 2.4, 0.08], '#1a1e22')
-        for (let i = 0; i < 4; i++) {
-          const z = r.z0 + 2.6 + i * 1.5
-          V(f, [cx, y + 0.12 + i * 0.22, z], [w - 2.2, 0.24 + i * 0.44, 1.4], '#4c5560')
-          for (let j = 0; j < 6; j++) V(f, [cx + (j - 2.5) * 1.1, y + 0.5 + i * 0.44, z], [0.46, 0.06, 0.46], PAL.chair)
+        // 문쪽 1.55m 횡통로에서 양측 aisle로 진입하고, 스크린은 반대쪽 벽에 둔다.
+        localBox(0, localDepth - 0.12, 1.7, [5.4, 2.2, 0.08], '#1a1e22', 0, { landmarkRole: 'screen', navRole: 'wall-mounted' })
+        localBox(0, 6.15, 0.16, [5.2, 0.16, 0.8], '#59636d', 0, { landmarkRole: 'stage' })
+        for (let i = 0; i < 3; i++) {
+          const v = 2.0 + i * 1.25
+          localBox(0, v, 0.12 + i * 0.18, [4.6, 0.24 + i * 0.36, 0.9], '#4c5560')
+          for (const u of [-1.65, -0.55, 0.55, 1.65]) localBox(u, v, 0.5 + i * 0.36, [0.46, 0.06, 0.46], PAL.chair)
         }
+        localBox(0, 1.25, 2.72, [0.42, 0.24, 0.55], '#30383f', 0, { landmarkRole: 'projector', navRole: 'ceiling-mounted' })
       } else {
         V(f, [cx, y + 0.75, r.z1 - 1.4], [3.2, 0.08, 1.0], '#2c333a')
         V(f, [cx, y + 0.38, r.z1 - 1.4], [3.0, 0.72, 0.9], '#454d55')
@@ -928,25 +940,25 @@ export function buildCampus(opts = {}) {
       V(f, [r.x0 + 0.7, y + 0.4, r.z1 - 0.8], [0.6, 0.8, 0.6], '#8d949a')                     // 투표함
       V(f, [r.x0 + 0.7, y + 0.82, r.z1 - 0.8], [0.28, 0.04, 0.06], '#2b3036')
     } else if (kind === 'english') {
-      // 4인 원탁 — 일반 교실의 4×5 격자와 실루엣이 정반대다
-      grid(2, 2, 3.0, 2.6, (x, z) => {
-        CY(f, [x, y + 0.72, z], 0.85, 0.06, PAL.desk)
-        CY(f, [x, y + 0.35, z], 0.14, 0.70, PAL.deskLeg)
-        CY(f, [x, y + 0.02, z], 0.45, 0.04, PAL.deskLeg)
+      // 3개 언어 포드. 4원탁 중첩을 없애고 문→중앙→뒤 포드의 1.2m 축을 남긴다.
+      const pods = [[-1.65, 2.8], [1.65, 2.8], [0, 5.35]]
+      for (const [pu, pv] of pods) {
+        localCylinder(pu, pv, 0.72, 0.64, 0.06, PAL.desk)
+        localCylinder(pu, pv, 0.35, 0.14, 0.70, PAL.deskLeg)
+        localCylinder(pu, pv, 0.02, 0.42, 0.04, PAL.deskLeg)
         for (let i = 0; i < 4; i++) {
-          const a = i * Math.PI / 2 + 0.78
-          V(f, [x + Math.cos(a) * 1.2, y + 0.44, z + Math.sin(a) * 1.2], [0.44, 0.06, 0.44], PAL.chair, { rot: [0, -a, 0] })
-          V(f, [x + Math.cos(a) * 1.42, y + 0.68, z + Math.sin(a) * 1.42], [0.44, 0.46, 0.06], PAL.chair, { rot: [0, -a, 0] })
+          const a = i * Math.PI / 2 + Math.PI / 4
+          localBox(pu + Math.cos(a) * 0.92, pv + Math.sin(a) * 0.92, 0.44, [0.42, 0.06, 0.42], PAL.chair, -a)
+          localBox(pu + Math.cos(a) * 1.05, pv + Math.sin(a) * 1.05, 0.68, [0.42, 0.46, 0.06], PAL.chair, -a)
         }
-      })
-      const fp = facePos()
-      V(f, [fp.x, y + 1.9, fp.z], fp.rot ? [0.05, 1.5, 2.7] : [2.7, 1.5, 0.05], '#20262b')    // 대형 스크린
-      V(f, [fp.x, y + 1.9, fp.z], fp.rot ? [0.03, 1.34, 2.5] : [2.5, 1.34, 0.03], '#39525f', { e: 0.35 })
-      for (let i = 0; i < 8; i++) {                                                            // 알파벳 띠
-        V(f, [r.x0 + 1.0 + i * ((w - 2.0) / 8), y + 2.68, r.z0 + 0.1], [(w - 2.0) / 8 - 0.12, 0.34, 0.02], i % 2 ? '#d8c15a' : '#5f8fa8')
       }
-      P(f, [cx, y + 0.04, cz], [Math.min(w - 1.6, 6.0), Math.min(d - 1.6, 5.0)], '#5c6f7a')    // 카펫
-      V(f, [r.x1 - 0.5, y + 0.85, r.z0 + 1.2], [0.5, 1.7, 1.1], PAL.locker)                    // 교재장
+      localBox(0, localDepth - 0.12, 1.9, [3.4, 1.45, 0.05], '#20262b', 0, { landmarkRole: 'language-screen', navRole: 'wall-mounted' })
+      localBox(0, localDepth - 0.09, 1.9, [3.2, 1.29, 0.03], '#39525f', 0, { e: 0.35, navRole: 'wall-mounted' })
+      for (let i = 0; i < 8; i++) {                                                            // 알파벳 띠
+        const span = localWidth - 2.0
+        localBox(-span / 2 + span * (i + 0.5) / 8, localDepth - 0.1, 2.68, [span / 8 - 0.12, 0.34, 0.02], i % 2 ? '#d8c15a' : '#5f8fa8', 0, { navRole: 'wall-mounted' })
+      }
+      localBox(0, 4.0, 0.04, [Math.min(localWidth - 1.6, 6.0), 0.03, Math.min(localDepth - 2.0, 4.8)], '#5c6f7a', 0, { navRole: 'floor-decal' })
     } else if (kind === 'evhall') {
       // 승강장 정면은 비워 둔다. 대기 공간이므로 벽붙이 가구만 놓는다
       const zBack = r.z1 - 0.45
