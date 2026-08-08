@@ -112,11 +112,12 @@ function Scene({
   return (
     <>
       {/* ── 조명 ── */}
-      <ambientLight intensity={cameraMode === 'cctv' ? 1.4 : 0.5} />
+      <ambientLight color={cameraMode === 'cctv' ? '#ffffff' : '#16202b'} intensity={cameraMode === 'cctv' ? 1.4 : 0.42} />
       <directionalLight
-        position={[10, 30, 10]}
-        intensity={cameraMode === 'cctv' ? 2.4 : 0.62}
-        color={cameraMode === 'cctv' ? '#f2f7ff' : '#ffffff'}
+        position={cameraMode === 'cctv' ? [10, 30, 10] : [70, 110, 50]}
+        intensity={cameraMode === 'cctv' ? 2.4 : 1.05}
+        color={cameraMode === 'cctv' ? '#f2f7ff' : '#a8c6e4'}
+        castShadow={cameraMode === '3d'}
       />
       {cameraMode === 'cctv' && (
         <>
@@ -125,7 +126,7 @@ function Scene({
           <CCTVVisuals />
         </>
       )}
-      {cameraMode === '3d' && <hemisphereLight args={['#a8c8d9', '#35434a', 0.62]} />}
+      {cameraMode === '3d' && <hemisphereLight args={['#2b3b4a', '#0b0f13', 0.56]} />}
       {cameraMode === '3d' && <Fog />}
 
       {/* ── 물리 월드 ── */}
