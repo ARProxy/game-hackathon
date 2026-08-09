@@ -226,17 +226,16 @@ export default function MiniMap() {
   if (!['playing', 'final_spell', 'escape'].includes(phase)) return null
 
   return (
-    <aside aria-label="학교 미니맵" style={{
-      position: 'absolute', top: import.meta.env.DEV ? 112 : 16, right: 16,
-      width: SIZE, padding: 9, borderRadius: 12,
-      border: '1px solid rgba(143,211,232,.38)', background: 'rgba(5,12,18,.88)',
-      boxShadow: '0 10px 34px rgba(0,0,0,.3)', backdropFilter: 'blur(7px)',
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7, fontSize: 10, letterSpacing: '.06em' }}>
-        <strong style={{ color: '#BDEFFF' }}>ㅁ자 학교 · 실제 구조</strong>
-        <span style={{ color: '#B6FF3D' }}>{floor}</span>
+    <aside
+      aria-label="학교 미니맵"
+      className="school-minimap"
+      style={{ top: import.meta.env.DEV ? 108 : 12 }}
+    >
+      <div className="school-minimap__header">
+        <strong>ㅁ자 학교 · 실제 구조</strong>
+        <span>{floor}</span>
       </div>
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE} role="img" aria-label={`${floor} 실제 구조와 현재 목표`}>
+      <svg className="school-minimap__canvas" viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label={`${floor} 실제 구조와 현재 목표`}>
         <rect width={SIZE} height={SIZE} rx="7" fill="#0B1821" />
         <FloorPlan view={view} floor={floor} />
         {objectives.map((objective) => <ObjectiveMarker key={`${objective.label}-${objective.x}-${objective.z}`} view={view} point={objective} />)}
@@ -246,11 +245,13 @@ export default function MiniMap() {
         {player && <ActorMarker view={view} point={player.position} color="#52E5FF" label={playerId || '플레이어'} player />}
         {teammateMarkers.map((marker) => <ActorMarker key={marker.label} view={view} point={marker} color={marker.color} label={marker.label} />)}
       </svg>
-      <div style={{ marginTop: 5, fontSize: 9, color: 'rgba(255,255,255,.68)', lineHeight: 1.4 }}>
-        <span style={{ color: '#52E5FF' }}>▲ 나</span>
-        <span style={{ color: '#B6FF3D', marginLeft: 8 }}>● 동료</span>
-        <span style={{ color: '#FFD45C', marginLeft: 8 }}>◆ 목표</span>
-        {objectives[0] && <div style={{ marginTop: 3, color: '#FFE49A' }}>목표 · {objectives[0].label}</div>}
+      <div className="school-minimap__legend">
+        <div className="school-minimap__legend-row">
+          <span style={{ color: '#52E5FF' }}>▲ 나</span>
+          <span style={{ color: '#B6FF3D' }}>● 동료</span>
+          <span style={{ color: '#FFD45C' }}>◆ 목표</span>
+        </div>
+        {objectives[0] && <div className="school-minimap__objective">목표 · {objectives[0].label}</div>}
       </div>
     </aside>
   )

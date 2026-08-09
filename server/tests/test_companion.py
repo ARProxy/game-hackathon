@@ -382,6 +382,31 @@ def test_rooftop_companion_reports_assigned_signal_once_on_arrival() -> None:
     assert repeated_action is None
 
 
+def test_rooftop_companion_patrols_after_signal_report(monkeypatch) -> None:
+    session = make_session("companion-rooftop-signal-patrol")
+    session.round_data = None
+    session.state.get_player("seeker").position.floor = WorldFloor.F1
+    companion_id = "partner"
+    runtime = session.companion_states[companion_id]
+    initial = decide_companion_intent(session, companion_id)
+    runtime.memory[initial["target_id"]] = {
+        "discovered_at": 1.0,
+        "position": initial["target"],
+        "zone": "rooftop_intro",
+    }
+
+    monkeypatch.setattr("app.ai.companion.time.monotonic", lambda: 4.9)
+    first_patrol = decide_companion_intent(session, companion_id)
+    monkeypatch.setattr("app.ai.companion.time.monotonic", lambda: 7.3)
+    second_patrol = decide_companion_intent(session, companion_id)
+
+    assert first_patrol["reason"].startswith("rooftop_signal_")
+    assert first_patrol["reason"].endswith("_patrol")
+    assert first_patrol["target_id"].startswith("roof_signal_patrol_")
+    assert first_patrol["target"] != second_patrol["target"]
+    assert first_patrol["arrival_distance"] == 0.18
+
+
 def test_vertical_companions_split_mission_support_and_route_scout_roles() -> None:
     expected_support_reasons = {
         VerticalRoundPhase.FLOOR_3: "vertical_stage_objective",

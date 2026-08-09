@@ -79,7 +79,7 @@ export default function Partner({
   const guidanceActive = useGameStore((state) => (
     state.companionIntents[playerId]
       ?? (playerId === 'partner' ? state.companionIntent : null)
-  )?.reason === 'rooftop_signal_guide')
+  )?.reason?.startsWith('rooftop_signal_guide'))
 
   useEffect(() => {
     const rescue = (event: KeyboardEvent) => {

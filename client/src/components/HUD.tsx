@@ -39,6 +39,8 @@ const COMPANION_LABELS: Record<string, string> = {
 const COMPANION_REASON_LABELS: Record<string, string> = {
   rooftop_signal_scout: '담당 옥상 중계기 시야 확보',
   rooftop_signal_guide: '다음 정답 신호로 플레이어 안내 중',
+  rooftop_signal_scout_patrol: '담당 중계기 주변을 순찰 중',
+  rooftop_signal_guide_patrol: '다음 신호 주변을 돌며 플레이어 대기 중',
   vertical_stage_objective: '현재 미션 장치 지원',
   intercom_ai_position: '인터폰 판독 위치로 이동',
   simultaneous_ai_position: '동시 조작 B 장치 준비',

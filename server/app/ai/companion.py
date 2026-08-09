@@ -34,6 +34,9 @@ TRAP_CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/trapContract.j
 with TRAP_CONTRACT_PATH.open(encoding="utf-8") as trap_contract_file:
     TRAP_CONTRACT = json.load(trap_contract_file)
 
+ROOFTOP_SIGNAL_PATROL_PERIOD_SECONDS = 2.4
+ROOFTOP_SIGNAL_PATROL_OFFSET = 0.9
+
 
 def command_companion(session: Any, prop_id: str, position: dict, utterance: str, companion_id: str = "partner") -> None:
     runtime = session.companion_states[companion_id]
@@ -191,9 +194,31 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                 signal_side = "east" if companion_id == "partner" else "west"
             signal_slot = _get_map_slot(f"ROOF_SIGNAL_{signal_side.upper()}")
             sx, _, sz = signal_slot.get("approachPosition", signal_slot["position"])
+            base_target_id = f"roof_signal_{'guide' if guiding else 'scout'}_{signal_side}"
+            if base_target_id in runtime.memory:
+                companion_phase = 0 if companion_id == "partner" else 1
+                patrol_index = (
+                    int(time.monotonic() / ROOFTOP_SIGNAL_PATROL_PERIOD_SECONDS)
+                    + companion_phase
+                ) % 2
+                patrol_direction = -1 if patrol_index == 0 else 1
+                if signal_side == "center":
+                    sx += patrol_direction * ROOFTOP_SIGNAL_PATROL_OFFSET
+                else:
+                    sz += patrol_direction * ROOFTOP_SIGNAL_PATROL_OFFSET
+                return {
+                    "state": "EXPLORE_ZONE",
+                    "target_id": f"roof_signal_patrol_{signal_side}_{patrol_index}",
+                    "target": {"x": sx, "z": sz},
+                    "reason": (
+                        "rooftop_signal_guide_patrol"
+                        if guiding else "rooftop_signal_scout_patrol"
+                    ),
+                    "arrival_distance": 0.18,
+                }
             return {
                 "state": "EXPLORE_ZONE",
-                "target_id": f"roof_signal_{'guide' if guiding else 'scout'}_{signal_side}",
+                "target_id": base_target_id,
                 "target": {"x": sx, "z": sz},
                 "reason": "rooftop_signal_guide" if guiding else "rooftop_signal_scout",
                 "arrival_distance": float(
