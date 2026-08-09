@@ -22,6 +22,7 @@ import StartFlow, { type EntryScreen, type MultiplayerLaunch } from './component
 import GameErrorBoundary from './components/GameErrorBoundary'
 import PauseMenu from './components/PauseMenu'
 import { useGameStore } from './stores/gameStore'
+import { useSettingsStore } from './stores/settingsStore'
 import useWebSocket, { sendGameMessage } from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
 import './App.css'
@@ -139,6 +140,8 @@ function CameraRelativeMoon() {
 /** 원본 Canvas의 블룸·필름 그레인·비네트를 월드 캔버스 위에만 적용한다. */
 function WorldPostEffects() {
   const [grainTexture, setGrainTexture] = useState<string>()
+  const graphicsQuality = useSettingsStore((state) => state.graphicsQuality)
+  const reducedFlashes = useSettingsStore((state) => state.reducedFlashes)
 
   useEffect(() => {
     const canvas = document.createElement('canvas')
@@ -159,9 +162,9 @@ function WorldPostEffects() {
   }, [])
 
   return (
-    <div className="world-post-effects" aria-hidden="true">
-      <i className="world-bloom" />
-      <i className="world-grain" style={grainTexture ? { backgroundImage: `url(${grainTexture})` } : undefined} />
+    <div className={`world-post-effects quality-${graphicsQuality} ${reducedFlashes ? 'reduced-flashes' : ''}`} aria-hidden="true">
+      {graphicsQuality !== 'low' && <i className="world-bloom" />}
+      {graphicsQuality === 'high' && <i className="world-grain" style={grainTexture ? { backgroundImage: `url(${grainTexture})` } : undefined} />}
       <i className="world-vignette" />
     </div>
   )
@@ -298,6 +301,7 @@ function GameController({ launch }: { launch: GameLaunch }) {
   const setRoom = useGameStore((state) => state.setRoom)
   const playerStatus = useGameStore((state) => state.players[state.playerId]?.status)
   const [speechFallbackReason, setSpeechFallbackReason] = useState<string | null>(null)
+  const speechLanguage = useSettingsStore((state) => state.speechLanguage)
   const speechEnabled = !isPaused && (
     (phase === 'playing' || phase === 'final_spell')
     && playerStatus !== 'frozen'
@@ -342,6 +346,7 @@ function GameController({ launch }: { launch: GameLaunch }) {
   /* Q키 Push-to-Talk */
   useSpeech({
     enabled: speechEnabled,
+    lang: speechLanguage,
     onStart: () => useGameStore.getState().setSpeaking(true),
     onEnd: () => useGameStore.getState().setSpeaking(false),
     onInterim: (t) => useGameStore.getState().setLastTranscript(t),
@@ -467,6 +472,10 @@ function GameApp() {
   const [floorLabel, setFloorLabel] = useState('전체')
   const [sceneKey, setSceneKey] = useState(0)
   const [launch, setLaunch] = useState<GameLaunch | null>(null)
+  const graphicsQuality = useSettingsStore((state) => state.graphicsQuality)
+  const shadowsEnabled = useSettingsStore((state) => state.shadowsEnabled)
+  const renderScale = useSettingsStore((state) => state.renderScale)
+  const canvasDpr = renderScale * (graphicsQuality === 'low' ? 0.7 : graphicsQuality === 'medium' ? 0.9 : 1)
   // 접근 가능 층은 서버의 문·이동 권한 계약이고 렌더 가시성 계약이 아니다.
   // 게임에서는 전체 학교 외형을 유지하고, 개발용 원본 비교 모드에서만 층을 숨긴다.
   const renderedFloors = DEV_TOOLS_ENABLED && cameraMode === 'reference' ? visibleFloors : undefined
@@ -557,8 +566,9 @@ function GameApp() {
 
       <Canvas
         key={sceneKey}
-        dpr={[1, 1.5]}
-        shadows="soft"
+        dpr={canvasDpr}
+        shadows={shadowsEnabled ? 'soft' : false}
+        gl={{ antialias: graphicsQuality !== 'low', powerPreference: 'high-performance' }}
         fallback={(
           <div role="alert" style={{
             display: 'grid',

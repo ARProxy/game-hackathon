@@ -2,6 +2,7 @@ import { useCallback, useEffect } from 'react'
 import { useSettingsStore } from '../stores/settingsStore'
 
 type ToneShape = OscillatorType
+type SoundCategory = 'effects' | 'ambience'
 
 // 플레이어·술래·HUD가 서로 다른 AudioContext를 만들면 브라우저의 사용자
 // 제스처 잠금 상태가 갈라진다. 게임 전체가 하나의 엔진과 마스터 게인을 공유한다.
@@ -10,6 +11,8 @@ let sharedMaster: GainNode | null = null
 
 export default function useSound() {
   const masterVolume = useSettingsStore((state) => state.masterVolume)
+  const effectsVolume = useSettingsStore((state) => state.effectsVolume)
+  const ambienceVolume = useSettingsStore((state) => state.ambienceVolume)
 
   const ensureContext = useCallback(() => {
     let context = sharedContext
@@ -50,7 +53,7 @@ export default function useSound() {
   }, [ensureContext])
 
   const tone = useCallback((frequency: number, delay: number, duration: number, volume: number,
-    endFrequency = frequency, shape: ToneShape = 'sine', pan = 0) => {
+    endFrequency = frequency, shape: ToneShape = 'sine', pan = 0, category: SoundCategory = 'effects') => {
     const context = sharedContext
     const master = sharedMaster
     if (!context || context.state !== 'running' || !master) return
@@ -61,16 +64,17 @@ export default function useSound() {
     oscillator.frequency.setValueAtTime(frequency, start)
     oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), start + duration)
     gain.gain.setValueAtTime(0.0001, start)
-    gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(0.025, duration / 3))
+    const categoryVolume = category === 'ambience' ? ambienceVolume : effectsVolume
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume * categoryVolume), start + Math.min(0.025, duration / 3))
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
     const panner = context.createStereoPanner()
     panner.pan.value = Math.min(1, Math.max(-1, pan))
     oscillator.connect(gain).connect(panner).connect(master)
     oscillator.start(start)
     oscillator.stop(start + duration + 0.02)
-  }, [])
+  }, [ambienceVolume, effectsVolume])
 
-  const noise = useCallback((delay: number, duration: number, volume: number, highpass: number, pan = 0) => {
+  const noise = useCallback((delay: number, duration: number, volume: number, highpass: number, pan = 0, category: SoundCategory = 'effects') => {
     const context = sharedContext
     const master = sharedMaster
     if (!context || context.state !== 'running' || !master) return
@@ -86,13 +90,14 @@ export default function useSound() {
     source.buffer = buffer
     filter.type = 'highpass'
     filter.frequency.value = highpass
-    gain.gain.setValueAtTime(volume, start)
+    const categoryVolume = category === 'ambience' ? ambienceVolume : effectsVolume
+    gain.gain.setValueAtTime(Math.max(0.0001, volume * categoryVolume), start)
     gain.gain.exponentialRampToValueAtTime(0.0001, start + duration)
     const panner = context.createStereoPanner()
     panner.pan.value = Math.min(1, Math.max(-1, pan))
     source.connect(filter).connect(gain).connect(panner).connect(master)
     source.start(start)
-  }, [])
+  }, [ambienceVolume, effectsVolume])
 
   const playFreeze = useCallback(() => {
     tone(1100, 0, 0.18, 0.16, 240, 'triangle')
@@ -168,9 +173,9 @@ export default function useSound() {
   }, [noise, tone])
 
   const playAmbientPulse = useCallback(() => {
-    tone(48, 0, 2.8, 0.075, 42, 'sine')
-    tone(96, 0.18, 2.1, 0.025, 82, 'triangle', -0.18)
-    noise(0.05, 1.4, 0.018, 120, 0.22)
+    tone(48, 0, 2.8, 0.075, 42, 'sine', 0, 'ambience')
+    tone(96, 0.18, 2.1, 0.025, 82, 'triangle', -0.18, 'ambience')
+    noise(0.05, 1.4, 0.018, 120, 0.22, 'ambience')
   }, [noise, tone])
 
   const playRooftopSignal = useCallback((step: number) => {

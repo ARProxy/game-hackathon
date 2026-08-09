@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CHARACTERS } from '../game/Characters'
-import { useSettingsStore } from '../stores/settingsStore'
+import SettingsControls from './SettingsControls'
 
 export type EntryScreen = 'title' | 'mode' | 'character' | 'multiplayer' | 'exit'
 export interface MultiplayerLaunch {
@@ -21,24 +21,12 @@ interface StartFlowProps {
 const runners = CHARACTERS.filter((character) => character.role === 'runner')
 
 function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const settings = useSettingsStore()
   return (
     <div className="start-modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="start-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onMouseDown={(event) => event.stopPropagation()}>
         <p className="start-kicker">SYSTEM</p>
         <h2 id="settings-title">설정</h2>
-        <label className="setting-row">
-          <span>전체 음량 <b>{Math.round(settings.masterVolume * 100)}%</b></span>
-          <input type="range" min="0" max="1" step="0.01" value={settings.masterVolume} onChange={(event) => settings.setMasterVolume(Number(event.target.value))} />
-        </label>
-        <label className="setting-row">
-          <span>마우스 감도 <b>{settings.mouseSensitivity.toFixed(1)}x</b></span>
-          <input type="range" min="0.4" max="2" step="0.1" value={settings.mouseSensitivity} onChange={(event) => settings.setMouseSensitivity(Number(event.target.value))} />
-        </label>
-        <label className="setting-toggle">
-          <span>자막</span>
-          <input type="checkbox" checked={settings.subtitlesEnabled} onChange={(event) => settings.setSubtitlesEnabled(event.target.checked)} />
-        </label>
+        <SettingsControls />
         <button className="start-button primary" onClick={onClose}>적용하고 돌아가기</button>
       </section>
     </div>

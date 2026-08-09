@@ -53,6 +53,13 @@ export interface ActiveGate {
   position: { x: number; z: number }
 }
 
+export interface SubtitleEntry {
+  playerId: string
+  text: string
+  timestamp: number
+  speechMode?: string
+}
+
 export interface MultiplayerRoomState {
   room_id: string
   host_id: string
@@ -251,7 +258,7 @@ interface GameStore {
   // 음성 관련
   isSpeaking: boolean
   lastTranscript: string
-  subtitles: { playerId: string; text: string; timestamp: number }[]
+  subtitles: SubtitleEntry[]
 
   // Actions
   setConnected: (connected: boolean) => void
@@ -300,7 +307,7 @@ interface GameStore {
   setMultiplayerError: (message: string | null) => void
   setSpeaking: (isSpeaking: boolean) => void
   setLastTranscript: (transcript: string) => void
-  addSubtitle: (playerId: string, text: string) => void
+  addSubtitle: (playerId: string, text: string, speechMode?: string) => void
   reset: () => void
 }
 
@@ -575,11 +582,11 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setLastTranscript: (transcript) => set({ lastTranscript: transcript }),
 
-  addSubtitle: (playerId, text) =>
+  addSubtitle: (playerId, text, speechMode) =>
     set((state) => ({
       subtitles: [
         ...state.subtitles.slice(-4), // 최근 5개만 유지
-        { playerId, text, timestamp: Date.now() },
+        { playerId, text, timestamp: Date.now(), speechMode },
       ],
     })),
 

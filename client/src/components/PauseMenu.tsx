@@ -1,13 +1,12 @@
 import { useEffect } from 'react'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import { useGameStore } from '../stores/gameStore'
-import { useSettingsStore } from '../stores/settingsStore'
+import SettingsControls from './SettingsControls'
 
 const ACTIVE_PHASES = new Set(['playing', 'final_spell', 'escape'])
 
 export default function PauseMenu({ onMainMenu }: { onMainMenu: () => void }) {
   const paused = useGameStore((state) => state.isPaused)
-  const settings = useSettingsStore()
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -33,9 +32,7 @@ export default function PauseMenu({ onMainMenu }: { onMainMenu: () => void }) {
         <div className="pause-columns">
           <div>
             <h3>설정</h3>
-            <label className="setting-row"><span>전체 음량 <b>{Math.round(settings.masterVolume * 100)}%</b></span><input type="range" min="0" max="1" step="0.01" value={settings.masterVolume} onChange={(e) => settings.setMasterVolume(Number(e.target.value))} /></label>
-            <label className="setting-row"><span>마우스 감도 <b>{settings.mouseSensitivity.toFixed(1)}x</b></span><input type="range" min="0.4" max="2" step="0.1" value={settings.mouseSensitivity} onChange={(e) => settings.setMouseSensitivity(Number(e.target.value))} /></label>
-            <label className="setting-toggle"><span>자막 표시</span><input type="checkbox" checked={settings.subtitlesEnabled} onChange={(e) => settings.setSubtitlesEnabled(e.target.checked)} /></label>
+            <SettingsControls compact />
           </div>
           <div>
             <h3>조작법</h3>

@@ -37,6 +37,7 @@ export default function ThirdPersonCamera({ targetRef, enabled }: ThirdPersonCam
   const isLocked = useRef(false)
   const armDistance = useRef<number | null>(null)
   const sensitivity = useSettingsStore((state) => state.mouseSensitivity)
+  const invertY = useSettingsStore((state) => state.invertY)
   const collisionRay = useMemo(() => new rapier.Ray(
     { x: 0, y: 0, z: 0 },
     { x: 0, y: 0, z: 1 },
@@ -60,7 +61,7 @@ export default function ThirdPersonCamera({ targetRef, enabled }: ThirdPersonCam
       if (!isLocked.current) return
       yaw.current -= e.movementX * BASE_SENSITIVITY * sensitivity
       pitch.current = THREE.MathUtils.clamp(
-        pitch.current - e.movementY * BASE_SENSITIVITY * sensitivity,
+        pitch.current - e.movementY * BASE_SENSITIVITY * sensitivity * (invertY ? -1 : 1),
         -0.2,  // 약간 올려다보기 허용
         0.6,   // 최대 각도 제한 (위층 관통 방지)
       )
@@ -78,7 +79,7 @@ export default function ThirdPersonCamera({ targetRef, enabled }: ThirdPersonCam
         document.exitPointerLock()
       }
     }
-  }, [enabled, gl.domElement, sensitivity])
+  }, [enabled, gl.domElement, invertY, sensitivity])
 
   useFrame((_, delta) => {
     if (!enabled || !targetRef.current) return

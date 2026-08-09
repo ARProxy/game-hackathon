@@ -1,6 +1,14 @@
 import { useEffect, useRef } from 'react'
 import useSound from '../hooks/useSound'
 import { useGameStore, type GamePhase, type PlayerStatus } from '../stores/gameStore'
+import { useSettingsStore } from '../stores/settingsStore'
+
+function safeCompanionSpeech(text: string, forbiddenWords: string[]): string {
+  return forbiddenWords.reduce((safe, word) => {
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return escaped ? safe.replace(new RegExp(escaped, 'gi'), '그 대상') : safe
+  }, text)
+}
 
 export default function SoundController() {
   const phase = useGameStore((state) => state.phase)
@@ -10,6 +18,11 @@ export default function SoundController() {
   const rooftopProgress = useGameStore((state) => state.rooftopSignal?.progress ?? 0)
   const verticalPhase = useGameStore((state) => state.verticalProgression?.phase ?? null)
   const companionMessageCount = useGameStore((state) => state.subtitles.filter((item) => item.playerId.startsWith('partner')).length)
+  const latestSubtitle = useGameStore((state) => state.subtitles.at(-1) ?? null)
+  const forbiddenWords = useGameStore((state) => state.forbiddenWords)
+  const masterVolume = useSettingsStore((state) => state.masterVolume)
+  const voiceVolume = useSettingsStore((state) => state.voiceVolume)
+  const speechLanguage = useSettingsStore((state) => state.speechLanguage)
   const {
     playFreeze, playRescue, playGateOpen, playVictory, playDefeat,
     playAmbientPulse, playMissionProgress, playCompanionCue,
@@ -20,6 +33,35 @@ export default function SoundController() {
   const previousRooftopProgress = useRef(rooftopProgress)
   const previousCompanionMessageCount = useRef(companionMessageCount)
   const previousStatuses = useRef<Record<string, PlayerStatus>>({})
+  const lastSpokenTimestamp = useRef(0)
+
+  useEffect(() => {
+    if (!latestSubtitle?.playerId.startsWith('partner')) return
+    if (latestSubtitle.timestamp <= lastSpokenTimestamp.current) return
+    lastSpokenTimestamp.current = latestSubtitle.timestamp
+    if (!('speechSynthesis' in window) || latestSubtitle.speechMode === 'silent') return
+    const utterance = new SpeechSynthesisUtterance(
+      safeCompanionSpeech(latestSubtitle.text, forbiddenWords),
+    )
+    utterance.lang = speechLanguage
+    utterance.volume = Math.min(1, masterVolume * voiceVolume * (
+      latestSubtitle.speechMode === 'whisper' ? 0.58 : 1
+    ))
+    utterance.rate = latestSubtitle.speechMode === 'shout' ? 1.08
+      : latestSubtitle.speechMode === 'radio' ? 0.94
+        : 1
+    utterance.pitch = latestSubtitle.speechMode === 'intercom' ? 0.82
+      : latestSubtitle.speechMode === 'whisper' ? 0.92
+        : 1.05
+    const matchingVoice = window.speechSynthesis.getVoices().find((voice) =>
+      voice.lang.toLowerCase().startsWith(speechLanguage.slice(0, 2).toLowerCase()),
+    )
+    if (matchingVoice) utterance.voice = matchingVoice
+    window.speechSynthesis.cancel()
+    if (utterance.volume > 0.001) window.speechSynthesis.speak(utterance)
+  }, [forbiddenWords, latestSubtitle, masterVolume, speechLanguage, voiceVolume])
+
+  useEffect(() => () => window.speechSynthesis?.cancel(), [])
 
   useEffect(() => {
     if (!['playing', 'final_spell', 'escape'].includes(phase)) return

@@ -401,6 +401,7 @@ export default function HUD() {
   const connectionError = useGameStore((s) => s.connectionError)
   const subtitles = useGameStore((s) => s.subtitles)
   const subtitlesEnabled = useSettingsStore((s) => s.subtitlesEnabled)
+  const subtitleScale = useSettingsStore((s) => s.subtitleScale)
   const inspectingPropId = useGameStore((s) => s.inspectingPropId)
   const partnerTarget = useGameStore((s) => s.partnerTarget)
   const partnerDecision = useGameStore((s) => s.partnerDecision)
@@ -723,7 +724,7 @@ export default function HUD() {
             background: 'rgba(0, 0, 0, 0.6)',
             padding: '4px 12px',
             borderRadius: 6,
-            fontSize: 14,
+            fontSize: 14 * subtitleScale,
             opacity: i === visibleSubtitles.length - 1 ? 1 : 0.5,
           }}>
             {sub.text}
@@ -737,7 +738,7 @@ export default function HUD() {
             border: '1px solid rgba(82, 229, 255, 0.4)',
             padding: '4px 12px',
             borderRadius: 6,
-            fontSize: 14,
+            fontSize: 14 * subtitleScale,
             color: '#52E5FF',
           }}>
             {lastTranscript}

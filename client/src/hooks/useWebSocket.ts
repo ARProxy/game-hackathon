@@ -272,12 +272,12 @@ export default function useWebSocket() {
           useGameStore.getState().setActiveMissionPrompt(
             'AI가 방송 기록과 일치하는 증거를 확인했습니다. 다음 구역 개방을 기다리세요.',
           )
-          addSubtitle(data.companion_id ?? 'partner', data.feedback ?? '방송 기록과 일치해. 이 후보가 맞아.')
+          addSubtitle(data.companion_id ?? 'partner', data.feedback ?? '방송 기록과 일치해. 이 후보가 맞아.', data.speech_mode)
         } else {
           useGameStore.getState().setActiveMissionPrompt(
             `AI가 ${data.zone ?? '해당 구역'} 후보를 직접 확인했지만 기록과 달랐습니다. Q로 재질·형태·쓰임의 차이를 교정하세요.`,
           )
-          addSubtitle(data.companion_id ?? 'partner', data.feedback ?? '직접 확인해 보니 달라. 차이를 교정해 줘.')
+          addSubtitle(data.companion_id ?? 'partner', data.feedback ?? '직접 확인해 보니 달라. 차이를 교정해 줘.', data.speech_mode)
         }
         break
 
@@ -490,11 +490,11 @@ export default function useWebSocket() {
         break
 
       case 'companion_report':
-        addSubtitle(data.companion_id ?? 'partner', data.message)
+        addSubtitle(data.companion_id ?? 'partner', data.message, data.speech_mode)
         break
 
       case 'companion_seeker_report':
-        addSubtitle(data.companion_id ?? 'partner', data.message)
+        addSubtitle(data.companion_id ?? 'partner', data.message, data.speech_mode)
         break
 
       case 'companion_assignment':
@@ -522,7 +522,7 @@ export default function useWebSocket() {
             cues: candidate.cues,
           })),
         })
-        addSubtitle('partner', data.reply)
+        addSubtitle('partner', data.reply, data.speech_mode)
         break
 
       case 'prop_inspected':
