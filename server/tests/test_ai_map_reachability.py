@@ -63,7 +63,6 @@ def test_each_playable_phase_has_a_mission_on_its_active_floor(phase: VerticalRo
 @pytest.mark.parametrize(
     ("phase", "route"),
     [
-        (VerticalRoundPhase.FLOOR_3, "west"),
         (VerticalRoundPhase.FLOOR_2, "west"),
         (VerticalRoundPhase.FLOOR_2, "east"),
         (VerticalRoundPhase.FLOOR_1, "west"),
@@ -79,6 +78,16 @@ def test_each_progression_route_connects_two_distinct_floors(
     _position(source_id)
     _position(destination_id)
     assert source["floor"] != destination["floor"]
+
+
+def test_rooftop_to_third_floor_uses_physical_stair_endpoints_not_generic_route() -> None:
+    assert VerticalRoundPhase.FLOOR_3 not in TRANSITION_SLOTS_BY_PHASE
+    bottom = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
+    top = get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")
+
+    assert bottom["kind"] == top["kind"] == "stair_boundary"
+    assert bottom["floor"] == "ROOF" and bottom["position"][1] == pytest.approx(7.2)
+    assert top["floor"] == "F3" and top["position"][1] == pytest.approx(10.8)
 
 
 def test_field_final_stations_are_separated_for_three_runner_cooperation() -> None:
