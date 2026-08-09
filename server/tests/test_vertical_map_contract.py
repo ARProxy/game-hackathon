@@ -14,11 +14,17 @@ REQUIRED_SLOT_IDS = {
     "ROOF_TO_F3_STAIR_BOTTOM_CROSSING", "F3_TO_ROOF_STAIR_TOP_CROSSING",
     "F3_MISSION_ROOM_POOL", "F3_BROADCAST_CONSOLE", "F3_SEEKER_REVEAL_ENTRY",
     "F3_TO_F2_STAIR_WEST", "F3_TO_F2_STAIR_EAST",
+    "F3_F2_STAIR_WEST_TOP_CROSSING", "F3_F2_STAIR_WEST_BOTTOM_CROSSING",
+    "F3_F2_STAIR_EAST_TOP_CROSSING", "F3_F2_STAIR_EAST_BOTTOM_CROSSING",
     "F2_MISSION_ROOM_POOL", "F2_INTERCOM_A", "F2_INTERCOM_B",
     "F2_TO_F1_STAIR_WEST", "F2_TO_F1_STAIR_EAST",
     "F1_STAIR_ARRIVAL_WEST", "F1_STAIR_ARRIVAL_EAST",
+    "F2_F1_STAIR_WEST_TOP_CROSSING", "F2_F1_STAIR_WEST_BOTTOM_CROSSING",
+    "F2_F1_STAIR_EAST_TOP_CROSSING", "F2_F1_STAIR_EAST_BOTTOM_CROSSING",
     "F1_MISSION_ROOM_POOL", "F1_SECURITY_ROOM", "F1_BLOCKER_SPAWN_ENTRY",
     "F1_TO_BASEMENT_FIRE_DOOR", "F1_TO_FIELD_FIRE_DOOR",
+    "F1_B1_STAIR_WEST_TOP_CROSSING", "F1_B1_STAIR_WEST_BOTTOM_CROSSING",
+    "F1_FIELD_INSIDE_CROSSING", "F1_FIELD_OUTSIDE_CROSSING",
     "ELEVATOR_SHAFT_PASSENGER", "ELEVATOR_SHAFT_CARGO",
     "BASEMENT_FINAL_ENTRY", "BASEMENT_FINAL_DEVICE_POOL", "BASEMENT_ESCAPE_GATE",
     "BASEMENT_DEVICE_PANEL", "BASEMENT_DEVICE_VALVE", "BASEMENT_DEVICE_GENERATOR",
@@ -48,7 +54,7 @@ def test_position_slots_use_floor_height_and_finite_map_coordinates() -> None:
         base_y = floor_y[slot["floor"]]
         if slot["kind"] == "device":
             assert base_y < position[1] <= base_y + 3.2, slot_id
-        elif slot["kind"] == "stair_boundary":
+        elif slot_id in {"ROOF_TO_F3_STAIR_BOTTOM_CROSSING", "F3_TO_ROOF_STAIR_TOP_CROSSING"}:
             assert min(abs(position[1] - height) for height in (7.2, 10.8)) < 0.001, slot_id
         else:
             assert position[1] == pytest.approx(base_y), slot_id
@@ -135,6 +141,23 @@ def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
     assert door_to_door[0] == get_map_slot("ROOF_TO_F3_FIRE_DOOR")["position"]
     assert door_to_door[-1] == get_map_slot("F3_TO_F2_STAIR_WEST")["position"]
     assert len(door_to_door) >= 12
+
+
+def test_every_floor_transition_path_matches_its_authority_boundaries() -> None:
+    path_and_slots = {
+        "F3_F2_STAIRS_WEST": ("F3_F2_STAIR_WEST_TOP_CROSSING", "F3_F2_STAIR_WEST_BOTTOM_CROSSING", "down"),
+        "F3_F2_STAIRS_EAST": ("F3_F2_STAIR_EAST_TOP_CROSSING", "F3_F2_STAIR_EAST_BOTTOM_CROSSING", "down"),
+        "F2_F1_STAIRS_WEST": ("F2_F1_STAIR_WEST_TOP_CROSSING", "F2_F1_STAIR_WEST_BOTTOM_CROSSING", "down"),
+        "F2_F1_STAIRS_EAST": ("F2_F1_STAIR_EAST_TOP_CROSSING", "F2_F1_STAIR_EAST_BOTTOM_CROSSING", "down"),
+        "F1_B1_STAIRS_WEST": ("F1_B1_STAIR_WEST_TOP_CROSSING", "F1_B1_STAIR_WEST_BOTTOM_CROSSING", "down"),
+        "F1_FIELD_DOOR": ("F1_FIELD_INSIDE_CROSSING", "F1_FIELD_OUTSIDE_CROSSING", "out"),
+    }
+    for path_id, (start_slot, end_slot, points_key) in path_and_slots.items():
+        path = VERTICAL_MAP_CONTRACT["paths"][path_id]
+        points = path[points_key]
+        assert points[0] == get_map_slot(start_slot)["position"], path_id
+        assert points[-1] == get_map_slot(end_slot)["position"], path_id
+        assert path["durationSeconds"] >= 0.8, path_id
 
 
 def test_third_floor_uses_dedicated_broadcast_console_inside_the_room() -> None:

@@ -3,6 +3,8 @@
 import math
 import time
 
+import pytest
+
 from app.ai.companion import (
     advance_companion,
     command_companion,
@@ -533,4 +535,41 @@ def test_rooftop_companions_use_separate_stair_lanes_before_following_player_dow
             "target_floor": runtime.player_floor_changed["position"],
             "traversal": "stairs",
             "direction": "down",
+            "path_id": "ROOF_F3_STAIRS",
         }
+
+
+def test_companion_walks_to_authored_stair_entry_before_following_between_floors() -> None:
+    session = make_session("companion-physical-f3-f2-stair")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    partner = session.state.get_player("partner")
+    session.state.get_player("seeker").position.floor = WorldFloor.F1
+    partner.position.floor = WorldFloor.F3
+    destination = get_map_slot("F3_F2_STAIR_EAST_BOTTOM_CROSSING")
+    runtime = session.companion_states["partner"]
+    runtime.player_floor_changed = {
+        "floor": "F2",
+        "position": {
+            "x": destination["position"][0], "y": destination["position"][1],
+            "z": destination["position"][2], "floor": "F2", "zone": destination["zone"],
+        },
+        "route": "east", "traversal": "stairs",
+        "path_id": "F3_F2_STAIRS_EAST", "direction": "down",
+        "timestamp": time.monotonic(),
+    }
+
+    intent = decide_companion_intent(session, "partner")
+
+    assert intent["state"] == "FOLLOW_TO_FLOOR"
+    assert intent["target"]["x"] == pytest.approx(-10.03)
+    assert intent["target"]["z"] == pytest.approx(-15.66)
+    assert intent["_path_id"] == "F3_F2_STAIRS_EAST"
+    partner.position.x, partner.position.z = intent["target"]["x"], intent["target"]["z"]
+    _, action = advance_companion(session, "partner")
+    assert action == {
+        "type": "floor_transition",
+        "target_floor": runtime.player_floor_changed["position"],
+        "traversal": "stairs", "direction": "down",
+        "path_id": "F3_F2_STAIRS_EAST",
+    }

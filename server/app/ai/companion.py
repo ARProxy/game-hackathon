@@ -138,13 +138,25 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                 # 플레이어를 따라 이동 (자발적 판단)
                 target_x = float(floor_event["position"]["x"])
                 target_z = float(floor_event["position"]["z"])
-                stair_direction = None
+                traversal = floor_event.get("traversal")
+                stair_direction = floor_event.get("direction")
+                path_id = floor_event.get("path_id")
                 lateral_offset = -0.38 if companion_id == "partner" else 0.38
                 if current_floor == WorldFloor.ROOF and player_floor == WorldFloor.F3:
                     from app.game.map_slots import get_map_slot as _get_stair_slot
                     target_position = _get_stair_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")["position"]
                     target_x, target_z = float(target_position[0]), float(target_position[2])
                     stair_direction = "down"
+                    traversal = "stairs"
+                    path_id = "ROOF_F3_STAIRS"
+                elif path_id:
+                    from app.game.map_slots import VERTICAL_MAP_CONTRACT as _map_contract
+                    path = _map_contract["paths"].get(path_id, {})
+                    authored = path.get("down") or path.get("out") or []
+                    if authored:
+                        entering_index = 0 if stair_direction in {"down", "out"} else -1
+                        target_x = float(authored[entering_index][0])
+                        target_z = float(authored[entering_index][2])
                 return {
                     "state": "FOLLOW_TO_FLOOR",
                     "target_id": None,
@@ -155,7 +167,9 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                     "reason": "player_descended",
                     "_floor_event": floor_event,
                     "_stair_direction": stair_direction,
-                    "arrival_distance": 0.42 if stair_direction else CONTRACT["arrivalDistance"],
+                    "_traversal": traversal,
+                    "_path_id": path_id,
+                    "arrival_distance": 0.42 if traversal else CONTRACT["arrivalDistance"],
                 }
             # 이유가 있으면 현재 목표 유지 (독립 동선) — 이벤트는 유지
         else:
@@ -466,10 +480,14 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
     elif intent["state"] == "FOLLOW_TO_FLOOR" and arrived:
         floor_event = intent.get("_floor_event")
         if floor_event:
-            action = {"type": "floor_transition", "target_floor": floor_event["position"]}
-            if intent.get("_stair_direction"):
+            action = {
+                "type": "floor_transition",
+                "target_floor": floor_event["position"],
+                "path_id": intent.get("_path_id"),
+            }
+            if intent.get("_traversal"):
                 action.update({
-                    "traversal": "stairs",
+                    "traversal": intent["_traversal"],
                     "direction": intent["_stair_direction"],
                 })
     elif intent["state"] == "AVOID_SEEKER" and sighting and not sighting.get("reported"):

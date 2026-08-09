@@ -15,6 +15,7 @@ from app.game.state import PlayerRole, PlayerStatus
 # 왕복 지연 중 최대 약 0.5~0.7m의 좌표 차이가 생겨도 이미 표시된 상호작용을
 # 거절하지 않도록 권위 판정에만 작은 여유를 둔다.
 MISSION_INTERACTION_RADIUS = 3.0
+FLOOR_CROSSING_RADIUS = 1.35
 BROADCAST_MISSION_PROMPT = (
     "긴급 방송 원문: ‘열쇠로 잠긴 문을 열어라.’ 그대로 읽으면 비공개 금기어에 "
     "걸릴 수 있습니다. Q로 도구·잠긴 출입구·개방 행동의 뜻을 모두 다른 말로 전달하세요."
@@ -43,19 +44,27 @@ VERTICAL_CLUE_BY_PHASE = {
 
 TRANSITION_SLOTS_BY_PHASE = {
     VerticalRoundPhase.FLOOR_2: {
-        "west": ("F3_TO_F2_STAIR_WEST", "F2_TO_F1_STAIR_WEST"),
-        "east": ("F3_TO_F2_STAIR_EAST", "F2_TO_F1_STAIR_EAST"),
+        "west": ("F3_F2_STAIR_WEST_TOP_CROSSING", "F3_F2_STAIR_WEST_BOTTOM_CROSSING"),
+        "east": ("F3_F2_STAIR_EAST_TOP_CROSSING", "F3_F2_STAIR_EAST_BOTTOM_CROSSING"),
     },
     VerticalRoundPhase.FLOOR_1: {
-        "west": ("F2_TO_F1_STAIR_WEST", "F1_STAIR_ARRIVAL_WEST"),
-        "east": ("F2_TO_F1_STAIR_EAST", "F1_STAIR_ARRIVAL_EAST"),
+        "west": ("F2_F1_STAIR_WEST_TOP_CROSSING", "F2_F1_STAIR_WEST_BOTTOM_CROSSING"),
+        "east": ("F2_F1_STAIR_EAST_TOP_CROSSING", "F2_F1_STAIR_EAST_BOTTOM_CROSSING"),
     },
     VerticalRoundPhase.FIELD_FINAL: {
-        "field": ("F1_TO_FIELD_FIRE_DOOR", "FIELD_FINAL_ENTRY"),
+        "field": ("F1_FIELD_INSIDE_CROSSING", "F1_FIELD_OUTSIDE_CROSSING"),
     },
     VerticalRoundPhase.BASEMENT_FINAL: {
-        "basement": ("F1_TO_BASEMENT_FIRE_DOOR", "BASEMENT_FINAL_ENTRY"),
+        "basement": ("F1_B1_STAIR_WEST_TOP_CROSSING", "F1_B1_STAIR_WEST_BOTTOM_CROSSING"),
     },
+}
+TRANSITION_PATH_BY_PHASE_ROUTE = {
+    (VerticalRoundPhase.FLOOR_2, "west"): "F3_F2_STAIRS_WEST",
+    (VerticalRoundPhase.FLOOR_2, "east"): "F3_F2_STAIRS_EAST",
+    (VerticalRoundPhase.FLOOR_1, "west"): "F2_F1_STAIRS_WEST",
+    (VerticalRoundPhase.FLOOR_1, "east"): "F2_F1_STAIRS_EAST",
+    (VerticalRoundPhase.FIELD_FINAL, "field"): "F1_FIELD_DOOR",
+    (VerticalRoundPhase.BASEMENT_FINAL, "basement"): "F1_B1_STAIRS_WEST",
 }
 FLOOR_CLOSED_AFTER_PHASE = {
     VerticalRoundPhase.FLOOR_3: WorldFloor.ROOF,
@@ -378,6 +387,7 @@ def submit_security_direction(session: Any, actor_id: str, transcript: str) -> d
 
 
 def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
+    """실제 계단 또는 문 반대편 경계에 도착한 actor의 층 권위를 바꾼다."""
     if not session.vertical_progression_enabled:
         raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")
     actor = session.state.get_player(actor_id)
@@ -403,11 +413,13 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
         or WorldFloor(destination["floor"]) not in accessible_floors
     ):
         raise InvalidProgression("닫혔거나 아직 열리지 않은 층 이동 경로다")
-    source_position = source["position"]
+    # actor의 서버 floor는 계단을 걷는 동안 출발 층을 유지한다. 따라서
+    # 승인 위치는 출발 문이 아니라 실제로 걸어 도착한 반대편 경계다.
+    crossing_position = destination["position"]
     if math.hypot(
-        actor.position.x - source_position[0], actor.position.z - source_position[2]
-    ) > MISSION_INTERACTION_RADIUS:
-        raise InvalidProgression("열린 층 이동 경로와 거리가 너무 멀다")
+        actor.position.x - crossing_position[0], actor.position.z - crossing_position[2]
+    ) > FLOOR_CROSSING_RADIUS:
+        raise InvalidProgression("계단 또는 출입문 반대편 경계까지 직접 이동해야 한다")
 
     destination_floor = WorldFloor(destination["floor"])
     x, y, z = destination["position"]
@@ -418,6 +430,14 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
     return {
         "actor_id": actor_id,
         "route": route,
+        "traversal": "door" if route == "field" else "stairs",
+        "path_id": TRANSITION_PATH_BY_PHASE_ROUTE[(phase, route)],
+        "direction": (
+            "down" if source["position"][1] > destination["position"][1]
+            else "up" if source["position"][1] < destination["position"][1]
+            else "out" if source["floor"] == WorldFloor.F1.value
+            else "in"
+        ),
         "position": {
             "x": x, "y": y, "z": z,
             "floor": destination_floor.value,

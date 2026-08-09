@@ -39,8 +39,16 @@ def _place_actor_at_slot(session: GameSession, actor_id: str, slot_id: str) -> N
 
 
 def _move_all_through(session: GameSession, source_slot_id: str, route: str) -> None:
+    crossing_by_source = {
+        "F3_TO_F2_STAIR_EAST": "F3_F2_STAIR_EAST_BOTTOM_CROSSING",
+        "F2_TO_F1_STAIR_EAST": "F2_F1_STAIR_EAST_BOTTOM_CROSSING",
+        "F1_TO_FIELD_FIRE_DOOR": "F1_FIELD_OUTSIDE_CROSSING",
+        "F1_TO_BASEMENT_FIRE_DOOR": "F1_B1_STAIR_WEST_BOTTOM_CROSSING",
+    }
+    crossing = get_map_slot(crossing_by_source[source_slot_id])
     for actor_id in RUNNER_IDS:
-        _place_actor_at_slot(session, actor_id, source_slot_id)
+        actor = session.state.get_player(actor_id)
+        actor.position.x, actor.position.y, actor.position.z = crossing["position"]
         use_open_floor_transition(session, actor_id, route)
 
 

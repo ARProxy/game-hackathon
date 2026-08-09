@@ -845,6 +845,10 @@ class ConnectionManager:
                         runtime.player_floor_changed = {
                             "floor": event["position"]["floor"],
                             "position": event["position"],
+                            "route": event.get("route"),
+                            "traversal": event.get("traversal"),
+                            "path_id": event.get("path_id"),
+                            "direction": event.get("direction"),
                             "timestamp": time.monotonic(),
                         }
 
@@ -868,6 +872,10 @@ class ConnectionManager:
                         runtime.player_floor_changed = {
                             "floor": event["position"]["floor"],
                             "position": event["position"],
+                            "route": event.get("route"),
+                            "traversal": event.get("traversal", "stairs"),
+                            "path_id": event.get("path_id", "ROOF_F3_STAIRS"),
+                            "direction": event.get("direction"),
                             "timestamp": time.monotonic(),
                         }
 
@@ -2129,6 +2137,7 @@ class ConnectionManager:
                     "route": "companion_follow",
                     "traversal": action.get("traversal"),
                     "direction": action.get("direction"),
+                    "path_id": action.get("path_id"),
                     "position": {
                         "x": partner.position.x,
                         "y": partner.position.y,

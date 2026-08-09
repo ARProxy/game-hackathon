@@ -199,7 +199,9 @@ function addSlabRect(floor, rect, material) {
 }
 
 function addRingSlab(floor) {
-  const holes = floor === 'F1' ? [] : [NW_WELL, SE_WELL]
+  // 1층 북서 코어도 지하까지 실제로 이어진다. 남동 코어만 1층에서
+  // 끝나므로 F1은 북서 보이드 하나를 남긴다.
+  const holes = floor === 'F1' ? [NW_WELL] : [NW_WELL, SE_WELL]
   const bands = [
     { x0: B.x0, x1: B.x1, z0: B.z0, z1: C.z0 },
     { x0: B.x0, x1: B.x1, z0: C.z1, z1: B.z1 },
@@ -679,6 +681,8 @@ function addWellRails(floor, well, openSide) {
 }
 
 function addStairs() {
+  // 지하→1층 북서 코어. B1은 좁은 기계실이라 남동 코어를 두지 않는다.
+  addSwitchbackStair('B1', { x0: -40, x1: -32, z0: -48, z1: -40 }, -1, 'nw')
   for (const floor of ['F1', 'F2', 'F3']) {
     // 두 코어의 빠져 있던 측벽을 복구해 계단이 방 안에 노출된 발판이 아니라
     // 방화문·내화벽으로 닫힌 실제 계단실로 읽히게 한다.
@@ -691,6 +695,7 @@ function addStairs() {
     addWellRails(floor, NW_WELL, 'S')
     addWellRails(floor, SE_WELL, 'N')
   }
+  addWellRails('F1', NW_WELL, 'S')
 }
 
 function addParapet(floor, axis, fixed, start, end, material = 'extConcrete') {

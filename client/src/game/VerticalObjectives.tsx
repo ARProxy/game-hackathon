@@ -31,27 +31,27 @@ const ROOFTOP_SIGNALS = [
   { id: 'east', slotId: 'ROOF_SIGNAL_EAST', label: '동쪽 신호' },
   { id: 'west', slotId: 'ROOF_SIGNAL_WEST', label: '서쪽 신호' },
 ] as const
-const TRANSITIONS: Record<string, { source: string; route: string }[]> = {
+const TRANSITIONS: Record<string, { source: string; crossing: string; route: string; traversal: 'stairs' | 'door' }[]> = {
   'F3>F2': [
-    { source: 'F3_TO_F2_STAIR_WEST', route: 'west' },
-    { source: 'F3_TO_F2_STAIR_EAST', route: 'east' },
+    { source: 'F3_TO_F2_STAIR_WEST', crossing: 'F3_F2_STAIR_WEST_BOTTOM_CROSSING', route: 'west', traversal: 'stairs' },
+    { source: 'F3_TO_F2_STAIR_EAST', crossing: 'F3_F2_STAIR_EAST_BOTTOM_CROSSING', route: 'east', traversal: 'stairs' },
   ],
   'F2>F3': [
-    { source: 'F2_TO_F1_STAIR_WEST', route: 'west' },
-    { source: 'F2_TO_F1_STAIR_EAST', route: 'east' },
+    { source: 'F2_TO_F1_STAIR_WEST', crossing: 'F3_F2_STAIR_WEST_TOP_CROSSING', route: 'west', traversal: 'stairs' },
+    { source: 'F2_TO_F1_STAIR_EAST', crossing: 'F3_F2_STAIR_EAST_TOP_CROSSING', route: 'east', traversal: 'stairs' },
   ],
   'F2>F1': [
-    { source: 'F2_TO_F1_STAIR_WEST', route: 'west' },
-    { source: 'F2_TO_F1_STAIR_EAST', route: 'east' },
+    { source: 'F2_TO_F1_STAIR_WEST', crossing: 'F2_F1_STAIR_WEST_BOTTOM_CROSSING', route: 'west', traversal: 'stairs' },
+    { source: 'F2_TO_F1_STAIR_EAST', crossing: 'F2_F1_STAIR_EAST_BOTTOM_CROSSING', route: 'east', traversal: 'stairs' },
   ],
   'F1>F2': [
-    { source: 'F1_STAIR_ARRIVAL_WEST', route: 'west' },
-    { source: 'F1_STAIR_ARRIVAL_EAST', route: 'east' },
+    { source: 'F1_STAIR_ARRIVAL_WEST', crossing: 'F2_F1_STAIR_WEST_TOP_CROSSING', route: 'west', traversal: 'stairs' },
+    { source: 'F1_STAIR_ARRIVAL_EAST', crossing: 'F2_F1_STAIR_EAST_TOP_CROSSING', route: 'east', traversal: 'stairs' },
   ],
-  'F1>FIELD': [{ source: 'F1_TO_FIELD_FIRE_DOOR', route: 'field' }],
-  'FIELD>F1': [{ source: 'FIELD_FINAL_ENTRY', route: 'field' }],
-  'F1>B1': [{ source: 'F1_TO_BASEMENT_FIRE_DOOR', route: 'basement' }],
-  'B1>F1': [{ source: 'BASEMENT_FINAL_ENTRY', route: 'basement' }],
+  'F1>FIELD': [{ source: 'F1_TO_FIELD_FIRE_DOOR', crossing: 'F1_FIELD_OUTSIDE_CROSSING', route: 'field', traversal: 'door' }],
+  'FIELD>F1': [{ source: 'FIELD_FINAL_ENTRY', crossing: 'F1_FIELD_INSIDE_CROSSING', route: 'field', traversal: 'door' }],
+  'F1>B1': [{ source: 'F1_TO_BASEMENT_FIRE_DOOR', crossing: 'F1_B1_STAIR_WEST_BOTTOM_CROSSING', route: 'basement', traversal: 'stairs' }],
+  'B1>F1': [{ source: 'BASEMENT_FINAL_ENTRY', crossing: 'F1_B1_STAIR_WEST_TOP_CROSSING', route: 'basement', traversal: 'stairs' }],
 }
 const BASEMENT_DEVICES = [
   { slotId: 'BASEMENT_DEVICE_PANEL', deviceId: 'panel', label: '배전반' },
@@ -280,10 +280,11 @@ function BasementDeviceObjectives({ playerRef }: {
   </>
 }
 
-function FloorTransitionBeacon({ position, targetFloor, primary }: {
+function FloorTransitionBeacon({ position, targetFloor, primary, traversal }: {
   position: [number, number, number]
   targetFloor: string
   primary: boolean
+  traversal: 'stairs' | 'door'
 }) {
   return (
     <group position={position}>
@@ -298,7 +299,9 @@ function FloorTransitionBeacon({ position, targetFloor, primary }: {
           color: primary ? '#BDEFFF' : '#D6E7EE', background: 'rgba(5,15,22,.9)',
           fontSize: 11, fontWeight: 800,
         }}>
-          E · {targetFloor} 구역으로 이동
+          {traversal === 'stairs'
+            ? `방화문을 열고 계단을 직접 걸어 ${targetFloor} 구역으로 이동`
+            : `출입문을 직접 통과해 ${targetFloor} 구역으로 이동`}
         </div>
       </Html>
     </group>
@@ -417,7 +420,6 @@ export default function VerticalObjectives({ playerRef }: {
   const playerFloor = useGameStore((state) => state.players[state.playerId]?.position.floor)
   const phase = useGameStore((state) => state.phase)
   const missionNearbyRef = useRef(false)
-  const nearbyTransitionRef = useRef<{ source: string; route: string } | null>(null)
   const stairBoundaryRequestAtRef = useRef(0)
   const [missionNearby, setMissionNearby] = useState(false)
   const previousFloor = progression?.accessible_floors.find((floor) => floor !== progression.active_floor)
@@ -451,25 +453,21 @@ export default function VerticalObjectives({ playerRef }: {
       missionNearbyRef.current = nextMissionNearby
       setMissionNearby(nextMissionNearby)
     }
-    nearbyTransitionRef.current = player
-      ? choices.find((choice) => {
-          const position = positionOf(slots[choice.source])
-          return Math.abs(_playerPosition.y - position[1]) < 1.6
-            && Math.hypot(_playerPosition.x - position[0], _playerPosition.z - position[2]) <= 2.25
-        }) ?? null
-      : null
-
-    if (!player || !stairDirection) return
-    const boundarySlotId = stairDirection === 'down'
+    if (!player) return
+    const physicalChoice = choices.find((choice) => {
+      const boundary = positionOf(slots[choice.crossing])
+      return Math.abs(_playerPosition.y - boundary[1]) <= 0.62
+        && Math.hypot(_playerPosition.x - boundary[0], _playerPosition.z - boundary[2]) <= 1.25
+    })
+    const roofBoundarySlotId = stairDirection === 'down'
       ? 'ROOF_TO_F3_STAIR_BOTTOM_CROSSING'
-      : 'F3_TO_ROOF_STAIR_TOP_CROSSING'
-    const boundary = positionOf(slots[boundarySlotId])
-    const crossedHeight = stairDirection === 'down'
-      ? _playerPosition.y <= boundary[1] + 0.55
-      : _playerPosition.y >= boundary[1] - 0.55
+      : stairDirection === 'up' ? 'F3_TO_ROOF_STAIR_TOP_CROSSING' : null
+    const roofBoundary = roofBoundarySlotId ? positionOf(slots[roofBoundarySlotId]) : null
+    const crossedRoofBoundary = Boolean(roofBoundary
+      && Math.abs(_playerPosition.y - roofBoundary[1]) <= 0.62
+      && Math.hypot(_playerPosition.x - roofBoundary[0], _playerPosition.z - roofBoundary[2]) <= 1.25)
     if (
-      crossedHeight
-      && Math.hypot(_playerPosition.x - boundary[0], _playerPosition.z - boundary[2]) <= 1.25
+      (physicalChoice || crossedRoofBoundary)
       && performance.now() - stairBoundaryRequestAtRef.current >= 900
     ) {
       // 네트워크 프레임 유실이나 서버 판정 경합으로 첫 요청이 거절돼도
@@ -477,7 +475,9 @@ export default function VerticalObjectives({ playerRef }: {
       stairBoundaryRequestAtRef.current = performance.now()
       sendGameMessage({
         type: 'action',
-        payload: { action_type: 'cross_rooftop_stair_boundary', direction: stairDirection },
+        payload: physicalChoice
+          ? { action_type: 'use_floor_transition', route: physicalChoice.route }
+          : { action_type: 'cross_rooftop_stair_boundary', direction: stairDirection },
       })
     }
   })
@@ -493,13 +493,10 @@ export default function VerticalObjectives({ playerRef }: {
       // 공용 처리기가 같은 E를 또 보내면 signal_id 없는 요청과 정상 요청이
       // 한 프레임에 중복되므로 옥상 입력은 자식 처리기 하나가 독점한다.
       if (progression.phase === 'rooftop_intro') return
-      const nearbyTransition = nearbyTransitionRef.current
-      if (!nearbyTransition && !missionNearbyRef.current) return
+      if (!missionNearbyRef.current) return
       event.preventDefault()
       sendGameMessage(progression.phase === 'escape_open'
         ? { type: 'action', payload: { action_type: 'vertical_escape' } }
-        : nearbyTransition
-        ? { type: 'action', payload: { action_type: 'use_floor_transition', route: nearbyTransition.route } }
         : { type: 'action', payload: { action_type: 'interact_stage_mission' } })
     }
     window.addEventListener('keydown', interact)
@@ -518,6 +515,7 @@ export default function VerticalObjectives({ playerRef }: {
       position={positionOf(slots[choice.source])}
       targetFloor={String(targetFloor)}
       primary={transitionIsPrimary}
+      traversal={choice.traversal}
     />
   ))
   const stairGuidance = stairDirection

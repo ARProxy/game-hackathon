@@ -293,8 +293,8 @@ def test_current_and_previous_floor_transition_is_bidirectional() -> None:
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
 
-    f3_stair = get_map_slot("F3_TO_F2_STAIR_EAST")
-    f2_stair = get_map_slot("F2_TO_F1_STAIR_EAST")
+    f3_stair = get_map_slot("F3_F2_STAIR_EAST_BOTTOM_CROSSING")
+    f2_stair = get_map_slot("F3_F2_STAIR_EAST_TOP_CROSSING")
     human.position.x, human.position.y, human.position.z = f3_stair["position"]
     human.position.floor = WorldFloor.F3
     assert use_open_floor_transition(session, "human", "east")["position"]["floor"] == "F2"
@@ -302,6 +302,23 @@ def test_current_and_previous_floor_transition_is_bidirectional() -> None:
     human.position.x, human.position.y, human.position.z = f2_stair["position"]
     human.position.floor = WorldFloor.F2
     assert use_open_floor_transition(session, "human", "east")["position"]["floor"] == "F3"
+
+
+def test_floor_transition_rejects_doorway_teleport_before_physical_crossing() -> None:
+    from app.game.map_slots import get_map_slot
+
+    session, human = active_session()
+    _mark_vertical_missions_done(session)
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    doorway = get_map_slot("F3_TO_F2_STAIR_EAST")
+    human.position.x, human.position.y, human.position.z = doorway["position"]
+    human.position.floor = WorldFloor.F3
+
+    with pytest.raises(InvalidProgression, match="직접 이동"):
+        use_open_floor_transition(session, "human", "east")
 
 
 def test_stage_advance_waits_for_runner_on_floor_that_will_close() -> None:
@@ -332,13 +349,13 @@ def test_east_and_west_routes_open_after_third_floor_completion() -> None:
     complete_current_stage(session, "human")
 
     human.position.x, human.position.y, human.position.z = get_map_slot(
-        "F3_TO_F2_STAIR_EAST"
+        "F3_F2_STAIR_EAST_BOTTOM_CROSSING"
     )["position"]
     human.position.floor = WorldFloor.F3
     event = use_open_floor_transition(session, "human", "east")
 
     assert event["position"]["floor"] == "F2"
-    assert event["position"]["zone"] == "f2_core_se"
+    assert event["position"]["zone"] == "f2_southeast_stair_bottom"
 
 
 def test_first_floor_completion_opens_field_transition() -> None:
@@ -352,7 +369,7 @@ def test_first_floor_completion_opens_field_transition() -> None:
     assert result["next_phase"] == "field_final"
     assert session.vertical_round.final_route.value == "field"
     human.position.x, human.position.y, human.position.z = get_map_slot(
-        "F1_TO_FIELD_FIRE_DOOR"
+        "F1_FIELD_OUTSIDE_CROSSING"
     )["position"]
     human.position.floor = WorldFloor.F1
     event = use_open_floor_transition(session, "human", "field")
@@ -372,7 +389,7 @@ def test_first_floor_completion_can_open_basement_transition() -> None:
     assert session.vertical_round.final_route == FinalRoute.BASEMENT
 
     human.position.x, human.position.y, human.position.z = get_map_slot(
-        "F1_TO_BASEMENT_FIRE_DOOR"
+        "F1_B1_STAIR_WEST_BOTTOM_CROSSING"
     )["position"]
     human.position.floor = WorldFloor.F1
     event = use_open_floor_transition(session, "human", "basement")

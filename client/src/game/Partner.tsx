@@ -35,7 +35,18 @@ const _playerPosition = new THREE.Vector3()
 const _displayTarget = { x: 0, z: 0 }
 const _stairSample = new THREE.Vector3()
 const _stairHeading = new THREE.Vector3()
-const STAIR_PATH = verticalMapContract.paths.ROOF_F3_STAIRS
+type AuthoredTraversalPath = {
+  kind: 'stair_path' | 'door_path'
+  route?: string
+  upperFloor?: string
+  lowerFloor?: string
+  insideFloor?: string
+  outsideFloor?: string
+  durationSeconds: number
+  down?: number[][]
+  out?: number[][]
+}
+const TRAVERSAL_PATHS = verticalMapContract.paths as Record<string, AuthoredTraversalPath>
 const VERTICAL_SLOTS = verticalMapContract.slots as Record<string, { position?: number[] }>
 
 type StairTraversal = {
@@ -129,23 +140,36 @@ export default function Partner({
     if (!previousFloor) previousFloorRef.current = currentFloor
     else if (currentFloor && currentFloor !== previousFloor) {
       const zone = partnerState?.position.zone
-      const direction = previousFloor === 'ROOF' && currentFloor === 'F3'
-        && zone === 'roof_northwest_stair_bottom' ? 'down'
-        : previousFloor === 'F3' && currentFloor === 'ROOF'
-          && zone === 'f3_northwest_stair_top' ? 'up'
-          : null
-      if (direction) {
+      const route = zone?.includes('southeast') ? 'east'
+        : zone?.includes('northwest') || zone?.includes('basement') || zone?.startsWith('b1_') ? 'west'
+        : zone?.startsWith('field_') || zone === 'f1_main_lobby' ? 'field'
+        : null
+      const selected = Object.values(TRAVERSAL_PATHS).find((path) => {
+        const floorPairMatches = (
+          (path.upperFloor === previousFloor && path.lowerFloor === currentFloor)
+          || (path.upperFloor === currentFloor && path.lowerFloor === previousFloor)
+          || (path.insideFloor === previousFloor && path.outsideFloor === currentFloor)
+          || (path.insideFloor === currentFloor && path.outsideFloor === previousFloor)
+        )
+        return floorPairMatches && (!route || path.route === route || path.route === 'basement')
+      })
+      if (selected) {
+        const direction = selected.upperFloor === previousFloor ? 'down'
+          : selected.lowerFloor === previousFloor ? 'up'
+          : selected.insideFloor === previousFloor ? 'out'
+          : 'in'
         const lateralOffset = playerId === 'partner' ? -0.38 : 0.38
-        const authored = direction === 'down'
-          ? STAIR_PATH.down
-          : [...STAIR_PATH.down].reverse()
+        const basePath = selected.down ?? selected.out ?? []
+        const authored = direction === 'down' || direction === 'out'
+          ? basePath
+          : [...basePath].reverse()
         const points = authored.map(([x, y, z]) => new THREE.Vector3(x + lateralOffset, y, z))
         // 서버가 허용한 계단참 부근의 현재 표시 위치에서 자연스럽게 경사로로 잇는다.
         points[0].copy(group.position)
         const segmentLengths = points.slice(1).map((point, index) => point.distanceTo(points[index]))
         stairTraversalRef.current = {
           startedAt: clock.elapsedTime,
-          duration: STAIR_PATH.durationSeconds,
+          duration: selected.durationSeconds,
           points,
           segmentLengths,
           totalLength: segmentLengths.reduce((sum, length) => sum + length, 0),

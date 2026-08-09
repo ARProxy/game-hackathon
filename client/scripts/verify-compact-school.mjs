@@ -36,10 +36,10 @@ assert.equal(new Set(allAuthored.map((item) => item.id)).size, allAuthored.lengt
 assert.ok(COMPACT_SCHOOL.boxes.every((item) => typeof item.collider === 'boolean'), '모든 박스가 충돌 여부를 명시해야 한다')
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'rail').every((item) => item.collider && !item.visible), '계단·보이드 난간의 연속 충돌 장벽이 사라졌다')
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'railVisual').every((item) => !item.collider && item.visible), '난간 장식과 충돌 프록시가 섞였다')
-assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').length, 12, '두 코어 × 세 층 × 두 경사로가 필요하다')
+assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').length, 14, '지하 북서 코어를 포함한 실제 층간 경사로가 필요하다')
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').every((item) => item.s[0] >= 3), '계단 유효 폭은 3m 이상이어야 한다')
-assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairMass').length, 96, '모든 계단 디딤판 아래가 실제 덩어리로 채워져야 한다')
-assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairStringer').length, 24, '모든 계단 경사로 양쪽에 구조 거더가 필요하다')
+assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairMass').length, 112, '모든 계단 디딤판 아래가 실제 덩어리로 채워져야 한다')
+assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairStringer').length, 28, '모든 계단 경사로 양쪽에 구조 거더가 필요하다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'parapet').length, 8, '옥상 외곽과 중정에 연속 파라펫이 필요하다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roomFinish').length, 24, '모든 의미 공간은 용도별 바닥 마감이 필요하다')
 assert.ok(
