@@ -62,10 +62,12 @@ from app.game.vertical_flow import (
     activate_basement_device,
     activate_final_station,
     activate_simultaneous_device,
+    command_basement_device,
     complete_current_stage,
     cross_rooftop_stair_boundary,
     evaluate_broadcast_phrase,
     final_escape_slot,
+    parse_basement_device_command,
     refresh_closing_floor,
     start_intercom_mission,
     start_security_guidance,
@@ -407,6 +409,35 @@ class ConnectionManager:
                         "speech_mode": SpeechMode.RADIO.value,
                     }, session.vertical_missions.simultaneous.ai_companion_id)
                 return
+            if (
+                is_final and transcript.strip()
+                and session.vertical_round.phase == VerticalRoundPhase.BASEMENT_FINAL
+                and session.state.phase == GamePhase.PLAYING
+                and parse_basement_device_command(transcript) is not None
+            ):
+                result = command_basement_device(session, player_id, transcript)
+                await self.broadcast(room_id, {
+                    "type": "basement_device_commanded",
+                    **result,
+                })
+                if result.get("success"):
+                    runtime = session.companion_states.get(str(result["companion_id"]))
+                    if runtime:
+                        runtime.memory.pop(f"basement_{result['device_id']}", None)
+                        runtime.goal_changed_at = 0.0
+                else:
+                    await self._broadcast_companion_speech(room_id, {
+                        "type": "companion_report",
+                        "companion_id": "partner",
+                        "message": (
+                            "그 장치는 아직 대기 신호가 아니야. "
+                            "내가 보고한 대기 장치를 다시 확인해 줘."
+                        ),
+                        "phase": VerticalRoundPhase.BASEMENT_FINAL.value,
+                        "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
+                        "speech_mode": SpeechMode.RADIO.value,
+                    }, "partner")
+                return
             mission = session.current_mission()
             if mission and is_final and transcript.strip():
                 decision = compare_partner_candidates(
@@ -568,6 +599,20 @@ class ConnectionManager:
                     blocker_slot,
                     route="seeker_final_blockade",
                 )
+
+    async def _begin_basement_final_spell(
+        self, room_id: str, session: Any, actor_id: str,
+    ) -> None:
+        """인간 또는 AI가 마지막 지하 장치를 끝내도 동일한 주문 단계로 전환한다."""
+        await self._lock_dynamic_forbidden(room_id, session)
+        session.spell_words = ["달빛", "교정", "탈출"]
+        session.final_station_actor_ids.add(actor_id)
+        session.state.phase = GamePhase.FINAL_SPELL
+        await self.broadcast(room_id, {
+            "type": "vertical_final_ready",
+            "required_clues": len(session.spell_words),
+            "progression": session.vertical_progression_payload(),
+        })
 
     async def _move_actor_to_slot(
         self,
@@ -950,15 +995,7 @@ class ConnectionManager:
                 })
             if result.get("completed"):
                 # 지하 미션 완료 → 주문 단계
-                await self._lock_dynamic_forbidden(room_id, session)
-                session.spell_words = ["달빛", "교정", "탈출"]
-                session.final_station_actor_ids.add(player_id)
-                session.state.phase = GamePhase.FINAL_SPELL
-                await self.broadcast(room_id, {
-                    "type": "vertical_final_ready",
-                    "required_clues": len(session.spell_words),
-                    "progression": session.vertical_progression_payload(),
-                })
+                await self._begin_basement_final_spell(room_id, session, player_id)
 
         elif action_type == "companion_think" and player and player.role == PlayerRole.HUMAN:
             for companion_id in DEFAULT_AI_PARTNER_IDS:
@@ -2227,6 +2264,46 @@ class ConnectionManager:
                 "total_commands": action.get("total_commands", 3),
                 "expected_command": expected,
             })
+        elif action["type"] == "basement_device_activate":
+            device_id = str(action.get("device_id", ""))
+            try:
+                result = activate_basement_device(session, companion_id, device_id)
+            except InvalidProgression:
+                if runtime:
+                    runtime.memory.pop(f"basement_{device_id}", None)
+                return
+            await self.broadcast(room_id, {
+                "type": "basement_device_activated",
+                "companion_id": companion_id,
+                **result,
+            })
+            if not result.get("success"):
+                if runtime:
+                    runtime.memory.pop(f"basement_{device_id}", None)
+                    runtime.goal_changed_at = 0.0
+                await self._broadcast_companion_speech(room_id, {
+                    "type": "companion_report",
+                    "companion_id": companion_id,
+                    "message": "작동 조건이 바뀌었어. 대기 신호를 다시 확인할게.",
+                    "phase": action.get("phase", ""),
+                    "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
+                    "speech_mode": SpeechMode.RADIO.value,
+                }, companion_id)
+                return
+            for companion_runtime in session.companion_states.values():
+                for target_id in tuple(companion_runtime.memory):
+                    if target_id.startswith("basement_"):
+                        companion_runtime.memory.pop(target_id, None)
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report",
+                "companion_id": companion_id,
+                "message": "지시한 장치를 작동했어. 다음 대기 신호를 확인할게.",
+                "phase": action.get("phase", ""),
+                "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                "speech_mode": SpeechMode.RADIO.value,
+            }, companion_id)
+            if result.get("completed"):
+                await self._begin_basement_final_spell(room_id, session, companion_id)
         elif action["type"] == "basement_device_report":
             # AI가 지하 장치에 도착하여 상태를 보고
             device_status = action.get("device_status", {})

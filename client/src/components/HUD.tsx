@@ -67,7 +67,7 @@ const VERTICAL_INSTRUCTIONS: Record<string, string> = {
   floor_2: '인터폰에서 E를 누른 뒤 AI가 읽은 색과 도형을 Q로 순서대로 전달하세요.',
   floor_1: '경비실 CCTV 콘솔에서 E로 관제를 시작하고, 화면 표식을 Q로 안내해 AI를 원격 장치까지 이동시키세요.',
   field_final: '각자 맡은 운동장 장치에 도착해 E로 활성화하세요.',
-  basement_final: 'AI가 보고한 대기 장치를 찾아 배전반·밸브·발전기를 올바른 순서로 E 작동하세요.',
+  basement_final: 'AI가 보고한 대기 장치가 배전반·밸브면 Q로 작동을 지시하고, 발전기면 직접 찾아 E로 작동하세요.',
   escape_open: '선택된 파이널 출구의 빛기둥으로 이동해 E를 누르세요.',
 }
 

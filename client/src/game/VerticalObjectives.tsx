@@ -23,7 +23,7 @@ const MISSION_LABEL: Record<string, string> = {
   floor_2: '2층 인터폰에서 AI의 기호 보고를 전달한다',
   floor_1: 'CCTV로 AI를 안내하고 원격 봉쇄를 함께 해제한다',
   field_final: '중앙 장치에서 팀과 합류한다',
-  basement_final: '지하 장치의 대기 상태를 확인해 순서대로 복구한다',
+  basement_final: 'AI에게 담당 설비를 지시하고 내 발전기를 직접 복구한다',
   escape_open: '빛기둥 아래로 탈출한다',
 }
 const ROOFTOP_SIGNALS = [

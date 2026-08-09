@@ -525,6 +525,30 @@ def activate_basement_device(session: Any, actor_id: str, device_id: str) -> dic
         raise InvalidProgression("지하 1층 장치 앞에 도착해야 한다")
     if math.hypot(actor.position.x - sx, actor.position.z - sz) > MISSION_INTERACTION_RADIUS:
         raise InvalidProgression("지하 장치와 거리가 너무 멀다")
+    companion_owner = {"panel": "partner", "valve": "partner-2"}.get(device_id)
+    if companion_owner is not None:
+        if actor_id != companion_owner:
+            return {
+                "actor_id": actor_id,
+                "device_id": device_id,
+                "success": False,
+                "reason": "companion_operated",
+                "companion_id": companion_owner,
+            }
+        if device_id not in bm.commanded_device_ids:
+            return {
+                "actor_id": actor_id,
+                "device_id": device_id,
+                "success": False,
+                "reason": "awaiting_command",
+            }
+    elif actor.role != PlayerRole.HUMAN:
+        return {
+            "actor_id": actor_id,
+            "device_id": device_id,
+            "success": False,
+            "reason": "human_operated",
+        }
     result = bm.activate_device(device_id, actor_id)
     return {"actor_id": actor_id, "device_id": device_id, **result}
 
@@ -538,6 +562,40 @@ def get_basement_device_status(session: Any, actor_id: str, device_id: str) -> d
     if not status:
         raise InvalidProgression("존재하지 않는 장치다")
     return status
+
+
+BASEMENT_DEVICE_COMMAND_CUES = {
+    "panel": ("배전반", "전기판", "전원판", "첫 장치"),
+    "valve": ("밸브", "급수", "물 장치", "두 번째 장치"),
+    "generator": ("발전기", "비상 전원", "마지막 장치"),
+}
+BASEMENT_ACTIVATION_CUES = ("작동", "켜", "올려", "돌려", "가동", "시작")
+
+
+def parse_basement_device_command(transcript: str) -> str | None:
+    normalized = " ".join(transcript.strip().lower().split())
+    if not any(cue in normalized for cue in BASEMENT_ACTIVATION_CUES):
+        return None
+    return next((
+        device_id
+        for device_id, cues in BASEMENT_DEVICE_COMMAND_CUES.items()
+        if any(cue in normalized for cue in cues)
+    ), None)
+
+
+def command_basement_device(session: Any, actor_id: str, transcript: str) -> dict:
+    """AI 담당 지하 장치에 대한 인간의 음성 작동 지시를 검증한다."""
+    if session.vertical_round.phase != VerticalRoundPhase.BASEMENT_FINAL:
+        raise InvalidProgression("지하 파이널 단계가 아니다")
+    actor = session.state.get_player(actor_id)
+    if not actor or actor.status != PlayerStatus.ALIVE or actor.role != PlayerRole.HUMAN:
+        raise InvalidProgression("살아 있는 인간 플레이어만 지하 장치를 지시할 수 있다")
+    device_id = parse_basement_device_command(transcript)
+    if device_id is None:
+        raise InvalidProgression("작동할 지하 장치와 행동을 함께 설명해야 한다")
+    if session.vertical_missions is None:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+    return session.vertical_missions.basement.command_device(device_id, actor_id)
 
 
 ELEVATOR_SOUND_PING_RADIUS = 25.0  # A5: 엘리베이터 도착 소리 핑 반경

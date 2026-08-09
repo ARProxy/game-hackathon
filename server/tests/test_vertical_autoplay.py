@@ -1,16 +1,18 @@
 """옥상부터 운동장 파이널 탈출 개방까지의 결정적 무교착 자동 플레이."""
 
-from app.ai.companion import decide_companion_intent
+from app.ai.companion import advance_companion, decide_companion_intent
 from app.ai.spell import check_spell
 from app.game.map_slots import get_map_slot
 from app.game.progression import FinalRoute, VerticalRoundPhase, WorldFloor
 from app.game.session import GameSession
 from app.game.state import GamePhase, PlayerRole
 from app.game.vertical_flow import (
+    activate_basement_device,
     activate_final_station,
     activate_rooftop_signal,
     activate_simultaneous_device,
     complete_current_stage,
+    command_basement_device,
     cross_rooftop_stair_boundary,
     evaluate_broadcast_phrase,
     final_station_position,
@@ -114,6 +116,44 @@ def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None
         ready = activate_final_station(session, actor_id)
     assert ready and ready["all_ready"]
 
+    session.spell_words = ["달빛", "교정", "탈출"]
+    session.state.phase = GamePhase.FINAL_SPELL
+    assert check_spell("달빛 교정 탈출", session.spell_words)["success"]
+    session.vertical_round.mark_mission_complete()
+    assert session.vertical_round.advance() == VerticalRoundPhase.ESCAPE_OPEN
+
+
+def test_basement_final_voice_delegation_reaches_escape_open() -> None:
+    session = GameSession("basement-autoplay")
+    session.state.add_player("human", PlayerRole.HUMAN)
+    session.setup_game([], dynamic_forbidden=True)
+    session.final_route_choice = FinalRoute.BASEMENT
+    session.vertical_round.final_route = FinalRoute.BASEMENT
+    session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+    session.vertical_missions.basement.correct_order = ["panel", "valve", "generator"]
+    session.state.get_player("seeker").position.floor = WorldFloor.ROOF
+
+    owner_by_device = {"panel": "partner", "valve": "partner-2"}
+    command_by_device = {"panel": "배전반 전원을 켜 줘", "valve": "급수 밸브를 돌려 줘"}
+    for device_id in session.vertical_missions.basement.correct_order:
+        device = next(
+            item for item in session.vertical_missions.basement.devices
+            if item.device_id == device_id
+        )
+        if device_id == "generator":
+            actor_id = "human"
+        else:
+            actor_id = owner_by_device[device_id]
+            command = command_basement_device(session, "human", command_by_device[device_id])
+            assert command["success"]
+        _place_actor_at_slot(session, actor_id, device.slot_id)
+        if actor_id != "human":
+            _, action = advance_companion(session, actor_id)
+            assert action["type"] == "basement_device_activate"
+        activated = activate_basement_device(session, actor_id, device_id)
+        assert activated["success"]
+
+    assert session.vertical_missions.basement.completed
     session.spell_words = ["달빛", "교정", "탈출"]
     session.state.phase = GamePhase.FINAL_SPELL
     assert check_spell("달빛 교정 탈출", session.spell_words)["success"]

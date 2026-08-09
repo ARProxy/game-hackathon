@@ -455,27 +455,56 @@ class TestVerticalStageInteraction:
             session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
             human = session.state.get_player("player1")
             mission = session.vertical_missions.basement
+            mission.correct_order = ["panel", "valve", "generator"]
 
-            for index, device_id in enumerate(mission.correct_order):
+            def receive_until(message_type: str, limit: int = 20):
+                for _ in range(limit):
+                    message = ws.receive_json()
+                    if message.get("type") == message_type:
+                        return message
+                raise AssertionError(f"{message_type} 메시지를 받지 못함")
+
+            command_by_device = {
+                "panel": ("partner", "배전반 전원을 켜 줘"),
+                "valve": ("partner-2", "급수 밸브를 돌려 줘"),
+            }
+            for index, device_id in enumerate(("panel", "valve")):
+                companion_id, transcript = command_by_device[device_id]
                 device = next(item for item in mission.devices if item.device_id == device_id)
-                human.position.x, human.position.y, human.position.z = get_map_slot(
+                companion = session.state.get_player(companion_id)
+                companion.position.x, companion.position.y, companion.position.z = get_map_slot(
                     device.slot_id
                 )["position"]
-                human.position.floor = WorldFloor.B1
+                companion.position.floor = WorldFloor.B1
                 ws.send_json({
-                    "type": "action",
-                    "payload": {
-                        "action_type": "activate_basement_device",
-                        "device_id": device_id,
-                    },
+                    "type": "speech",
+                    "payload": {"transcript": transcript, "is_final": True},
                 })
-                activated = ws.receive_json()
-                assert activated["type"] == "basement_device_activated"
+                commanded = receive_until("basement_device_commanded")
+                assert commanded["success"]
+                assert commanded["companion_id"] == companion_id
+                activated = receive_until("basement_device_activated")
                 assert activated["success"]
-                if index < 2:
-                    assert activated["progress"] == index + 1
+                assert activated["companion_id"] == companion_id
+                assert activated["progress"] == index + 1
 
-            ready = ws.receive_json()
+            generator = next(item for item in mission.devices if item.device_id == "generator")
+            human.position.x, human.position.y, human.position.z = get_map_slot(
+                generator.slot_id
+            )["position"]
+            human.position.floor = WorldFloor.B1
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "activate_basement_device",
+                    "device_id": "generator",
+                },
+            })
+            activated = receive_until("basement_device_activated")
+            assert activated["success"]
+            assert activated["completed"]
+
+            ready = receive_until("vertical_final_ready")
             assert ready["type"] == "vertical_final_ready"
             assert "spell_words" not in ready
             assert session.state.phase == GamePhase.FINAL_SPELL

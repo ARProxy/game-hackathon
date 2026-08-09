@@ -295,6 +295,14 @@ export default function useWebSocket() {
         break
       }
 
+      case 'basement_device_commanded':
+        addSubtitle('system', data.success
+          ? `${data.device_name ?? '담당 장치'} 작동 지시 전달 · AI가 실제 조작을 시작합니다.`
+          : data.reason === 'human_operated'
+            ? '그 장치는 플레이어 담당입니다. 장치 앞에서 E로 직접 작동하세요.'
+            : '아직 작동 순서가 아닙니다. AI가 보고한 대기 장치를 확인하세요.')
+        break
+
       case 'device_activated':
         addSubtitle('system', data.success
           ? '두 장치가 동시에 작동했습니다.'
@@ -306,7 +314,11 @@ export default function useWebSocket() {
         break
 
       case 'basement_device_activated':
-        addSubtitle('system', data.completed
+        addSubtitle('system', !data.success && data.reason === 'companion_operated'
+          ? '이 설비는 AI 동료 담당입니다. Q로 장치 작동을 지시하세요.'
+          : !data.success && data.reason === 'awaiting_command'
+            ? 'AI가 플레이어의 음성 작동 지시를 기다리고 있습니다.'
+          : data.completed
           ? '지하 설비 복구 완료. 모은 주문 조각을 준비하세요.'
           : data.reset
             ? '잘못된 순서입니다. 모든 장치가 꺼지고 큰 기계음이 울렸습니다.'

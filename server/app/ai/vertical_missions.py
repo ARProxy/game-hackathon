@@ -338,6 +338,32 @@ class BasementFinalMission:
     activated_order: list[str] = field(default_factory=list)
     completed: bool = False
     reset_count: int = 0
+    commanded_device_ids: set[str] = field(default_factory=set)
+
+    def command_device(self, device_id: str, actor_id: str) -> dict:
+        device = next((d for d in self.devices if d.device_id == device_id), None)
+        if not device:
+            return {"success": False, "reason": "unknown_device"}
+        owner_by_device = {"panel": "partner", "valve": "partner-2"}
+        owner_id = owner_by_device.get(device_id)
+        if owner_id is None:
+            return {"success": False, "reason": "human_operated", "device_id": device_id}
+        status = self.get_device_status(device_id)
+        if status is None or status["state"] != "standby":
+            return {
+                "success": False,
+                "reason": "not_standby",
+                "device_id": device_id,
+                "state": status["state"] if status else "unknown",
+            }
+        self.commanded_device_ids.add(device_id)
+        return {
+            "success": True,
+            "device_id": device_id,
+            "device_name": device.name,
+            "commanded_by": actor_id,
+            "companion_id": owner_id,
+        }
 
     def activate_device(self, device_id: str, actor_id: str) -> dict:
         device = next((d for d in self.devices if d.device_id == device_id), None)
@@ -348,6 +374,7 @@ class BasementFinalMission:
 
         device.state = "active"
         device.activated_by = actor_id
+        self.commanded_device_ids.discard(device_id)
         self.activated_order.append(device_id)
 
         # 순서 검증
@@ -368,6 +395,7 @@ class BasementFinalMission:
             d.state = "off"
             d.activated_by = None
         self.activated_order.clear()
+        self.commanded_device_ids.clear()
         self.reset_count += 1
 
     def get_device_status(self, device_id: str) -> dict | None:

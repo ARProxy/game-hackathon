@@ -20,6 +20,7 @@ from app.game.vertical_flow import (
     activate_basement_device,
     activate_simultaneous_device,
     complete_current_stage,
+    command_basement_device,
     mission_interaction_position,
     start_intercom_mission,
     start_security_guidance,
@@ -514,6 +515,26 @@ class TestBasementFinalMission:
             assert device.activated_by is None
         assert len(bm.activated_order) == 0
 
+    def test_ai_owned_basement_device_requires_human_voice_command(self) -> None:
+        bm = create_basement_mission(seed=0)
+        bm.correct_order = ["panel", "valve", "generator"]
+
+        commanded = bm.command_device("panel", "human")
+        assert commanded == {
+            "success": True,
+            "device_id": "panel",
+            "device_name": "배전반",
+            "commanded_by": "human",
+            "companion_id": "partner",
+        }
+        assert "panel" in bm.commanded_device_ids
+        assert bm.activate_device("panel", "partner")["success"]
+        assert "panel" not in bm.commanded_device_ids
+
+        human_owned = bm.command_device("generator", "human")
+        assert not human_owned["success"]
+        assert human_owned["reason"] == "human_operated"
+
     def test_basement_device_status(self) -> None:
         bm = create_basement_mission(seed=0)
 
@@ -551,6 +572,7 @@ class TestBasementFinalMission:
 
         session, human = active_session()
         session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+        session.vertical_missions.basement.correct_order = ["generator", "panel", "valve"]
         human.position.floor = WorldFloor.B1
         human.position.x, human.position.z = 0.0, 0.0
         first_id = session.vertical_missions.basement.correct_order[0]
@@ -567,6 +589,31 @@ class TestBasementFinalMission:
         )["position"]
         result = activate_basement_device(session, human.player_id, first_id)
         assert result["success"]
+
+    def test_server_accepts_supported_voice_command_for_standby_ai_device(self) -> None:
+        session, human = active_session()
+        session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+        session.vertical_missions.basement.correct_order = ["panel", "valve", "generator"]
+
+        result = command_basement_device(session, human.player_id, "배전반 전원을 켜 줘")
+
+        assert result["success"]
+        assert result["companion_id"] == "partner"
+
+    def test_human_cannot_replace_companion_at_assigned_basement_device(self) -> None:
+        from app.game.map_slots import get_map_slot
+
+        session, human = active_session()
+        session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+        session.vertical_missions.basement.correct_order = ["panel", "valve", "generator"]
+        slot = get_map_slot("BASEMENT_DEVICE_PANEL")
+        human.position.x, human.position.y, human.position.z = slot["position"]
+        human.position.floor = WorldFloor.B1
+
+        result = activate_basement_device(session, human.player_id, "panel")
+
+        assert not result["success"]
+        assert result["reason"] == "companion_operated"
 
 
 # ---------------------------------------------------------------------------

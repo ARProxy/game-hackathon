@@ -431,6 +431,25 @@ def test_floor_one_companion_moves_only_after_cctv_direction_is_accepted() -> No
     assert moving["target_id"] == "security_route_1"
 
 
+def test_basement_companion_activates_commanded_standby_device() -> None:
+    session = make_session("companion-basement-command")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+    session.vertical_round.final_route = FinalRoute.BASEMENT
+    session.vertical_missions.basement.correct_order = ["panel", "valve", "generator"]
+    partner = session.state.get_player("partner")
+    slot = get_map_slot("BASEMENT_DEVICE_PANEL")
+    partner.position.x, partner.position.y, partner.position.z = slot["position"]
+    partner.position.floor = WorldFloor.B1
+    session.state.get_player("seeker").position.floor = WorldFloor.ROOF
+    session.vertical_missions.basement.command_device("panel", "human")
+
+    _, action = advance_companion(session, "partner")
+
+    assert action["type"] == "basement_device_activate"
+    assert action["device_id"] == "panel"
+
+
 def test_intercom_companion_prepositions_but_waits_for_human_to_start_device() -> None:
     session = make_session("companion-intercom-preposition")
     session.round_data = None

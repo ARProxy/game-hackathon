@@ -560,8 +560,13 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
             ):
                 device_id = intent["target_id"].removeprefix("basement_")
                 status = session.vertical_missions.basement.get_device_status(device_id)
+                commanded = (
+                    device_id in session.vertical_missions.basement.commanded_device_ids
+                    and status is not None
+                    and status.get("state") == "standby"
+                )
                 action = {
-                    "type": "basement_device_report",
+                    "type": "basement_device_activate" if commanded else "basement_device_report",
                     "phase": session.vertical_round.phase.value,
                     "device_id": device_id,
                     "device_status": status,
@@ -650,6 +655,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "simultaneous_ready": (SpeechIntent.DECLARE_ACTION, "준비됐어! 동시에 작동하자!"),
     "security_checkpoint_ready": (SpeechIntent.REPORT_OBSERVATION, "교차로에 도착했어. 다음 방향을 알려 줘."),
     "basement_device_report": (SpeechIntent.REPORT_OBSERVATION, "장치 상태를 확인했어!"),
+    "basement_device_activate": (SpeechIntent.DECLARE_ACTION, "지시 확인. 담당 장치를 작동할게!"),
 }
 
 
@@ -688,7 +694,12 @@ def create_action_speech(
     is_urgent = action_type in {"rescue", "trap", "seeker_report"}
     if action_type == "intercom_report":
         mode = SpeechMode.INTERCOM
-    elif action_type in {"security_checkpoint_ready", "simultaneous_ready"}:
+    elif action_type in {
+        "security_checkpoint_ready",
+        "simultaneous_ready",
+        "basement_device_report",
+        "basement_device_activate",
+    }:
         mode = SpeechMode.RADIO
     else:
         mode = select_speech_mode(intent_state, seeker_distance, is_urgent)
