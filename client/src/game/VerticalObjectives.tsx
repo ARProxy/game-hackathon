@@ -371,7 +371,7 @@ function BroadcastMissionObjective({
           </div>
           <div style={{ marginTop: 4 }}>
             {active
-              ? 'Q · 원문 대신 세 가지 뜻을 다른 말로 방송'
+              ? '1 Q로 세 뜻 설명  ·  2 AI 조사 대기  ·  3 질문에는 특징 추가'
               : nearby ? 'E · 방송 송신기 연결' : '방송실 안 송신 콘솔을 찾으세요'}
           </div>
           {active && (

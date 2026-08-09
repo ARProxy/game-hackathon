@@ -73,7 +73,7 @@ function companionSummary(
 
 const VERTICAL_INSTRUCTIONS: Record<string, string> = {
   rooftop_intro: '세 중계기의 점멸 순서를 기억하세요. 안내가 꺼지면 그 순서대로 옥상을 달려 직접 입력합니다.',
-  floor_3: '방송실 안 ON AIR 콘솔에 E로 접속하세요. 그 순간 첫 추격이 시작되며, Q로 원문의 세 의미를 우회 전달해야 합니다.',
+  floor_3: '방송실 ON AIR 콘솔에서 E를 누른 뒤 Q로 세 의미를 우회 설명하세요. AI가 증거대를 조사하면 추격을 피해 결과를 기다리고, 질문이 오면 특징을 더 설명하세요.',
   floor_2: '인터폰에서 E를 누른 뒤 AI가 읽은 색과 도형을 Q로 순서대로 전달하세요.',
   floor_1: '경비실 CCTV 콘솔에서 E로 관제를 시작하고, 화면 표식을 Q로 안내해 AI를 원격 장치까지 이동시키세요.',
   field_final: '각자 맡은 운동장 장치에 도착해 E로 활성화하세요.',

@@ -10,7 +10,7 @@
       "upperFloor": "ROOF",
       "lowerFloor": "F3",
       "durationSeconds": 3.6,
-      "minimumFireDoorClearWidth": 1.7,
+      "minimumFireDoorClearWidth": 2.3,
       "minimumLandingDepth": 1.3,
       "down": [
         [-33.65, 10.8, -40.34],

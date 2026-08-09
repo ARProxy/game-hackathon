@@ -6,6 +6,7 @@ from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPh
 from app.game.session import GameSession
 from app.game.state import PlayerRole
 from app.game.vertical_flow import (
+    BROADCAST_MISSION_PROMPT,
     announce_elevator_arrival,
     activate_rooftop_signal,
     activate_final_station,
@@ -21,6 +22,11 @@ from app.game.vertical_flow import (
     use_open_floor_transition,
     use_elevator,
 )
+
+
+def test_broadcast_prompt_never_reveals_the_private_forbidden_word() -> None:
+    assert "열쇠" not in BROADCAST_MISSION_PROMPT
+    assert "키" not in BROADCAST_MISSION_PROMPT
 
 
 def test_broadcast_phrase_requires_tool_exit_and_action_meaning() -> None:

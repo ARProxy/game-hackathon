@@ -18,8 +18,8 @@ from app.game.state import PlayerRole, PlayerStatus
 MISSION_INTERACTION_RADIUS = 3.0
 FLOOR_CROSSING_RADIUS = 1.35
 BROADCAST_MISSION_PROMPT = (
-    "긴급 방송 원문: ‘열쇠로 잠긴 문을 열어라.’ 그대로 읽으면 비공개 금기어에 "
-    "걸릴 수 있습니다. Q로 도구·잠긴 출입구·개방 행동의 뜻을 모두 다른 말로 전달하세요."
+    "긴급 방송 원문에는 플레이어에게 공개되지 않는 금기어가 섞여 있습니다. "
+    "원문을 찾거나 읽지 말고 Q로 도구·잠긴 출입구·개방 행동의 뜻만 모두 다른 말로 전달하세요."
 )
 BROADCAST_TOOL_CUES = ("열쇠", "키", "금속", "도구", "쇠", "작은 물건")
 BROADCAST_EXIT_CUES = ("문", "출입구", "입구", "통로", "잠긴 곳", "잠금")

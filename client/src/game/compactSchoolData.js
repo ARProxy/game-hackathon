@@ -17,6 +17,11 @@ export const WALL_HEIGHT = 3.2
 export const WALL_THICKNESS = 0.22
 export const SLAB_THICKNESS = 0.3
 
+// 두 캐릭터가 마주쳐도 비킬 수 있는 계단·방화문 유효 폭. 계단실 코어를
+// 넓히지 않고도 기존 3m 레인보다 10% 넓은 보행면과 문 회전 여유를 준다.
+const STAIR_LANE_WIDTH = 3.3
+const STAIR_FIRE_DOOR_WIDTH = 2.4
+
 // 현재 compact 학교의 북측 복도에 직접 열린 실제 승강로. 이 좌표는
 // 렌더·충돌·서버 권위·AI 경로가 함께 사용하는 단일 계약이다.
 export const COMPACT_ELEVATORS = [
@@ -293,7 +298,7 @@ function addFloorShell(floor) {
     F1: { nw: ['F2', 'F1', 'B1'], se: ['F2', 'F1'] },
   }[floor]
   const northDoors = [-36, -28, -20, -12].map((center, index) => ({
-    center, width: index === 0 ? 1.8 : index >= 2 ? 1.5 : 1.05, type: 'door',
+    center, width: index === 0 ? STAIR_FIRE_DOOR_WIDTH : index >= 2 ? 1.5 : 1.05, type: 'door',
     id: index === 0 ? `stair_nw_${floor}` : index === 2 ? `evc_${floor}` : index === 3 ? `evp_${floor}` : `north_room_${floor}_${index}`,
     kind: index === 0 ? 'fire' : index >= 2 ? 'elevator' : 'room',
     unlockFloors: index === 0 ? stairUnlockFloors.nw : undefined,
@@ -304,7 +309,7 @@ function addFloorShell(floor) {
   addWallRun(floor, 'x', -40, -40, -8, northDoors, { lower: 'corrBase', upper: 'corrWall' })
 
   const southDoors = [-36, -28, -20, -12].map((center, index) => ({
-    center, width: index === 3 ? 1.8 : 1.05, type: 'door',
+    center, width: index === 3 ? STAIR_FIRE_DOOR_WIDTH : 1.05, type: 'door',
     id: index === 3 ? `stair_se_${floor}` : `south_room_${floor}_${index}`,
     kind: index === 3 ? 'fire' : 'room',
     unlockFloors: index === 3 ? stairUnlockFloors.se : undefined,
@@ -587,7 +592,7 @@ function addVisualRail(floor, p, s, rot, id) {
 
 function addSwitchbackStair(floor, core, dir, coreId) {
   const y = FY[floor]
-  const laneWidth = 3.0
+  const laneWidth = STAIR_LANE_WIDTH
   const coreWidth = core.x1 - core.x0
   const landingWidth = coreWidth - 0.3
   const landingX = (core.x0 + core.x1) / 2
@@ -759,7 +764,7 @@ function addParapet(floor, axis, fixed, start, end, material = 'extConcrete') {
 function addPenthouse(id, rect, doorSide, doorCenter, unlockFloor, locked = false) {
   const floor = 'ROOF'
   const y = FY.ROOF
-  const openings = [{ center: doorCenter, width: 1.8, type: 'door', id, kind: 'fire', unlockFloor, permanentlyLocked: locked, head: 2.35 }]
+  const openings = [{ center: doorCenter, width: STAIR_FIRE_DOOR_WIDTH, type: 'door', id, kind: 'fire', unlockFloor, permanentlyLocked: locked, head: 2.35 }]
   addWallRun(floor, 'x', rect.z0, rect.x0, rect.x1, doorSide === 'north' ? openings : [], { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
   addWallRun(floor, 'x', rect.z1, rect.x0, rect.x1, doorSide === 'south' ? openings : [], { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
   addFullWallSegment(floor, 'z', rect.x0, rect.z0, rect.z1, { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
@@ -1077,6 +1082,17 @@ function addNavigation() {
     ]
     ring.forEach(([x, z], index) => navNodes.push({ id: `${floor}_ring_${index}`, floor, p: [x, y, z], links: [`${floor}_ring_${(index + 7) % 8}`, `${floor}_ring_${(index + 1) % 8}`] }))
   }
+
+  // 옥상 링과 펜트하우스 안 계단 시작점을 열린 방화문 중심으로 잇는다.
+  // 이 포털이 없으면 서쪽 중계기에서 온 AI가 벽 양 끝을 번갈아 선택해
+  // 계단 앞에서 영구 왕복한다.
+  const roofStairPortalNodes = [
+    // 바닥 슬래브 위 문 정면까지만 그래프로 안내한다. 여기서 계단 레인
+    // 목표는 열린 문을 통해 직접 보이므로 마지막 접근은 직선 이동이 맡는다.
+    { id: 'ROOF_stair_nw_outside', p: [-36, FY.ROOF, -38.35], links: ['ROOF_ring_0'] },
+  ]
+  navNodes.find((node) => node.id === 'ROOF_ring_0')?.links.push('ROOF_stair_nw_outside')
+  navNodes.push(...roofStairPortalNodes.map((node) => ({ ...node, floor: 'ROOF' })))
 
   // 교실 안 목표와 복도 링을 실제 문 개구부로 연결한다. 잠긴 문에는
   // 포털을 만들지 않아 AI가 벽을 통과하는 경로를 선택할 수 없다.

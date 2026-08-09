@@ -529,13 +529,18 @@ def test_companion_holds_active_floor_role_when_human_returns_to_previous_floor(
 def test_rooftop_companions_use_separate_stair_lanes_before_following_player_down() -> None:
     bottom = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
     top = get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")
-    for companion_id, lateral_offset in (("partner", -0.38), ("partner-2", 0.38)):
+    for companion_id, lateral_offset, start_slot in (
+        ("partner", -0.38, "ROOF_SIGNAL_EAST"),
+        ("partner-2", 0.38, "ROOF_SIGNAL_WEST"),
+    ):
         session = make_session(f"companion-physical-roof-stair-{companion_id}")
         session.round_data = None
         session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
         partner = session.state.get_player(companion_id)
         seeker = session.state.get_player("seeker")
         partner.position.floor = WorldFloor.ROOF
+        start = get_map_slot(start_slot)["aiApproachPosition"]
+        partner.position.x, partner.position.y, partner.position.z = start
         seeker.position.floor = WorldFloor.F1
         runtime = session.companion_states[companion_id]
         runtime.player_floor_changed = {
@@ -557,8 +562,12 @@ def test_rooftop_companions_use_separate_stair_lanes_before_following_player_dow
         }
         assert runtime.player_floor_changed is not None
 
-        partner.position.x, partner.position.z = intent["target"]["x"], intent["target"]["z"]
-        _, action = advance_companion(session, companion_id)
+        action = None
+        for _ in range(120):
+            runtime.last_tick = time.monotonic() - 0.5
+            _, action = advance_companion(session, companion_id)
+            if action:
+                break
 
         assert action == {
             "type": "floor_transition",

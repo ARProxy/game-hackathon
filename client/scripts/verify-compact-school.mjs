@@ -40,7 +40,7 @@ assert.ok(COMPACT_SCHOOL.boxes.every((item) => typeof item.collider === 'boolean
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'rail').every((item) => item.collider && !item.visible), '계단·보이드 난간의 연속 충돌 장벽이 사라졌다')
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'railVisual').every((item) => !item.collider && item.visible), '난간 장식과 충돌 프록시가 섞였다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').length, 14, '지하 북서 코어를 포함한 실제 층간 경사로가 필요하다')
-assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').every((item) => item.s[0] >= 3), '계단 유효 폭은 3m 이상이어야 한다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').every((item) => item.s[0] >= 3.3), '계단 유효 폭은 3.3m 이상이어야 한다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairMass').length, 112, '모든 계단 디딤판 아래가 실제 덩어리로 채워져야 한다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairStringer').length, 28, '모든 계단 경사로 양쪽에 구조 거더가 필요하다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'parapet').length, 8, '옥상 외곽과 중정에 연속 파라펫이 필요하다')
@@ -82,6 +82,7 @@ for (const id of ['roof_to_f3', 'roof_se_locked', 'stair_nw_F3', 'stair_se_F3', 
   assert.ok(doorById[id], `수직 동선 문 ${id}가 없다`)
 }
 assert.equal(doorById.roof_to_f3.unlockFloor, 'F3', '옥상 방화문은 3층 단계가 열릴 때만 개방되어야 한다')
+assert.ok(doorById.roof_to_f3.w >= 2.3, '옥상 계단 방화문은 두 캐릭터가 교행할 수 있는 폭이어야 한다')
 assert.deepEqual(doorById.stair_nw_F3.unlockFloors, ['ROOF', 'F3', 'F2'], '3층 북서 문은 옥상 도착 뒤 3층이 활성인 동안 열려야 한다')
 assert.deepEqual(doorById.stair_se_F3.unlockFloors, ['F3', 'F2'], '3층 남동 문은 3층 활성과 2층 하강 때 열려야 한다')
 assert.deepEqual(doorById.stair_nw_F2.unlockFloors, ['F3', 'F2', 'F1'], '2층 북서 문은 도착 뒤 2층이 활성인 동안 열려야 한다')
