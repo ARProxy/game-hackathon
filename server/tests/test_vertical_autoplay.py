@@ -1,4 +1,4 @@
-"""옥상부터 운동장 파이널 탈출 개방까지의 결정적 무교착 자동 플레이."""
+"""옥상부터 두 파이널 탈출 개방까지의 결정적 무교착 자동 플레이."""
 
 from app.ai.companion import advance_companion, decide_companion_intent
 from app.ai.spell import check_spell
@@ -58,12 +58,11 @@ def _walk_all_from_roof_to_f3(session: GameSession) -> None:
         cross_rooftop_stair_boundary(session, actor_id, "down")
 
 
-def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None:
-    session = GameSession("vertical-autoplay")
-    session.state.add_player("human", PlayerRole.HUMAN)
-    session.setup_game([], dynamic_forbidden=True)
-    session.final_route_choice = FinalRoute.FIELD
-
+def _complete_rooftop_through_floor_one(
+    session: GameSession,
+    final_route: FinalRoute,
+) -> None:
+    session.final_route_choice = final_route
     slot_by_signal = {
         "center": "ROOF_SIGNAL_CENTER",
         "east": "ROOF_SIGNAL_EAST",
@@ -116,7 +115,28 @@ def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None
     assert session.vertical_missions.simultaneous.route_completed
     assert not activate_simultaneous_device(session, "partner", "B")["success"]
     assert activate_simultaneous_device(session, "human", "A")["success"]
-    assert complete_current_stage(session, "human")["next_phase"] == "field_final"
+    expected_final = "field_final" if final_route == FinalRoute.FIELD else "basement_final"
+    assert complete_current_stage(session, "human")["next_phase"] == expected_final
+
+
+def _new_vertical_session(room_id: str) -> GameSession:
+    session = GameSession(room_id)
+    session.state.add_player("human", PlayerRole.HUMAN)
+    session.setup_game([], dynamic_forbidden=True)
+    return session
+
+
+def _open_escape_with_spell(session: GameSession) -> None:
+    session.spell_words = ["달빛", "교정", "탈출"]
+    session.state.phase = GamePhase.FINAL_SPELL
+    assert check_spell("달빛 교정 탈출", session.spell_words)["success"]
+    session.vertical_round.mark_mission_complete()
+    assert session.vertical_round.advance() == VerticalRoundPhase.ESCAPE_OPEN
+
+
+def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None:
+    session = _new_vertical_session("field-vertical-autoplay")
+    _complete_rooftop_through_floor_one(session, FinalRoute.FIELD)
     _move_all_through(session, "F1_TO_FIELD_FIRE_DOOR", "field")
 
     ready = None
@@ -128,20 +148,13 @@ def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None
         ready = activate_final_station(session, actor_id)
     assert ready and ready["all_ready"]
 
-    session.spell_words = ["달빛", "교정", "탈출"]
-    session.state.phase = GamePhase.FINAL_SPELL
-    assert check_spell("달빛 교정 탈출", session.spell_words)["success"]
-    session.vertical_round.mark_mission_complete()
-    assert session.vertical_round.advance() == VerticalRoundPhase.ESCAPE_OPEN
+    _open_escape_with_spell(session)
 
 
-def test_basement_final_voice_delegation_reaches_escape_open() -> None:
-    session = GameSession("basement-autoplay")
-    session.state.add_player("human", PlayerRole.HUMAN)
-    session.setup_game([], dynamic_forbidden=True)
-    session.final_route_choice = FinalRoute.BASEMENT
-    session.vertical_round.final_route = FinalRoute.BASEMENT
-    session.vertical_round.phase = VerticalRoundPhase.BASEMENT_FINAL
+def test_rooftop_to_basement_voice_delegation_reaches_escape_open() -> None:
+    session = _new_vertical_session("basement-vertical-autoplay")
+    _complete_rooftop_through_floor_one(session, FinalRoute.BASEMENT)
+    _move_all_through(session, "F1_TO_BASEMENT_FIRE_DOOR", "basement")
     session.vertical_missions.basement.correct_order = ["panel", "valve", "generator"]
     session.state.get_player("seeker").position.floor = WorldFloor.ROOF
 
@@ -166,8 +179,4 @@ def test_basement_final_voice_delegation_reaches_escape_open() -> None:
         assert activated["success"]
 
     assert session.vertical_missions.basement.completed
-    session.spell_words = ["달빛", "교정", "탈출"]
-    session.state.phase = GamePhase.FINAL_SPELL
-    assert check_spell("달빛 교정 탈출", session.spell_words)["success"]
-    session.vertical_round.mark_mission_complete()
-    assert session.vertical_round.advance() == VerticalRoundPhase.ESCAPE_OPEN
+    _open_escape_with_spell(session)
