@@ -343,6 +343,27 @@ class ConnectionManager:
                     return
                 await self.broadcast(room_id, {"type": "intercom_result", **result})
                 if not result.get("success"):
+                    mismatch_index = result.get("first_mismatch_index")
+                    position_label = (
+                        f"{int(mismatch_index) + 1}번째 묶음"
+                        if mismatch_index is not None else "기호 순서"
+                    )
+                    issue = (
+                        "순서가 앞뒤로 바뀐 것 같아"
+                        if result.get("order_valid") is False
+                        else "색이나 도형 하나가 빠진 것 같아"
+                    )
+                    await self._broadcast_companion_speech(room_id, {
+                        "type": "companion_report",
+                        "companion_id": session.vertical_missions.intercom.ai_companion_id,
+                        "message": (
+                            f"{position_label}을 다시 확인해 줘. {issue}. "
+                            "다른 표현으로 말하면 내가 다시 대조할게."
+                        ),
+                        "phase": VerticalRoundPhase.FLOOR_2.value,
+                        "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
+                        "speech_mode": SpeechMode.INTERCOM.value,
+                    }, session.vertical_missions.intercom.ai_companion_id)
                     return
                 session.intercom_mission_actor_id = None
                 event = complete_current_stage(session, player_id)

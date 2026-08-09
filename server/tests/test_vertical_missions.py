@@ -147,7 +147,7 @@ class TestIntercomMission:
         assert not result["success"]
         assert not mission.completed
 
-    def test_check_answer_tracks_attempts(self) -> None:
+    def test_check_answer_tracks_attempts_without_hard_lockout(self) -> None:
         mission = IntercomMission(
             sequence=[{"shape": "원", "color": "빨간"}],
             max_attempts=2,
@@ -157,7 +157,10 @@ class TestIntercomMission:
         assert not r1["exhausted"]
         r2 = mission.check_answer("초록 별")
         assert r2["attempts"] == 2
-        assert r2["exhausted"]
+        assert not r2["exhausted"]
+        assert r2["retry_available"]
+        assert r2["hint_level"] == 2
+        assert r2["first_mismatch_index"] == 0
 
     def test_check_answer_requires_sequence_order(self) -> None:
         mission = IntercomMission(
@@ -170,6 +173,7 @@ class TestIntercomMission:
         result = mission.check_answer("초록 네모, 빨간 삼각형, 파란 원")
         assert not result["success"]
         assert not result["order_valid"]
+        assert result["first_mismatch_index"] is not None
 
     def test_describe_for_ai_avoids_forbidden_words(self) -> None:
         mission = IntercomMission(

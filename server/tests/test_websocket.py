@@ -240,6 +240,47 @@ class TestVerticalStageInteraction:
             assert advanced["next_phase"] == "floor_1"
             assert advanced["clue"] == {"word": "교정", "order": 2, "total": 3}
 
+    def test_intercom_failure_keeps_retry_open_and_ai_corrects_mismatch(self, client):
+        from app.game.session import session_manager
+        from app.game.vertical_flow import mission_interaction_position
+
+        with client.websocket_connect("/ws/vertical-intercom-retry/player1") as ws:
+            ws.send_json({
+                "type": "start_game",
+                "payload": {"forbidden_words": ["열쇠"]},
+            })
+            ws.receive_json()
+            session = session_manager.get_or_create("vertical-intercom-retry")
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+            player = session.state.get_player("player1")
+            x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_2)
+            player.position.x, player.position.y, player.position.z = x, y, z
+            player.position.floor = WorldFloor.F2
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+            assert ws.receive_json()["type"] == "vertical_mission_started"
+            session.vertical_missions.intercom.ai_arrived = True
+
+            ws.send_json({
+                "type": "speech",
+                "payload": {"transcript": "첫 번째 기호만 들었어", "is_final": True},
+            })
+            assert ws.receive_json()["type"] == "sound_ping"
+            assert ws.receive_json()["type"] == "speech_safe"
+            result = ws.receive_json()
+            assistant = ws.receive_json()
+
+            assert result["type"] == "intercom_result"
+            assert not result["success"]
+            assert result["retry_available"]
+            assert not result["exhausted"]
+            assert assistant["type"] == "companion_report"
+            assert assistant["speech_intent"] == "ask_clarification"
+            assert "다시" in assistant["message"]
+
     def test_third_floor_mission_changes_omen_to_limited_hunt(self, client):
         from app.game.session import session_manager
         from app.game.vertical_flow import mission_interaction_position

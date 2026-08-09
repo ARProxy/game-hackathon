@@ -155,13 +155,27 @@ class IntercomMission:
         success = all_present and order_valid
         if success:
             self.completed = True
+        first_mismatch_index = next((
+            index for index, item in enumerate(matched_items)
+            if not item["shape_matched"] or not item["color_matched"]
+        ), None)
+        if first_mismatch_index is None and not order_valid:
+            first_mismatch_index = next((
+                index for index in range(1, len(pair_positions))
+                if pair_positions[index - 1] >= pair_positions[index]
+            ), 0)
         return {
             "success": success,
             "matched_items": matched_items,
             "order_valid": order_valid,
             "attempts": self.attempts,
             "max_attempts": self.max_attempts,
-            "exhausted": self.attempts >= self.max_attempts and not success,
+            # 음성 인식이나 추격 때문에 세 번 실패해도 필수 진행을 잠그지 않는다.
+            # 세 번은 AI 힌트가 가장 구체적으로 바뀌는 기준일 뿐 재시도 제한이 아니다.
+            "hint_level": min(self.attempts, self.max_attempts),
+            "retry_available": not success,
+            "exhausted": False,
+            "first_mismatch_index": first_mismatch_index,
         }
 
 

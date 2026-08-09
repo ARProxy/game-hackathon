@@ -252,8 +252,8 @@ export default function useWebSocket() {
         addSubtitle('system', data.success
           ? '인터폰 전달 성공. 1층 방화문이 열립니다.'
           : data.order_valid === false
-            ? `기호의 순서가 다릅니다. 남은 시도 ${Math.max(0, data.max_attempts - data.attempts)}회.`
-            : `기호가 빠졌습니다. 남은 시도 ${Math.max(0, data.max_attempts - data.attempts)}회.`)
+            ? '기호의 순서가 다릅니다. AI의 재확인 보고를 듣고 다시 전달하세요.'
+            : '기호가 빠졌습니다. AI가 어긋난 묶음을 다시 확인합니다. 재시도할 수 있습니다.')
         break
 
       case 'intercom_ai_ready':
