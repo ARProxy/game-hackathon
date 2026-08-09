@@ -260,6 +260,10 @@ export default function useWebSocket() {
         addSubtitle(data.companion_id ?? 'partner', '인터폰 판독 위치에 도착했습니다. 기호 보고를 확인하세요.')
         break
 
+      case 'broadcast_ai_ready':
+        addSubtitle(data.companion_id ?? 'partner', '방송 수신 준비 완료. 우회 표현에서 빠진 뜻을 함께 확인할게.')
+        break
+
       case 'simultaneous_ai_ready':
         addSubtitle(data.companion_id ?? 'partner', '반대편 장치 준비 완료. A 장치에서 E를 누르세요.')
         break

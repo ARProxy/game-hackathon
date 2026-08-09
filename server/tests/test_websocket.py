@@ -271,6 +271,45 @@ class TestVerticalStageInteraction:
             assert started["voice_key"] == "Q"
             assert started["starts_limited_hunt"] is True
 
+    def test_third_floor_ai_points_out_missing_meaning_without_solving(self, client):
+        from app.game.session import session_manager
+        from app.game.vertical_flow import mission_interaction_position
+
+        with client.websocket_connect("/ws/vertical-third-floor-ai-feedback/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("vertical-third-floor-ai-feedback")
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+            player = session.state.get_player("player1")
+            x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_3)
+            player.position.x, player.position.y, player.position.z = x, y, z
+            player.position.floor = WorldFloor.F3
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+            assert ws.receive_json()["type"] == "vertical_threat_changed"
+            assert ws.receive_json()["type"] == "vertical_mission_started"
+
+            ws.send_json({
+                "type": "speech",
+                "payload": {
+                    "transcript": "작은 금속 도구와 잠긴 출입구가 있어",
+                    "is_final": True,
+                },
+            })
+
+            assert ws.receive_json()["type"] == "sound_ping"
+            assert ws.receive_json()["type"] == "speech_safe"
+            feedback = ws.receive_json()
+            assistant = ws.receive_json()
+            assert feedback["type"] == "vertical_mission_feedback"
+            assert feedback["missing_labels"] == ["개방 행동"]
+            assert assistant["type"] == "companion_report"
+            assert assistant["speech_intent"] == "ask_clarification"
+            assert "개방 행동" in assistant["message"]
+            assert "정답" not in assistant["message"]
+
     def test_rooftop_contact_cannot_be_submitted_as_seeker_capture(self, client):
         from app.game.session import session_manager
 

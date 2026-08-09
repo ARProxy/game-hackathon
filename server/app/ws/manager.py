@@ -308,6 +308,18 @@ class ConnectionManager:
                         "missing_labels": verdict["missing_labels"],
                         "prompt": BROADCAST_MISSION_PROMPT,
                     })
+                    missing_meanings = " · ".join(verdict["missing_labels"])
+                    await self._broadcast_companion_speech(room_id, {
+                        "type": "companion_report",
+                        "companion_id": "partner",
+                        "message": (
+                            f"방송을 같이 확인했어. {missing_meanings} 뜻이 빠졌어. "
+                            "그 단어를 그대로 읽지 말고 특징과 행동으로 다시 설명해 줘."
+                        ),
+                        "phase": VerticalRoundPhase.FLOOR_3.value,
+                        "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
+                        "speech_mode": SpeechMode.INTERCOM.value,
+                    }, "partner")
                     return
                 session.broadcast_mission_actor_id = None
                 event = complete_current_stage(session, player_id)
@@ -2057,7 +2069,10 @@ class ConnectionManager:
         elif action["type"] == "vertical_objective":
             phase = action["phase"]
             if phase == VerticalRoundPhase.FLOOR_3.value:
-                message = "3층 방송 장치를 찾았어. 이 장치는 사람의 목소리로 뜻을 전달해야 작동해."
+                message = (
+                    "방송 장치 옆에서 수신 내용을 확인할게. 네가 우회해서 말하면 "
+                    "빠진 뜻을 내가 바로 짚어 줄게."
+                )
             else:
                 message = {
                     VerticalRoundPhase.ROOFTOP_INTRO.value: "옥상 신호 장치를 찾았어. 내가 가동해 볼게.",
@@ -2072,6 +2087,12 @@ class ConnectionManager:
                 "speech_intent": SpeechIntent.DECLARE_ACTION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
+            if phase == VerticalRoundPhase.FLOOR_3.value:
+                await self.broadcast(room_id, {
+                    "type": "broadcast_ai_ready",
+                    "companion_id": companion_id,
+                    "role": "semantic_monitor",
+                })
             if phase == VerticalRoundPhase.FIELD_FINAL.value:
                 await self._handle_action(
                     room_id, companion_id, {"action_type": "interact_stage_mission"},
