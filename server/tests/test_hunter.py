@@ -6,6 +6,7 @@ from app.ai.hunter import (
     CONTRACT,
     _decide_blocker_intent,
     _safe_hunter_step,
+    advance_hunter,
     advance_secondary_hunter,
     decide_hunter_intent,
     director_snapshot,
@@ -311,11 +312,13 @@ def test_rooftop_and_early_third_floor_cannot_track_or_capture() -> None:
     session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
     seeker.position.floor = human.position.floor = WorldFloor.F3
     assert effective_seeker_threat(session) == SeekerThreat.OMEN
-    assert decide_hunter_intent(session)["reason"] == "omen_watch"
+    omen = decide_hunter_intent(session)
+    assert omen["reason"] == "omen_patrol"
+    assert omen["target"] != {"x": seeker.position.x, "z": seeker.position.z}
     assert not seeker_can_capture(session, "seeker")
 
 
-def test_third_floor_broadcast_opens_limited_hunt_without_roaming() -> None:
+def test_third_floor_broadcast_opens_limited_patrol_and_visual_chase() -> None:
     session = make_session("hunter-limited")
     seeker = session.state.get_player("seeker")
     human = session.state.get_player("human")
@@ -328,14 +331,32 @@ def test_third_floor_broadcast_opens_limited_hunt_without_roaming() -> None:
     human.position.x, human.position.z = -5.0, -5.0
 
     assert effective_seeker_threat(session) == SeekerThreat.LIMITED_HUNT
-    waiting = decide_hunter_intent(session)
-    assert waiting["reason"] == "limited_wait"
-    assert waiting["target"] == {"x": seeker.position.x, "z": seeker.position.z}
+    patrol = decide_hunter_intent(session)
+    assert patrol["reason"] == "limited_patrol"
+    assert patrol["target"] != {"x": seeker.position.x, "z": seeker.position.z}
     assert seeker_can_capture(session, "seeker")
 
     human.position.x, human.position.z = -23.0, -38.0
     session.hunter_forward = {"x": 1.0, "z": 0.0}
     assert decide_hunter_intent(session)["state"] == "DETECTED"
+
+
+def test_third_floor_omen_patrol_actually_moves_from_reveal_door() -> None:
+    session = make_session("hunter-omen-moves")
+    seeker = session.state.get_player("seeker")
+    human = session.state.get_player("human")
+    partner = session.state.get_player("partner")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    seeker.position.floor = WorldFloor.F3
+    seeker.position.x, seeker.position.z = -36.0, -38.2
+    human.position.floor = partner.position.floor = WorldFloor.F2
+    session.hunter_last_tick = time.monotonic() - 0.5
+    before = (seeker.position.x, seeker.position.z)
+
+    result = advance_hunter(session)
+
+    assert result["reason"] == "omen_patrol"
+    assert (seeker.position.x, seeker.position.z) != before
 
 
 def test_blocker_uses_map_nodes_for_patrol_and_zone_sharing() -> None:

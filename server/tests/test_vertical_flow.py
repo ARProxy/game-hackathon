@@ -14,6 +14,7 @@ from app.game.vertical_flow import (
     final_escape_position,
     final_station_position,
     mission_interaction_position,
+    validate_current_stage_interaction,
     use_open_floor_transition,
     use_elevator,
 )
@@ -55,6 +56,20 @@ def place_at_current_mission(session: GameSession, actor) -> None:
     for runner in session.state.players.values():
         if runner.role != PlayerRole.SEEKER:
             runner.position.floor = session.vertical_round.policy.active_floor
+
+
+def test_server_accepts_visible_mission_prompt_during_position_sync_lag() -> None:
+    session, human = active_session()
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_3)
+    human.position.x, human.position.y, human.position.z = x + 2.8, y, z
+    human.position.floor = WorldFloor.F3
+
+    validate_current_stage_interaction(session, "human")
+
+    human.position.x = x + 3.05
+    with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
+        validate_current_stage_interaction(session, "human")
 
 
 def test_disabled_compatibility_game_cannot_advance_vertical_stage() -> None:

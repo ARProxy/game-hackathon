@@ -203,12 +203,26 @@ def decide_hunter_intent(session: Any) -> dict:
         return {"state": "HUNT", "target_id": None, "target": {"x": 0.0, "z": 0.0}, "reason": "no_seeker"}
 
     threat = effective_seeker_threat(session)
-    if threat in {SeekerThreat.INACTIVE, SeekerThreat.OMEN}:
+    now = time.monotonic()
+    if threat == SeekerThreat.INACTIVE:
         return {
             "state": "HUNT",
             "target_id": None,
             "target": {"x": seeker.position.x, "z": seeker.position.z},
-            "reason": "inactive" if threat == SeekerThreat.INACTIVE else "omen_watch",
+            "reason": "inactive",
+        }
+    if threat == SeekerThreat.OMEN:
+        return {
+            "state": "HUNT",
+            "target_id": None,
+            "target": _timed_hunter_patrol_target(
+                seeker.position.floor.value,
+                seeker.position.x,
+                seeker.position.z,
+                now,
+                focus=(-24.0, -38.0),
+            ),
+            "reason": "omen_patrol",
         }
 
     if session.state.phase == GamePhase.ESCAPE and session.active_gate_id:
@@ -231,7 +245,6 @@ def decide_hunter_intent(session: Any) -> dict:
     else:
         forward_x, forward_z = forward_x / forward_length, forward_z / forward_length
 
-    now = time.monotonic()
     vision_distance = CONTRACT["visionDistance"] * vertical_threat_snapshot(session)["vision_multiplier"]
     visible: list[tuple[float, Any]] = []
     for runner in session.state.players.values():
@@ -307,8 +320,14 @@ def decide_hunter_intent(session: Any) -> dict:
         return {
             "state": "HUNT",
             "target_id": None,
-            "target": {"x": seeker.position.x, "z": seeker.position.z},
-            "reason": "limited_wait",
+            "target": _timed_hunter_patrol_target(
+                seeker.position.floor.value,
+                seeker.position.x,
+                seeker.position.z,
+                now,
+                focus=(-28.0, -38.0),
+            ),
+            "reason": "limited_patrol",
         }
 
     hunt_targets = []
@@ -639,6 +658,43 @@ def _nearest_navigation_position(floor: str, x: float, z: float) -> dict[str, fl
             float(candidate["position"][1]) - z,
         ),
     )
+    return {
+        "x": float(node["position"][0]),
+        "z": float(node["position"][1]),
+    }
+
+
+def _timed_hunter_patrol_target(
+    floor: str,
+    x: float,
+    z: float,
+    now: float,
+    *,
+    focus: tuple[float, float] | None = None,
+) -> dict[str, float]:
+    """문 앞 정지 없이 해당 층의 복도 그래프를 따라 다음 순찰점을 고른다."""
+    nodes = [
+        node for node in NAVIGATION_NODES_BY_FLOOR.get(floor, ())
+        if "_ring_" in str(node["id"])
+    ]
+    if focus is not None:
+        nodes.sort(key=lambda node: math.hypot(
+            float(node["position"][0]) - focus[0],
+            float(node["position"][1]) - focus[1],
+        ))
+        nodes = nodes[:4]
+    if not nodes:
+        return {"x": float(x), "z": float(z)}
+    patrol_index = int(now / 6.0) % len(nodes)
+    node = nodes[patrol_index]
+    for offset in range(len(nodes)):
+        candidate = nodes[(patrol_index + offset) % len(nodes)]
+        if math.hypot(
+            float(candidate["position"][0]) - x,
+            float(candidate["position"][1]) - z,
+        ) > 1.5:
+            node = candidate
+            break
     return {
         "x": float(node["position"][0]),
         "z": float(node["position"][1]),

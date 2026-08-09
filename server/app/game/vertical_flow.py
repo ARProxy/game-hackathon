@@ -11,7 +11,10 @@ from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPh
 from app.game.state import PlayerRole, PlayerStatus
 
 
-MISSION_INTERACTION_RADIUS = 2.25
+# 클라이언트는 2.25m 안에서만 E 안내를 연다. 서버는 10Hz 위치 동기화와
+# 왕복 지연 중 최대 약 0.5~0.7m의 좌표 차이가 생겨도 이미 표시된 상호작용을
+# 거절하지 않도록 권위 판정에만 작은 여유를 둔다.
+MISSION_INTERACTION_RADIUS = 3.0
 BROADCAST_MISSION_PROMPT = (
     "긴급 방송 원문: ‘열쇠로 잠긴 문을 열어라.’ 그대로 읽으면 비공개 금기어에 "
     "걸릴 수 있습니다. Q로 도구·잠긴 출입구·개방 행동의 뜻을 모두 다른 말로 전달하세요."
