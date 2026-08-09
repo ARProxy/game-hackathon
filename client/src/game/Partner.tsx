@@ -36,6 +36,7 @@ const _displayTarget = { x: 0, z: 0 }
 const _stairSample = new THREE.Vector3()
 const _stairHeading = new THREE.Vector3()
 const STAIR_PATH = verticalMapContract.paths.ROOF_F3_STAIRS
+const VERTICAL_SLOTS = verticalMapContract.slots as Record<string, { position?: number[] }>
 
 type StairTraversal = {
   startedAt: number
@@ -79,7 +80,7 @@ export default function Partner({
   const guidanceActive = useGameStore((state) => (
     state.companionIntents[playerId]
       ?? (playerId === 'partner' ? state.companionIntent : null)
-  )?.reason?.startsWith('rooftop_signal_guide'))
+  )?.reason === 'rooftop_signal_guide')
 
   useEffect(() => {
     const rescue = (event: KeyboardEvent) => {
@@ -213,7 +214,22 @@ export default function Partner({
     if (distance > 0.05) {
       group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, Math.atan2(dx, dz), 0.15)
     }
-    const active = partnerState?.status === 'alive' && (speed > 0 || intent.state === 'INSPECT_CANDIDATE')
+    const arrivalDistance = intent.arrivalDistance ?? companion.arrivalDistance
+    const locomoting = displayDistance > 0.04 || distance > arrivalDistance + 0.05
+    const active = partnerState?.status === 'alive'
+      && locomoting
+      && (speed > 0 || intent.state === 'INSPECT_CANDIDATE')
+    if (!locomoting && intent.reason.startsWith('rooftop_signal_')) {
+      const signalId = intent.targetId?.split('_').at(-1)
+      const signalSlot = signalId
+        ? VERTICAL_SLOTS[`ROOF_SIGNAL_${signalId.toUpperCase()}`]
+        : null
+      if (signalSlot?.position) {
+        const faceX = signalSlot.position[0] - group.position.x
+        const faceZ = signalSlot.position[2] - group.position.z
+        group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, Math.atan2(faceX, faceZ), 0.12)
+      }
+    }
     movementRef.current = active ? 1 : 0
     group.position.y = actorBaseY + (active ? Math.abs(Math.sin(clock.elapsedTime * 7)) * 0.08 : 0)
   })

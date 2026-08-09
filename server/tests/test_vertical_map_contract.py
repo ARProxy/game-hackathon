@@ -106,6 +106,17 @@ def test_rooftop_transition_uses_the_authored_fire_door() -> None:
     assert "두 문이 함께 열린다" in roof_lock["note"]
 
 
+def test_rooftop_ai_waits_beside_instead_of_on_human_signal_position() -> None:
+    for slot_id in ("ROOF_SIGNAL_CENTER", "ROOF_SIGNAL_EAST", "ROOF_SIGNAL_WEST"):
+        slot = get_map_slot(slot_id)
+        human = slot["interactionPosition"]
+        companion = slot["aiApproachPosition"]
+
+        assert human[1] == companion[1] == 10.8
+        assert math.hypot(human[0] - companion[0], human[2] - companion[2]) >= 1.15
+        assert math.hypot(slot["position"][0] - companion[0], slot["position"][2] - companion[2]) <= 2.25
+
+
 def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
     bottom = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
     top = get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")

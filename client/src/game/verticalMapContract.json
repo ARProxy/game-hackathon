@@ -36,9 +36,9 @@
     "ROOF_RUNNER_SPAWN_B": { "kind": "spawn", "floor": "ROOF", "position": [-24, 10.8, -37.4], "zone": "roof_north" },
     "ROOF_RUNNER_SPAWN_C": { "kind": "spawn", "floor": "ROOF", "position": [-21, 10.8, -37.4], "zone": "roof_north" },
     "ROOF_INTRO_MISSION": { "kind": "mission", "floor": "ROOF", "position": [-24, 10.8, -37.75], "zone": "roof_signal_center" },
-    "ROOF_SIGNAL_CENTER": { "kind": "device", "floor": "ROOF", "position": [-24, 11.52, -39.1], "interactionPosition": [-24, 10.8, -37.75], "approachPosition": [-24, 10.8, -37.75], "approachRadius": 0.22, "zone": "roof_signal_center", "deviceId": "roof_signal_center" },
-    "ROOF_SIGNAL_EAST": { "kind": "device", "floor": "ROOF", "position": [-5.5, 11.52, -27.8], "interactionPosition": [-6.9, 10.8, -27.8], "approachPosition": [-6.9, 10.8, -27.8], "approachRadius": 0.22, "zone": "roof_signal_east", "deviceId": "roof_signal_east" },
-    "ROOF_SIGNAL_WEST": { "kind": "device", "floor": "ROOF", "position": [-42.5, 11.52, -27.8], "interactionPosition": [-41.1, 10.8, -27.8], "approachPosition": [-41.1, 10.8, -27.8], "approachRadius": 0.22, "zone": "roof_signal_west", "deviceId": "roof_signal_west" },
+    "ROOF_SIGNAL_CENTER": { "kind": "device", "floor": "ROOF", "position": [-24, 11.52, -39.1], "interactionPosition": [-24, 10.8, -37.75], "approachPosition": [-24, 10.8, -37.75], "aiApproachPosition": [-25.2, 10.8, -37.9], "approachRadius": 0.22, "zone": "roof_signal_center", "deviceId": "roof_signal_center" },
+    "ROOF_SIGNAL_EAST": { "kind": "device", "floor": "ROOF", "position": [-5.5, 11.52, -27.8], "interactionPosition": [-6.9, 10.8, -27.8], "approachPosition": [-6.9, 10.8, -27.8], "aiApproachPosition": [-6.9, 10.8, -29.0], "approachRadius": 0.22, "zone": "roof_signal_east", "deviceId": "roof_signal_east" },
+    "ROOF_SIGNAL_WEST": { "kind": "device", "floor": "ROOF", "position": [-42.5, 11.52, -27.8], "interactionPosition": [-41.1, 10.8, -27.8], "approachPosition": [-41.1, 10.8, -27.8], "aiApproachPosition": [-41.1, 10.8, -29.0], "approachRadius": 0.22, "zone": "roof_signal_west", "deviceId": "roof_signal_west" },
     "ROOF_TO_F3_FIRE_DOOR": {
       "kind": "transition_lock",
       "floor": "ROOF",

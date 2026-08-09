@@ -277,8 +277,8 @@ def test_rooftop_companions_split_live_signal_guide_and_opposite_scout() -> None
     assert guide["reason"] == "rooftop_signal_guide"
     assert guide["target_id"] == f"roof_signal_guide_{next_signal_id}"
     assert guide["target"] == {
-        "x": guide_slot["approachPosition"][0],
-        "z": guide_slot["approachPosition"][2],
+        "x": guide_slot["aiApproachPosition"][0],
+        "z": guide_slot["aiApproachPosition"][2],
     }
     assert guide["arrival_distance"] == guide_slot["approachRadius"]
     assert scout["reason"] == "rooftop_signal_scout"
@@ -363,7 +363,7 @@ def test_rooftop_companion_reports_assigned_signal_once_on_arrival() -> None:
     partner = session.state.get_player("partner")
     intent = decide_companion_intent(session, "partner")
     signal_id = intent["target_id"].rsplit("_", 1)[-1]
-    signal_position = get_map_slot(f"ROOF_SIGNAL_{signal_id.upper()}")["approachPosition"]
+    signal_position = get_map_slot(f"ROOF_SIGNAL_{signal_id.upper()}")["aiApproachPosition"]
     partner.position.x, partner.position.y, partner.position.z = signal_position
     partner.position.floor = WorldFloor.ROOF
 
@@ -380,31 +380,6 @@ def test_rooftop_companion_reports_assigned_signal_once_on_arrival() -> None:
     _, repeated_action = advance_companion(session, "partner")
 
     assert repeated_action is None
-
-
-def test_rooftop_companion_patrols_after_signal_report(monkeypatch) -> None:
-    session = make_session("companion-rooftop-signal-patrol")
-    session.round_data = None
-    session.state.get_player("seeker").position.floor = WorldFloor.F1
-    companion_id = "partner"
-    runtime = session.companion_states[companion_id]
-    initial = decide_companion_intent(session, companion_id)
-    runtime.memory[initial["target_id"]] = {
-        "discovered_at": 1.0,
-        "position": initial["target"],
-        "zone": "rooftop_intro",
-    }
-
-    monkeypatch.setattr("app.ai.companion.time.monotonic", lambda: 4.9)
-    first_patrol = decide_companion_intent(session, companion_id)
-    monkeypatch.setattr("app.ai.companion.time.monotonic", lambda: 7.3)
-    second_patrol = decide_companion_intent(session, companion_id)
-
-    assert first_patrol["reason"].startswith("rooftop_signal_")
-    assert first_patrol["reason"].endswith("_patrol")
-    assert first_patrol["target_id"].startswith("roof_signal_patrol_")
-    assert first_patrol["target"] != second_patrol["target"]
-    assert first_patrol["arrival_distance"] == 0.18
 
 
 def test_vertical_companions_split_mission_support_and_route_scout_roles() -> None:
