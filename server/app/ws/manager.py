@@ -68,7 +68,9 @@ from app.game.vertical_flow import (
     final_escape_slot,
     refresh_closing_floor,
     start_intercom_mission,
+    start_security_guidance,
     submit_intercom_answer,
+    submit_security_direction,
     use_open_floor_transition,
     use_elevator,
     validate_current_stage_interaction,
@@ -370,6 +372,40 @@ class ConnectionManager:
                 await self._publish_vertical_stage_advance(
                     room_id, player_id, event,
                 )
+                return
+            if (
+                is_final and transcript.strip()
+                and session.security_mission_actor_id == player_id
+                and session.vertical_round.phase == VerticalRoundPhase.FLOOR_1
+                and session.vertical_missions is not None
+                and not session.vertical_missions.simultaneous.route_completed
+            ):
+                try:
+                    result = submit_security_direction(session, player_id, transcript)
+                except InvalidProgression as error:
+                    await self.send_to(room_id, player_id, {
+                        "type": "action_rejected",
+                        "action_type": "security_direction",
+                        "reason": str(error),
+                    })
+                    return
+                for runtime in session.companion_states.values():
+                    for target_id in tuple(runtime.memory):
+                        if target_id.startswith("security_route_"):
+                            runtime.memory.pop(target_id, None)
+                await self.broadcast(room_id, {
+                    "type": "security_route_progress",
+                    **result,
+                })
+                if not result.get("success"):
+                    await self._broadcast_companion_speech(room_id, {
+                        "type": "companion_report",
+                        "companion_id": session.vertical_missions.simultaneous.ai_companion_id,
+                        "message": "그 방향은 막혀 보여. CCTV 표식의 방향을 다른 말로 다시 알려 줘.",
+                        "phase": VerticalRoundPhase.FLOOR_1.value,
+                        "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
+                        "speech_mode": SpeechMode.RADIO.value,
+                    }, session.vertical_missions.simultaneous.ai_companion_id)
                 return
             mission = session.current_mission()
             if mission and is_final and transcript.strip():
@@ -689,6 +725,32 @@ class ConnectionManager:
                 })
                 return
             if session.vertical_round.phase == VerticalRoundPhase.FLOOR_1:
+                if (
+                    session.vertical_missions is not None
+                    and session.vertical_missions.simultaneous.started_at is None
+                ):
+                    try:
+                        mission_info = start_security_guidance(session, player_id)
+                    except InvalidProgression as error:
+                        await self.send_to(room_id, player_id, {
+                            "type": "action_rejected", "action_type": action_type,
+                            "reason": str(error),
+                        })
+                        return
+                    session.security_mission_actor_id = player_id
+                    await self.send_to(room_id, player_id, {
+                        "type": "vertical_mission_started",
+                        **mission_info,
+                    })
+                    await self._broadcast_companion_speech(room_id, {
+                        "type": "companion_report",
+                        "companion_id": session.vertical_missions.simultaneous.ai_companion_id,
+                        "message": "관제 화면은 네가 보고 있어. 방향을 말해 주면 교차로마다 멈춰 확인할게.",
+                        "phase": VerticalRoundPhase.FLOOR_1.value,
+                        "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                        "speech_mode": SpeechMode.RADIO.value,
+                    }, session.vertical_missions.simultaneous.ai_companion_id)
+                    return
                 await self._handle_action(
                     room_id,
                     player_id,
@@ -2136,7 +2198,7 @@ class ConnectionManager:
             }, companion_id)
         elif action["type"] == "simultaneous_ready":
             # AI가 동시 조작 장치에 도착하여 준비 완료 보고
-            message = "준비됐어! 동시에 작동하자!"
+            message = "원격 봉쇄 장치에 도착했어! 경비실 A 장치에서 E를 누르면 내가 B를 동시에 작동할게."
             message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report", "companion_id": companion_id,
@@ -2147,6 +2209,23 @@ class ConnectionManager:
             await self.broadcast(room_id, {
                 "type": "simultaneous_ai_ready",
                 "companion_id": companion_id,
+            })
+        elif action["type"] == "security_checkpoint_ready":
+            expected = str(action.get("expected_command") or "다음")
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report",
+                "companion_id": companion_id,
+                "message": "교차로에 도착했어. CCTV에 보이는 다음 방향을 말해 줘.",
+                "phase": action.get("phase", ""),
+                "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
+                "speech_mode": SpeechMode.RADIO.value,
+            }, companion_id)
+            await self.broadcast(room_id, {
+                "type": "security_checkpoint_ready",
+                "companion_id": companion_id,
+                "accepted_commands": action.get("accepted_commands", 0),
+                "total_commands": action.get("total_commands", 3),
+                "expected_command": expected,
             })
         elif action["type"] == "basement_device_report":
             # AI가 지하 장치에 도착하여 상태를 보고

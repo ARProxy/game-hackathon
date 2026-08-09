@@ -16,7 +16,9 @@ from app.game.vertical_flow import (
     final_station_position,
     mission_interaction_position,
     start_intercom_mission,
+    start_security_guidance,
     submit_intercom_answer,
+    submit_security_direction,
     use_open_floor_transition,
 )
 
@@ -89,8 +91,15 @@ def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None
     assert complete_current_stage(session, "human")["next_phase"] == "floor_1"
     _move_all_through(session, "F2_TO_F1_STAIR_EAST", "east")
 
-    _place_actor_at_slot(session, "partner", "F1_DEVICE_B")
     _place_actor_at_slot(session, "human", "F1_DEVICE_A")
+    start_security_guidance(session, "human")
+    for command in session.vertical_missions.simultaneous.route_commands:
+        result = submit_security_direction(session, "human", command)
+        assert result["success"]
+        target_slot = session.vertical_missions.simultaneous.current_target_slot
+        _place_actor_at_slot(session, "partner", target_slot)
+        decide_companion_intent(session, "partner")
+    assert session.vertical_missions.simultaneous.route_completed
     assert not activate_simultaneous_device(session, "partner", "B")["success"]
     assert activate_simultaneous_device(session, "human", "A")["success"]
     assert complete_current_stage(session, "human")["next_phase"] == "field_final"

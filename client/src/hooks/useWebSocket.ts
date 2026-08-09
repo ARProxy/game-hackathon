@@ -265,7 +265,26 @@ export default function useWebSocket() {
         break
 
       case 'simultaneous_ai_ready':
-        addSubtitle(data.companion_id ?? 'partner', '반대편 장치 준비 완료. A 장치에서 E를 누르세요.')
+        useGameStore.getState().setActiveMissionPrompt('AI가 원격 B 장치에 도착했습니다. 경비실 A 장치에서 E를 눌러 동시에 해제하세요.')
+        addSubtitle(data.companion_id ?? 'partner', '원격 B 장치 준비 완료. 경비실 A 장치에서 E를 누르세요.')
+        break
+
+      case 'security_route_progress':
+        useGameStore.getState().setActiveMissionPrompt(data.success
+          ? data.expected_command
+            ? `관제 경로 ${data.accepted_commands}/${data.total_commands} · 다음 CCTV 표식: ${data.expected_command} · Q로 안내`
+            : '경로 안내 완료 · AI가 원격 봉쇄 장치로 이동 중'
+          : `방향 불일치 · 현재 CCTV 표식: ${data.expected_command ?? '재확인'} · 다른 표현으로 다시 안내`)
+        addSubtitle('system', data.success
+          ? `CCTV 안내 ${data.accepted_commands}/${data.total_commands} 전달`
+          : 'AI가 잘못된 통로 앞에서 멈췄습니다. 방향을 다시 설명하세요.')
+        break
+
+      case 'security_checkpoint_ready':
+        useGameStore.getState().setActiveMissionPrompt(
+          `AI가 교차로에 도착했습니다 · 다음 CCTV 표식: ${data.expected_command} · Q로 방향 안내`,
+        )
+        addSubtitle(data.companion_id ?? 'partner', '교차로 도착. 다음 방향을 기다립니다.')
         break
 
       case 'basement_device_status': {
@@ -279,6 +298,8 @@ export default function useWebSocket() {
       case 'device_activated':
         addSubtitle('system', data.success
           ? '두 장치가 동시에 작동했습니다.'
+          : data.reason === 'guidance_incomplete'
+            ? 'CCTV 경로 안내를 끝내고 AI가 원격 장치에 도착해야 합니다.'
           : data.reason === 'waiting_for_other'
             ? 'A 장치 유지 중 — AI 동료가 B 장치에 도착하면 다시 E를 누르세요.'
             : '동시 조작 시간이 어긋났습니다. 다시 맞춰 보세요.')
@@ -482,6 +503,7 @@ export default function useWebSocket() {
           addSubtitle('partner', '조금만 기다려, 더 가까이 가서 다시 구조할게!')
         } else if (data.action_type === 'interact_stage_mission'
           || data.action_type === 'intercom_submit'
+          || data.action_type === 'security_direction'
           || data.action_type === 'activate_device'
           || data.action_type === 'activate_basement_device'
           || data.action_type === 'use_floor_transition'

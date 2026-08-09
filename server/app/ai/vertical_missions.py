@@ -4,7 +4,7 @@
 - 옥상: 점멸 순서를 기억하고 직접 옥상을 횡단하는 신호 복원
 - 3층: 방송 미션 (음성으로 의미 전달) -- 이미 vertical_flow.py에 구현됨
 - 2층: 인터폰 협동 (AI가 기호를 읽고 플레이어가 입력)
-- 1층: 동시 조작 (AI와 플레이어가 제한시간 내 동시 장치 작동)
+- 1층: CCTV 음성 관제 (인간 방향 안내 → AI 실제 이동 → 원격 동시 해제)
 - 파이널: 3명 스테이션 도달 + 주문 -- 이미 구현됨
 - 지하: 배전반/급수 밸브/발전기 3개 장치를 올바른 순서로 활성화
 """
@@ -185,10 +185,11 @@ class IntercomMission:
 
 @dataclass
 class SimultaneousMission:
-    """1층 동시 조작 미션.
+    """1층 CCTV 음성 관제 뒤 동시 조작으로 마무리하는 미션.
 
-    플레이어가 F1_DEVICE_A, AI가 F1_DEVICE_B를 time_window 이내에
-    모두 작동시키면 성공한다.
+    인간은 경비실 CCTV에서 보이는 안전 표식을 음성으로 전달하고, AI는
+    세 체크포인트를 실제로 이동한다. 마지막 원격 장치에 도착한 뒤에만
+    인간 A + AI B 동시 조작을 허용한다.
     """
 
     device_a_slot: str = "F1_DEVICE_A"
@@ -201,9 +202,76 @@ class SimultaneousMission:
     ai_ready: bool = False
     completed: bool = False
     attempts: int = 0
+    started_at: float | None = None
+    guidance_actor_id: str | None = None
+    route_commands: list[str] = field(default_factory=lambda: ["직진", "왼쪽", "오른쪽"])
+    route_slots: list[str] = field(default_factory=lambda: [
+        "F1_CCTV_CHECKPOINT_1", "F1_CCTV_CHECKPOINT_2", "F1_DEVICE_B",
+    ])
+    accepted_commands: int = 0
+
+    @property
+    def route_completed(self) -> bool:
+        return self.accepted_commands >= len(self.route_commands) and self.ai_ready
+
+    @property
+    def expected_command(self) -> str | None:
+        if self.accepted_commands >= len(self.route_commands):
+            return None
+        return self.route_commands[self.accepted_commands]
+
+    @property
+    def current_target_slot(self) -> str | None:
+        if self.accepted_commands <= 0:
+            return None
+        return self.route_slots[self.accepted_commands - 1]
+
+    def start_guidance(self, actor_id: str) -> dict:
+        if self.started_at is None:
+            self.started_at = time.time()
+            self.guidance_actor_id = actor_id
+        return self.guidance_state(success=True)
+
+    def submit_direction(self, transcript: str) -> dict:
+        if self.started_at is None:
+            return self.guidance_state(success=False, reason="not_started")
+        expected = self.expected_command
+        if expected is None:
+            return self.guidance_state(success=False, reason="route_complete")
+        normalized = " ".join(transcript.strip().lower().split())
+        command_cues = {
+            "직진": ("직진", "앞으로", "곧장", "복도 끝", "계속 가"),
+            "왼쪽": ("왼쪽", "좌회전", "서쪽"),
+            "오른쪽": ("오른쪽", "우회전", "북쪽"),
+        }
+        matched = any(cue in normalized for cue in command_cues[expected])
+        if not matched:
+            return self.guidance_state(success=False, reason="wrong_direction")
+        self.accepted_commands += 1
+        return self.guidance_state(success=True)
+
+    def guidance_state(self, *, success: bool, reason: str | None = None) -> dict:
+        return {
+            "success": success,
+            "reason": reason,
+            "accepted_commands": self.accepted_commands,
+            "total_commands": len(self.route_commands),
+            "expected_command": self.expected_command,
+            "target_slot": self.current_target_slot,
+            "route_completed": self.route_completed,
+        }
 
     def activate_device(self, device: str) -> dict:
         """장치 활성화. device는 'A' 또는 'B'."""
+        if device not in {"A", "B"}:
+            return {"success": False, "reason": "invalid_device"}
+        if not self.route_completed:
+            return {
+                "success": False,
+                "reason": "guidance_incomplete",
+                "accepted_commands": self.accepted_commands,
+                "total_commands": len(self.route_commands),
+            }
         now = time.time()
         self.attempts += 1
 
@@ -211,8 +279,6 @@ class SimultaneousMission:
             self.device_a_activated_at = now
         elif device == "B":
             self.device_b_activated_at = now
-        else:
-            return {"success": False, "reason": "invalid_device"}
 
         if self.device_a_activated_at is None or self.device_b_activated_at is None:
             other = "B" if device == "A" else "A"

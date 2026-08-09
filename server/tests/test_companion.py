@@ -386,7 +386,7 @@ def test_vertical_companions_split_mission_support_and_route_scout_roles() -> No
     expected_support_reasons = {
         VerticalRoundPhase.FLOOR_3: "vertical_stage_objective",
         VerticalRoundPhase.FLOOR_2: "intercom_ai_position",
-        VerticalRoundPhase.FLOOR_1: "simultaneous_ai_position",
+        VerticalRoundPhase.FLOOR_1: "security_waiting_for_guidance",
     }
     floor_by_phase = {
         VerticalRoundPhase.FLOOR_3: WorldFloor.F3,
@@ -409,6 +409,26 @@ def test_vertical_companions_split_mission_support_and_route_scout_roles() -> No
         assert scout["reason"] == "next_route_scout"
         assert support["target_id"] != scout["target_id"]
         assert support["target"] != scout["target"]
+
+
+def test_floor_one_companion_moves_only_after_cctv_direction_is_accepted() -> None:
+    session = make_session("companion-security-guidance")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
+    partner = session.state.get_player("partner")
+    partner.position.floor = WorldFloor.F1
+    session.state.get_player("seeker").position.floor = WorldFloor.ROOF
+    sim = session.vertical_missions.simultaneous
+
+    waiting = decide_companion_intent(session, "partner")
+    assert waiting["reason"] == "security_waiting_for_guidance"
+
+    sim.start_guidance("human")
+    sim.submit_direction("앞으로 직진")
+    moving = decide_companion_intent(session, "partner")
+
+    assert moving["reason"] == "security_guided_route"
+    assert moving["target_id"] == "security_route_1"
 
 
 def test_intercom_companion_prepositions_but_waits_for_human_to_start_device() -> None:

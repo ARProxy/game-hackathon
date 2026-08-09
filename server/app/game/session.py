@@ -86,6 +86,7 @@ class GameSession:
         self.vertical_progression_enabled = bool(VERTICAL_MAP_CONTRACT["enabled"])
         self.broadcast_mission_actor_id: str | None = None
         self.intercom_mission_actor_id: str | None = None
+        self.security_mission_actor_id: str | None = None
         self.final_station_actor_ids: set[str] = set()
         self.engine = ForbiddenWordEngine(DEFAULT_FORBIDDEN_WORDS)
         self.dynamic_forbidden_enabled = False
@@ -158,6 +159,7 @@ class GameSession:
         self.final_route_choice = random.choice(tuple(FinalRoute))
         self.broadcast_mission_actor_id = None
         self.intercom_mission_actor_id = None
+        self.security_mission_actor_id = None
         self.final_station_actor_ids.clear()
         self.round_data = None
         self.spell_words = []

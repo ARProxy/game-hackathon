@@ -105,6 +105,8 @@
     },
     "F1_SECURITY_ROOM": { "kind": "room", "floor": "F1", "position": [-7.7, 0, -28], "zone": "f1_security", "anchorRoom": "f1_security" },
     "F1_DEVICE_A": { "kind": "device", "floor": "F1", "position": [-7.7, 1.42, -28], "zone": "f1_security", "deviceId": "ip_f1_security", "anchorRoom": "f1_security" },
+    "F1_CCTV_CHECKPOINT_1": { "kind": "mission_checkpoint", "floor": "F1", "position": [-10, 0, -18], "zone": "f1_ring_southeast", "note": "CCTV 직진 표식 뒤 AI가 확인하는 첫 교차로" },
+    "F1_CCTV_CHECKPOINT_2": { "kind": "mission_checkpoint", "floor": "F1", "position": [-24, 0, -18], "zone": "f1_ring_south", "note": "CCTV 좌회전 표식 뒤 AI가 확인하는 두 번째 교차로" },
     "F1_DEVICE_B": { "kind": "device", "floor": "F1", "position": [-24, 1.42, -40.15], "zone": "f1_admin", "deviceId": "ip_f1_admin", "anchorRoom": "f1_admin" },
     "F1_BLOCKER_SPAWN_ENTRY": { "kind": "spawn", "floor": "F1", "position": [-12, 0, -17.8], "zone": "f1_basement_stair", "anchorRoom": "b1_stair" },
     "F1_TO_BASEMENT_FIRE_DOOR": {

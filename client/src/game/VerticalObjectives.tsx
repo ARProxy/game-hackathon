@@ -21,7 +21,7 @@ const MISSION_LABEL: Record<string, string> = {
   rooftop_intro: '점멸 순서를 기억하고 옥상 세 신호를 직접 입력한다',
   floor_3: '3층 방송 장치를 조사한다',
   floor_2: '2층 인터폰에서 AI의 기호 보고를 전달한다',
-  floor_1: 'AI와 3초 안에 두 장치를 함께 작동한다',
+  floor_1: 'CCTV로 AI를 안내하고 원격 봉쇄를 함께 해제한다',
   field_final: '중앙 장치에서 팀과 합류한다',
   basement_final: '지하 장치의 대기 상태를 확인해 순서대로 복구한다',
   escape_open: '빛기둥 아래로 탈출한다',

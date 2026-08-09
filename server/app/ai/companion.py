@@ -257,17 +257,19 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
             vm = session.vertical_missions
             sim = vm.simultaneous
             if not sim.completed and sim.ai_companion_id == companion_id:
-                ai_slot = _get_map_slot(sim.device_b_slot)
+                if sim.started_at is None or sim.current_target_slot is None:
+                    return _intent("REGROUP", None, partner, "security_waiting_for_guidance")
+                ai_slot = _get_map_slot(sim.current_target_slot)
                 bx, _, bz = ai_slot["position"]
                 arrived = math.hypot(partner.position.x - bx, partner.position.z - bz) <= 1.5
-                if arrived and not sim.ai_arrived:
+                if arrived and sim.accepted_commands >= len(sim.route_commands):
                     sim.ai_arrived = True
                     sim.ai_ready = True
                 return {
                     "state": "EXPLORE_ZONE",
-                    "target_id": "simultaneous_mission",
+                    "target_id": f"security_route_{sim.accepted_commands}",
                     "target": {"x": bx, "z": bz},
-                    "reason": "simultaneous_ai_position",
+                    "reason": "security_guided_route",
                 }
 
         # 지하 파이널 미션: AI가 배정된 장치 방으로 이동하여 상태를 보고
@@ -539,10 +541,17 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
                 "zone": session.vertical_round.phase.value,
             }
             # 동시 조작 미션: AI가 도착하면 준비 완료 액션 발생
-            if intent["target_id"] == "simultaneous_mission" and session.vertical_missions is not None:
+            if (
+                str(intent["target_id"]).startswith("security_route_")
+                and session.vertical_missions is not None
+            ):
+                sim = session.vertical_missions.simultaneous
                 action = {
-                    "type": "simultaneous_ready",
+                    "type": "simultaneous_ready" if sim.ai_ready else "security_checkpoint_ready",
                     "phase": session.vertical_round.phase.value,
+                    "accepted_commands": sim.accepted_commands,
+                    "total_commands": len(sim.route_commands),
+                    "expected_command": sim.expected_command,
                 }
             # 지하 파이널: AI가 장치에 도착하면 상태 보고
             elif (
@@ -639,6 +648,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
     "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),
     "simultaneous_ready": (SpeechIntent.DECLARE_ACTION, "준비됐어! 동시에 작동하자!"),
+    "security_checkpoint_ready": (SpeechIntent.REPORT_OBSERVATION, "교차로에 도착했어. 다음 방향을 알려 줘."),
     "basement_device_report": (SpeechIntent.REPORT_OBSERVATION, "장치 상태를 확인했어!"),
 }
 
@@ -676,7 +686,12 @@ def create_action_speech(
             speech_intent = SpeechIntent.FORBIDDEN_AVOIDANCE
 
     is_urgent = action_type in {"rescue", "trap", "seeker_report"}
-    mode = select_speech_mode(intent_state, seeker_distance, is_urgent)
+    if action_type == "intercom_report":
+        mode = SpeechMode.INTERCOM
+    elif action_type in {"security_checkpoint_ready", "simultaneous_ready"}:
+        mode = SpeechMode.RADIO
+    else:
+        mode = select_speech_mode(intent_state, seeker_distance, is_urgent)
 
     return build_speech_event(
         speaker=companion_id,

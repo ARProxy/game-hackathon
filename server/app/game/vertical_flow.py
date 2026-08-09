@@ -338,6 +338,42 @@ def activate_simultaneous_device(session: Any, actor_id: str, device: str) -> di
     }
 
 
+def start_security_guidance(session: Any, actor_id: str) -> dict:
+    """1층 경비실 CCTV 관제를 시작하고 첫 음성 방향 표식을 공개한다."""
+    if session.vertical_round.phase != VerticalRoundPhase.FLOOR_1:
+        raise InvalidProgression("1층 관제 미션 단계가 아니다")
+    validate_current_stage_interaction(session, actor_id)
+    if session.vertical_missions is None:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+    mission = session.vertical_missions.simultaneous
+    state = mission.start_guidance(actor_id)
+    return {
+        "mission": "floor_1_security_guidance",
+        "prompt": (
+            "CCTV의 안전 표식을 보고 Q로 AI에게 방향을 알려 주세요. "
+            f"첫 표식: {state['expected_command']}"
+        ),
+        **state,
+    }
+
+
+def submit_security_direction(session: Any, actor_id: str, transcript: str) -> dict:
+    """경비실 앞 인간 발화로만 AI의 다음 관제 경로를 승인한다."""
+    if session.vertical_round.phase != VerticalRoundPhase.FLOOR_1:
+        raise InvalidProgression("1층 관제 미션 단계가 아니다")
+    validate_current_stage_interaction(session, actor_id)
+    if session.vertical_missions is None:
+        raise InvalidProgression("수직 미션이 초기화되지 않았다")
+    mission = session.vertical_missions.simultaneous
+    if mission.guidance_actor_id != actor_id:
+        raise InvalidProgression("관제 장치를 시작한 플레이어만 방향을 전달할 수 있다")
+    return {
+        "mission": "floor_1_security_guidance",
+        "actor_id": actor_id,
+        **mission.submit_direction(transcript),
+    }
+
+
 def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
     if not session.vertical_progression_enabled:
         raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")

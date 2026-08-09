@@ -22,7 +22,9 @@ from app.game.vertical_flow import (
     complete_current_stage,
     mission_interaction_position,
     start_intercom_mission,
+    start_security_guidance,
     submit_intercom_answer,
+    submit_security_direction,
 )
 
 
@@ -191,8 +193,16 @@ class TestIntercomMission:
 # ---------------------------------------------------------------------------
 
 class TestSimultaneousMission:
+    @staticmethod
+    def complete_guidance(mission: SimultaneousMission) -> None:
+        mission.start_guidance("human")
+        for command in mission.route_commands:
+            assert mission.submit_direction(command)["success"]
+        mission.ai_ready = True
+
     def test_both_devices_within_window_succeeds(self) -> None:
         mission = SimultaneousMission(time_window=3.0)
+        self.complete_guidance(mission)
         mission.activate_device("A")
         result = mission.activate_device("B")
         assert result["success"]
@@ -200,12 +210,14 @@ class TestSimultaneousMission:
 
     def test_single_device_waits_for_other(self) -> None:
         mission = SimultaneousMission()
+        self.complete_guidance(mission)
         result = mission.activate_device("A")
         assert not result["success"]
         assert result["reason"] == "waiting_for_other"
 
     def test_timing_mismatch_resets(self) -> None:
         mission = SimultaneousMission(time_window=0.0)
+        self.complete_guidance(mission)
         mission.device_a_activated_at = time.time() - 5.0
         result = mission.activate_device("B")
         assert not result["success"]
@@ -218,6 +230,20 @@ class TestSimultaneousMission:
         result = mission.activate_device("C")
         assert not result["success"]
         assert result["reason"] == "invalid_device"
+
+    def test_cctv_guidance_requires_three_supported_directions(self) -> None:
+        mission = SimultaneousMission()
+        started = mission.start_guidance("human")
+        assert started["expected_command"] == "직진"
+        assert not mission.submit_direction("뒤로 가")["success"]
+        assert mission.submit_direction("복도 끝까지 앞으로 가")["success"]
+        assert mission.submit_direction("서쪽으로 좌회전")["success"]
+        final = mission.submit_direction("북쪽으로 우회전")["success"]
+        assert final
+        assert mission.expected_command is None
+        assert not mission.route_completed
+        mission.ai_ready = True
+        assert mission.route_completed
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +381,37 @@ class TestIntercomFlow:
 
 
 class TestSimultaneousFlow:
+    def test_security_guidance_moves_ai_route_before_unlock(self) -> None:
+        from app.ai.companion import decide_companion_intent
+        from app.game.map_slots import get_map_slot
+
+        session, human = active_session()
+        advance_to_floor(session, human, VerticalRoundPhase.FLOOR_1)
+        slot = get_map_slot("F1_DEVICE_A")
+        human.position.x, human.position.y, human.position.z = slot["position"]
+        human.position.floor = WorldFloor.F1
+        partner = session.state.get_player("partner")
+        partner.position.floor = WorldFloor.F1
+        session.state.get_player("seeker").position.floor = WorldFloor.ROOF
+
+        started = start_security_guidance(session, "human")
+        assert started["expected_command"] == "직진"
+        assert not submit_security_direction(session, "human", "뒤로 가")["success"]
+
+        for command in ("앞으로", "좌회전", "우회전"):
+            progress = submit_security_direction(session, "human", command)
+            assert progress["success"]
+            intent = decide_companion_intent(session, "partner")
+            target = get_map_slot(progress["target_slot"])["position"]
+            assert intent["target"] == {"x": target[0], "z": target[2]}
+
+        assert not session.vertical_missions.simultaneous.route_completed
+        partner.position.x, partner.position.y, partner.position.z = get_map_slot(
+            "F1_DEVICE_B",
+        )["position"]
+        decide_companion_intent(session, "partner")
+        assert session.vertical_missions.simultaneous.route_completed
+
     def test_activate_device_a_near_slot(self) -> None:
         session, human = active_session()
         advance_to_floor(session, human, VerticalRoundPhase.FLOOR_1)
@@ -366,7 +423,7 @@ class TestSimultaneousFlow:
 
         result = activate_simultaneous_device(session, "human", "A")
         assert not result["success"]
-        assert result["reason"] == "waiting_for_other"
+        assert result["reason"] == "guidance_incomplete"
 
     def test_both_devices_activated_completes(self) -> None:
         session, human = active_session()
@@ -382,6 +439,12 @@ class TestSimultaneousFlow:
         slot_b = get_map_slot("F1_DEVICE_B")
         partner.position.x, partner.position.y, partner.position.z = slot_b["position"]
         partner.position.floor = WorldFloor.F1
+
+        sim = session.vertical_missions.simultaneous
+        sim.start_guidance("human")
+        for command in sim.route_commands:
+            assert sim.submit_direction(command)["success"]
+        sim.ai_ready = True
 
         activate_simultaneous_device(session, "partner", "B")
         result = activate_simultaneous_device(session, "human", "A")

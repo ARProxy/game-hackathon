@@ -391,7 +391,11 @@ class TestVerticalStageInteraction:
             human.position.floor = WorldFloor.F1
             partner.position.x, partner.position.y, partner.position.z = get_map_slot("F1_DEVICE_B")["position"]
             partner.position.floor = WorldFloor.F1
-            session.vertical_missions.simultaneous.ai_ready = True
+            sim = session.vertical_missions.simultaneous
+            sim.start_guidance("player1")
+            sim.accepted_commands = len(sim.route_commands)
+            sim.ai_ready = True
+            session.security_mission_actor_id = "player1"
 
             ws.send_json({
                 "type": "action",
