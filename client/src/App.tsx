@@ -5,7 +5,7 @@ import { Physics } from '@react-three/rapier'
 import * as THREE from 'three'
 import SchoolCampus, { SPAWNS, type FloorKey } from './game/SchoolCampus'
 import Player, { type PlayerHandle } from './game/Player'
-import { CHARACTERS } from './game/Characters'
+import { CHARACTERS, CharacterModel } from './game/Characters'
 import PlayerLight from './game/PlayerLight'
 import Seeker from './game/Seeker'
 import Props from './game/Props'
@@ -37,6 +37,8 @@ type CameraMode = 'reference' | '3d'
 
 /** Claude 원본 비교와 층 필터는 개발 서버에서만 사용할 수 있다. */
 const DEV_TOOLS_ENABLED = import.meta.env.DEV
+const SEEKER_VISUAL_PREVIEW = DEV_TOOLS_ENABLED
+  && new URLSearchParams(window.location.search).get('preview') === 'seeker'
 
 /* ─────────────────────────────────────────────
  * 층 필터 (원본 비교 모드에서 숫자키로 전환)
@@ -368,7 +370,34 @@ function GameController() {
  * Tab: Claude 원본 비교 ↔ 3D 전환
  * 숫자키 1~4, 0: 층별 필터 (원본 비교 모드에서만)
  * ───────────────────────────────────────────── */
-function App() {
+/** `/\?preview=seeker`에서만 열리는 입체 술래 디자인 검수 무대. */
+function SeekerVisualPreview() {
+  const movementRef = useRef(0.72)
+  return (
+    <div style={{ width: '100vw', height: '100vh', background: '#060609' }}>
+      <Canvas shadows camera={{ position: [0.1, 1.58, 5.3], fov: 42, near: 0.1, far: 100 }}>
+        <color attach="background" args={['#060609']} />
+        <fog attach="fog" args={['#060609', 7, 15]} />
+        <ambientLight intensity={0.28} color="#66778A" />
+        <spotLight position={[-2.8, 4.8, 3.8]} intensity={34} angle={0.42} penumbra={0.72} color="#C7D8E8" castShadow />
+        <pointLight position={[2.4, 1.2, 2.2]} intensity={10} distance={7} color="#6E0B18" />
+        <group position={[0, -1.15, 0]} rotation={[0, -0.05, 0]}>
+          <CharacterModel id="R00" movementRef={movementRef} />
+        </group>
+        <mesh position={[0, -1.16, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <circleGeometry args={[3.8, 48]} />
+          <meshStandardMaterial color="#111116" roughness={0.95} />
+        </mesh>
+        <OrbitControls target={[0, 0.35, 0]} minDistance={2.8} maxDistance={8} enablePan={false} />
+      </Canvas>
+      <div style={{ position: 'fixed', left: 24, bottom: 20, color: '#AAB4C0', fontFamily: 'monospace', fontSize: 12 }}>
+        SEEKER VOLUMETRIC REVIEW · drag / zoom
+      </div>
+    </div>
+  )
+}
+
+function GameApp() {
   const [entryScreen, setEntryScreen] = useState<EntryScreen>('title')
   const [playerCharacterId, setPlayerCharacterId] = useState(runnerIds[0] ?? 'R01')
   const [isGameRunning, setGameRunning] = useState(false)
@@ -517,6 +546,10 @@ function App() {
       </GameErrorBoundary>}
     </div>
   )
+}
+
+function App() {
+  return SEEKER_VISUAL_PREVIEW ? <SeekerVisualPreview /> : <GameApp />
 }
 
 export default App

@@ -9,7 +9,6 @@
  */
 import { useMemo, useRef, type Ref, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
 
@@ -69,24 +68,31 @@ export const CAMO = { color: '#1A2530', opacity: 0.26 }
 export const CHARACTERS: Character[] = [
   {
     id: 'R00', tag: 'S1', name: '우는 껍질', role: 'seeker',
-    c: '#191417', glow: '#9E1827', accessory: '시선을 놓지 않는 가면과 비정상적으로 긴 팔', shoes: '맨발',
+    c: '#171316', glow: '#A30F24', accessory: '갈라진 입체 가면과 바닥에 닿는 비대칭 팔', shoes: '맨발',
     note: '청각 특화 추격자',
     parts: [
-      { t: 'ring', p: [0, 0.015, 0], ri: 0.18, ro: 0.72, c: '#020204', op: 0.72, seg: 28, part: 'shadow' },
-      { t: 'cap', p: [-0.13, 0.62, 0], r: 0.075, h: 1.08, c: '#181316', rot: [0.03, 0, -0.02], part: 'leg' },
-      { t: 'cap', p: [0.13, 0.62, -0.02], r: 0.07, h: 1.12, c: '#21171A', rot: [-0.04, 0, 0.025], part: 'leg' },
-      { t: 'sph', p: [-0.13, 0.055, 0.13], r: 0.14, s: [0.9, 0.26, 1.85], c: '#0E0B0D', part: 'shoe' },
-      { t: 'sph', p: [0.13, 0.055, 0.13], r: 0.14, s: [0.9, 0.26, 1.85], c: '#100C0E', part: 'shoe' },
-      { t: 'cap', p: [0, 1.58, 0], r: 0.2, h: 0.92, s: [0.82, 1, 0.48], c: '#24191D', rot: [0, 0, -0.07], part: 'body' },
-      { t: 'sph', p: [-0.2, 2.12, -0.02], r: 0.36, s: [1.35, 0.62, 0.72], c: '#2D1E22', part: 'body' },
-      { t: 'cap', p: [-0.45, 1.24, 0.02], r: 0.048, h: 2.16, c: '#1B1215', rot: [0, 0, -0.055], part: 'arm' },
-      { t: 'cap', p: [0.38, 1.22, -0.03], r: 0.044, h: 2.22, c: '#25171B', rot: [0.03, 0, 0.075], part: 'arm' },
-      { t: 'sph', p: [-0.5, 0.12, 0.08], r: 0.095, s: [0.62, 1.45, 0.55], c: '#342026', part: 'hand' },
-      { t: 'sph', p: [0.46, 0.08, 0.04], r: 0.09, s: [0.6, 1.55, 0.5], c: '#2A191E', part: 'hand' },
-      { t: 'sph', p: [-0.17, 2.48, -0.02], r: 0.29, s: [0.78, 1.2, 0.62], c: '#151013', part: 'head' },
-      { t: 'tor', p: [0, 1.76, 0.17], r: 0.18, tb: 0.014, s: [1.2, 0.55, 1], c: '#6F2730', rot: [0, 0, 0.05], part: 'rib' },
-      { t: 'tor', p: [-0.01, 1.57, 0.17], r: 0.17, tb: 0.012, s: [1.1, 0.5, 1], c: '#59212A', rot: [0, 0, -0.03], part: 'rib' },
-      { t: 'sph', p: [0, 1.3, 0.15], r: 0.055, s: [0.7, 1.45, 0.45], c: '#A41325', em: 0.55, part: 'woundLight' },
+      { t: 'ring', p: [0, 0.018, 0], ri: 0.16, ro: 0.82, c: '#010103', op: 0.8, seg: 28, part: 'shadow' },
+      { t: 'cap', p: [-0.145, 0.65, 0.01], r: 0.078, h: 1.12, c: '#171215', rot: [0.04, 0, -0.025], part: 'leg' },
+      { t: 'cap', p: [0.13, 0.64, -0.035], r: 0.067, h: 1.15, c: '#21171A', rot: [-0.05, 0, 0.04], part: 'leg' },
+      { t: 'sph', p: [-0.15, 0.055, 0.16], r: 0.145, s: [0.92, 0.25, 2.05], c: '#0B090B', part: 'shoe' },
+      { t: 'sph', p: [0.14, 0.052, 0.13], r: 0.14, s: [0.88, 0.23, 1.82], c: '#0D0A0C', part: 'shoe' },
+      { t: 'sph', p: [-0.015, 1.13, -0.02], r: 0.21, s: [0.96, 0.72, 0.56], c: '#20161A', part: 'pelvis' },
+      { t: 'cap', p: [-0.04, 1.59, -0.025], r: 0.185, h: 0.82, s: [0.84, 1, 0.5], c: '#25191D', rot: [0.02, 0, -0.09], part: 'body' },
+      { t: 'sph', p: [-0.2, 2.04, -0.04], r: 0.38, s: [1.42, 0.58, 0.7], c: '#302025', rot: [0, 0, -0.12], part: 'shoulder' },
+      { t: 'cap', p: [-0.51, 1.23, 0.015], r: 0.052, h: 2.23, c: '#191114', rot: [0.025, 0, -0.085], part: 'arm' },
+      { t: 'cap', p: [0.39, 1.18, -0.045], r: 0.044, h: 2.3, c: '#26171C', rot: [0.045, 0, 0.09], part: 'arm' },
+      { t: 'sph', p: [-0.58, 0.1, 0.1], r: 0.105, s: [0.58, 1.65, 0.5], c: '#362127', part: 'hand' },
+      { t: 'sph', p: [0.5, 0.045, 0.055], r: 0.09, s: [0.54, 1.9, 0.46], c: '#2A191E', part: 'hand' },
+      { t: 'cap', p: [-0.635, 0.02, 0.18], r: 0.016, h: 0.26, c: '#4A2A31', rot: [1.15, 0, -0.12], part: 'finger' },
+      { t: 'cap', p: [-0.58, 0.015, 0.2], r: 0.014, h: 0.3, c: '#4A2A31', rot: [1.22, 0, 0.02], part: 'finger' },
+      { t: 'cap', p: [0.47, -0.01, 0.16], r: 0.014, h: 0.31, c: '#40232A', rot: [1.2, 0, -0.03], part: 'finger' },
+      { t: 'cap', p: [0.525, -0.005, 0.14], r: 0.013, h: 0.27, c: '#40232A', rot: [1.1, 0, 0.13], part: 'finger' },
+      { t: 'cap', p: [-0.13, 2.25, -0.03], r: 0.07, h: 0.22, c: '#171114', rot: [0, 0, -0.16], part: 'neck' },
+      { t: 'sph', p: [-0.12, 2.49, -0.055], r: 0.31, s: [0.82, 1.22, 0.68], c: '#141013', rot: [0, 0, -0.08], part: 'headBack' },
+      { t: 'tor', p: [-0.015, 1.8, 0.17], r: 0.19, tb: 0.015, s: [1.25, 0.52, 1], c: '#702530', rot: [0, 0, 0.04], part: 'rib' },
+      { t: 'tor', p: [-0.025, 1.61, 0.165], r: 0.175, tb: 0.013, s: [1.15, 0.48, 1], c: '#572029', rot: [0, 0, -0.04], part: 'rib' },
+      { t: 'tor', p: [-0.03, 1.44, 0.15], r: 0.15, tb: 0.011, s: [1.05, 0.45, 1], c: '#421A21', rot: [0, 0, 0.02], part: 'rib' },
+      { t: 'sph', p: [-0.02, 1.28, 0.16], r: 0.058, s: [0.65, 1.55, 0.42], c: '#A30F24', em: 0.72, part: 'woundLight' },
     ],
   },
   {
@@ -410,19 +416,91 @@ function PartMesh({ part, opacity, tint, tagMap }: {
   )
 }
 
-function HorrorFaceDecal() {
-  const texture = useTexture('/assets/seeker-face-v1.png')
-  texture.colorSpace = THREE.SRGBColorSpace
+/** 주 술래의 얼굴은 카메라를 따라 도는 평면 이미지가 아니라 머리에 결합된 입체 구조다. */
+function SeekerFaceRig() {
+  const faceRef = useRef<THREE.Group>(null)
+  const jawRef = useRef<THREE.Mesh>(null)
+  const leftEyeRef = useRef<THREE.Mesh>(null)
+  const rightEyeRef = useRef<THREE.Mesh>(null)
+
+  useFrame(({ clock }) => {
+    const face = faceRef.current
+    const jaw = jawRef.current
+    const twitch = Math.sin(clock.elapsedTime * 11.3) > 0.965 ? 1 : 0
+    if (face) {
+      face.rotation.y = Math.sin(clock.elapsedTime * 0.74) * 0.035 + twitch * 0.12
+      face.rotation.z = -0.055 + Math.sin(clock.elapsedTime * 1.31) * 0.018 - twitch * 0.045
+    }
+    if (jaw) jaw.scale.y = 1 + Math.max(0, Math.sin(clock.elapsedTime * 2.2)) * 0.13 + twitch * 0.18
+    const eyeShift = Math.sin(clock.elapsedTime * 0.91) * 0.012
+    if (leftEyeRef.current) leftEyeRef.current.position.x = -0.085 + eyeShift
+    if (rightEyeRef.current) rightEyeRef.current.position.x = 0.085 + eyeShift
+  })
+
+  const toothXs = [-0.075, -0.025, 0.025, 0.075]
   return (
-    <sprite position={[-0.17, 2.5, 0.2]} scale={[0.74, 1.08, 1]} renderOrder={7}>
-      <spriteMaterial
-        map={texture}
-        transparent
-        alphaTest={0.08}
-        depthWrite={false}
-        toneMapped
-      />
-    </sprite>
+    <group ref={faceRef} position={[-0.12, 2.49, 0.015]}>
+      {/* 뒤통수와 분리되지 않는 두꺼운 석고 가면 */}
+      <mesh position={[0, 0, 0.18]} scale={[0.76, 1.12, 0.4]} castShadow>
+        <sphereGeometry args={[0.3, 16, 12]} />
+        <meshStandardMaterial color="#B7ADA2" roughness={0.94} metalness={0.01} />
+      </mesh>
+      <mesh position={[0, 0.005, 0.284]} scale={[0.77, 1.12, 0.5]}>
+        <torusGeometry args={[0.232, 0.018, 8, 20]} />
+        <meshStandardMaterial color="#4B3033" roughness={0.85} />
+      </mesh>
+
+      {/* 안구가 아니라 깊게 파인 눈구멍 안에서 작은 반사점만 움직인다. */}
+      {[-0.09, 0.09].map((x) => (
+        <mesh key={`socket-${x}`} position={[x, 0.08, 0.34]} scale={[1, 0.62, 0.38]}>
+          <sphereGeometry args={[0.09, 12, 8]} />
+          <meshStandardMaterial color="#09070A" roughness={1} />
+        </mesh>
+      ))}
+      <mesh ref={leftEyeRef} position={[-0.085, 0.082, 0.391]}>
+        <sphereGeometry args={[0.018, 8, 6]} />
+        <meshStandardMaterial color="#D7C8B4" emissive="#6E0B18" emissiveIntensity={0.45} roughness={0.35} />
+      </mesh>
+      <mesh ref={rightEyeRef} position={[0.085, 0.082, 0.391]}>
+        <sphereGeometry args={[0.015, 8, 6]} />
+        <meshStandardMaterial color="#AFA293" emissive="#6E0B18" emissiveIntensity={0.32} roughness={0.4} />
+      </mesh>
+
+      {/* 검은 구강은 얼굴 표면보다 안쪽에 있고, 턱과 치아는 별도 체적을 가진다. */}
+      <mesh ref={jawRef} position={[0, -0.125, 0.342]} scale={[0.78, 1.18, 0.34]}>
+        <sphereGeometry args={[0.135, 14, 10]} />
+        <meshStandardMaterial color="#080609" roughness={0.92} />
+      </mesh>
+      <mesh position={[0, -0.218, 0.305]} scale={[0.72, 0.42, 0.5]}>
+        <sphereGeometry args={[0.205, 14, 10]} />
+        <meshStandardMaterial color="#A69B91" roughness={0.96} />
+      </mesh>
+      {toothXs.map((x, index) => (
+        <group key={`teeth-${x}`}>
+          <mesh position={[x, -0.08, 0.444]} rotation={[0, 0, Math.PI]}>
+            <coneGeometry args={[0.016 + (index % 2) * 0.004, 0.068, 5]} />
+            <meshStandardMaterial color="#C8BBA5" roughness={0.78} />
+          </mesh>
+          <mesh position={[x * 0.9, -0.18, 0.438]}>
+            <coneGeometry args={[0.015, 0.06, 5]} />
+            <meshStandardMaterial color="#9E9280" roughness={0.82} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* 균열도 텍스처가 아니라 표면 앞으로 나온 얇은 홈 구조로 만든다. */}
+      {[
+        [-0.11, 0.2, -0.48, 0.105], [-0.075, 0.15, -0.92, 0.082],
+        [0.12, 0.19, 0.58, 0.11], [0.085, 0.145, 1.02, 0.075],
+        [-0.135, -0.04, -0.18, 0.095],
+      ].map(([x, y, rz, length], index) => (
+        <mesh key={`crack-${index}`} position={[x, y, 0.421]} rotation={[0, 0, rz]}>
+          <boxGeometry args={[0.012, length, 0.012]} />
+          <meshStandardMaterial color="#3B2026" roughness={1} />
+        </mesh>
+      ))}
+      <pointLight position={[0, -0.08, 0.5]} color="#8F0B20" intensity={1.8} distance={1.15} decay={2} />
+    </group>
   )
 }
 
@@ -500,7 +578,7 @@ export function CharacterModel({ id, frozen = false, camo = false, glowPulse = 1
     <group>
       <group ref={bodyRef}>
         {ch.parts.map((p, i) => !isFootPart(p) && renderPart(p, i))}
-        {ch.id === 'R00' && <HorrorFaceDecal />}
+        {ch.id === 'R00' && <SeekerFaceRig />}
       </group>
       <group ref={leftFootRef}>
         {ch.parts.map((p, i) => isFootPart(p) && p.p[0] < 0 && renderPart(p, i))}
