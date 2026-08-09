@@ -65,37 +65,43 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
 
         human.position.floor = partner.position.floor = partner_two.position.floor = WorldFloor.ROOF
 
-        for companion_id, actor in (("partner", partner), ("partner-2", partner_two)):
+        slot_by_signal = {
+            "center": "ROOF_SIGNAL_CENTER",
+            "east": "ROOF_SIGNAL_EAST",
+            "west": "ROOF_SIGNAL_WEST",
+        }
+        while self.session.vertical_missions.rooftop.next_signal_id is not None:
+            signal_id = self.session.vertical_missions.rooftop.next_signal_id
+            if signal_id == "center":
+                position = get_map_slot(slot_by_signal[signal_id])["interactionPosition"]
+                human.position.x, human.position.y, human.position.z = position
+                await self.manager.handle_message(self.room_id, self.player_id, {
+                    "type": "action",
+                    "payload": {"action_type": "interact_stage_mission", "signal_id": signal_id},
+                })
+                continue
+
+            companion_id = "partner" if signal_id == "east" else "partner-2"
+            actor = self.session.state.get_player(companion_id)
             intent = decide_companion_intent(self.session, companion_id)
             actor.position.x = intent["target"]["x"]
             actor.position.y = 10.8
             actor.position.z = intent["target"]["z"]
             _, action = advance_companion(self.session, companion_id)
             assert action == {
-                "type": "rooftop_signal_observed",
-                "signal_id": intent["target_id"].rsplit("_", 1)[-1],
-                "guiding": intent["reason"] == "rooftop_signal_guide",
+                "type": "rooftop_signal_activate",
+                "signal_id": signal_id,
+                "guiding": True,
             }
             await self.manager._handle_companion_action(self.room_id, companion_id, action)
-
-        slot_by_signal = {
-            "center": "ROOF_SIGNAL_CENTER",
-            "east": "ROOF_SIGNAL_EAST",
-            "west": "ROOF_SIGNAL_WEST",
-        }
-        for signal_id in self.session.vertical_missions.rooftop.sequence:
-            position = get_map_slot(slot_by_signal[signal_id])["interactionPosition"]
-            human.position.x, human.position.y, human.position.z = position
-            await self.manager.handle_message(self.room_id, self.player_id, {
-                "type": "action",
-                "payload": {"action_type": "interact_stage_mission", "signal_id": signal_id},
-            })
 
         signal_events = [
             message for message in self.websocket.messages
             if message["type"] == "rooftop_signal_progress"
         ]
-        assert [event["actor_id"] for event in signal_events] == [self.player_id] * 3
+        assert {event["actor_id"] for event in signal_events} == {
+            self.player_id, "partner", "partner-2",
+        }
         assert signal_events[-1]["completed"]
         advanced = next(
             message for message in reversed(self.websocket.messages)

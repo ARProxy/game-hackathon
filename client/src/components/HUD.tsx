@@ -553,12 +553,14 @@ export default function HUD() {
                 기억 신호 입력 {rooftopSignal.progress}/{rooftopSignal.total}
                 {' · '}
                 {rooftopSignal.nextSignalId
-                  ? `다음: AI가 ${ROOFTOP_SIGNAL_LABELS[rooftopSignal.nextSignalId] ?? '목표'} 신호 안내 중`
+                  ? rooftopSignal.nextSignalId === 'center'
+                    ? '플레이어 차례 · 중앙 신호에서 E 입력'
+                    : `동료 차례 · AI가 ${ROOFTOP_SIGNAL_LABELS[rooftopSignal.nextSignalId]} 신호 입력 중`
                   : '완료'}
                 {rooftopSignal.nextSignalId !== null && (
                   <div style={{ marginTop: 3, color: '#BDEFFF', opacity: .8 }}>
                     R · 점멸 순서 다시 보기<br />
-                    AI 동료는 동·서 위치를 보고하지만 입력은 대신하지 않습니다.
+                    역할 분담 · 나=중앙 / 동료 1=동쪽 / 동료 2=서쪽
                   </div>
                 )}
               </div>

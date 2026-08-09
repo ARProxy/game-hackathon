@@ -369,10 +369,11 @@ def test_rooftop_companion_reports_assigned_signal_once_on_arrival() -> None:
 
     _, observed_action = advance_companion(session, "partner")
 
+    guiding = intent["reason"] == "rooftop_signal_guide"
     assert observed_action == {
-        "type": "rooftop_signal_observed",
+        "type": "rooftop_signal_activate" if guiding and signal_id in {"east", "west"} else "rooftop_signal_observed",
         "signal_id": signal_id,
-        "guiding": intent["reason"] == "rooftop_signal_guide",
+        "guiding": guiding,
     }
     assert intent["target_id"] in session.companion_states["partner"].memory
 

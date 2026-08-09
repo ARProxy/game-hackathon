@@ -1997,6 +1997,30 @@ class ConnectionManager:
                     "closed_floor": closed_floor.value if closed_floor else None,
                     "progression": session.vertical_progression_payload(),
                 })
+        elif action["type"] == "rooftop_signal_activate":
+            signal_id = str(action.get("signal_id", ""))
+            signal_label = {"east": "동쪽", "west": "서쪽"}.get(signal_id, "담당")
+            try:
+                signal = activate_rooftop_signal(session, companion_id, signal_id)
+            except InvalidProgression:
+                # 같은 틱에 인간 입력이 먼저 반영되면 다음 목표 계산으로 넘긴다.
+                return
+            await self.broadcast(room_id, {
+                "type": "rooftop_signal_progress",
+                "actor_id": companion_id,
+                **signal,
+            })
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report",
+                "companion_id": companion_id,
+                "message": f"{signal_label} 신호 입력 완료! 다음 순서를 확인할게.",
+                "phase": VerticalRoundPhase.ROOFTOP_INTRO.value,
+                "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
+            }, companion_id)
+            if signal["completed"]:
+                event = complete_current_stage(session, companion_id)
+                await self._publish_vertical_stage_advance(room_id, companion_id, event)
         elif action["type"] == "rooftop_signal_observed":
             signal_id = str(action.get("signal_id", ""))
             signal_label = {"center": "중앙", "east": "동쪽", "west": "서쪽"}.get(signal_id, "담당")

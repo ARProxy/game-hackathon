@@ -490,7 +490,11 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
                 "zone": session.vertical_round.phase.value,
             }
             action = {
-                "type": "rooftop_signal_observed",
+                "type": (
+                    "rooftop_signal_activate"
+                    if guiding and signal_id in {"east", "west"}
+                    else "rooftop_signal_observed"
+                ),
                 "signal_id": signal_id,
                 "guiding": guiding,
             }
@@ -630,6 +634,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "trap": (SpeechIntent.REPORT_OBSERVATION, "트랩에 걸렸어!"),
     "vertical_objective": (SpeechIntent.REPORT_OBSERVATION, "장치를 찾았어."),
     "rooftop_signal_observed": (SpeechIntent.REPORT_OBSERVATION, "담당 중계기 위치를 확보했어. 입력은 네가 맡아!"),
+    "rooftop_signal_activate": (SpeechIntent.DECLARE_ACTION, "내 담당 중계기를 입력할게!"),
     "route_scout_report": (SpeechIntent.REPORT_OBSERVATION, "다음 층으로 이어지는 경로를 확인했어."),
     "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
     "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),
