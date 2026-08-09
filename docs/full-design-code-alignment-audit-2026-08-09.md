@@ -1,5 +1,7 @@
 # 기획 1~5 대비 전체 코드 일치도 감사
 
+> **역사 기록:** 이 문서는 수정 전 67% 상태의 최초 감사다. 최신 재감사와 제출 판정은 `final-design-code-alignment-audit-2026-08-09.md`를 따른다.
+
 > 감사일: 2026-08-09  
 > 범위: 타이틀부터 결과까지의 실제 솔로 런타임, 서버 권위, AI 동료, 술래, 수직 맵, 층별 미션, 금기어, 멀티플레이 기반  
 > 정본: `game-design.md` → `game-design-v2.md` → `game-design-v3.md` → `game-design-v4.md` → `game-design-v5.md`, 그리고 `design-thinking-journey.md`  
