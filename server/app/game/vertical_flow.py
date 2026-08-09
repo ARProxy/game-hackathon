@@ -160,7 +160,7 @@ def activate_rooftop_signal(session: Any, actor_id: str, signal_id: str) -> dict
     if not session.vertical_progression_enabled:
         raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")
     if session.vertical_round.phase != VerticalRoundPhase.ROOFTOP_INTRO:
-        raise InvalidProgression("옥상 신호 동기화 단계가 아니다")
+        raise InvalidProgression("옥상 기억 신호 입력 단계가 아니다")
     actor = session.state.get_player(actor_id)
     if (
         actor is None
@@ -182,7 +182,7 @@ def activate_rooftop_signal(session: Any, actor_id: str, signal_id: str) -> dict
     if not result.get("success"):
         if result.get("reason") == "already_active":
             raise InvalidProgression("이미 동기화한 옥상 신호 장치다")
-        raise InvalidProgression("점등된 안내 신호의 순서대로 조작해야 한다")
+        raise InvalidProgression("처음 본 점멸 순서와 다르다. 기억한 다음 중계기를 찾아야 한다")
     return result
 
 

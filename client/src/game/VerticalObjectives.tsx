@@ -17,7 +17,7 @@ const MISSION_SLOT: Record<string, string> = {
   field_final: 'FIELD_FINAL_STATION_B',
 }
 const MISSION_LABEL: Record<string, string> = {
-  rooftop_intro: '점등 순서대로 옥상 신호 세 곳을 동기화한다',
+  rooftop_intro: '점멸 순서를 기억하고 옥상 세 신호를 직접 입력한다',
   floor_3: '3층 방송 장치를 조사한다',
   floor_2: '2층 인터폰에서 AI의 기호 보고를 전달한다',
   floor_1: 'AI와 3초 안에 두 장치를 함께 작동한다',
@@ -62,45 +62,62 @@ const positionOf = (slot: Slot): [number, number, number] => {
   return [value?.[0] ?? 0, value?.[1] ?? 0, value?.[2] ?? 0]
 }
 
-function RooftopSignalBeacon({ position, label, current, activated, progress, total }: {
+type RooftopSignalId = typeof ROOFTOP_SIGNALS[number]['id']
+
+function RooftopSignalBeacon({ position, label, previewOrder, nearby, activated, progress, total }: {
   position: [number, number, number]
   label: string
-  current: boolean
+  previewOrder: number | null
+  nearby: boolean
   activated: boolean
   progress: number
   total: number
 }) {
   const pulseRef = useRef<THREE.Group>(null)
   useFrame(({ clock }) => {
-    if (!pulseRef.current || !current) return
+    if (!pulseRef.current || (previewOrder === null && !nearby)) return
     const pulse = 1 + Math.sin(clock.elapsedTime * 4.5) * 0.12
     pulseRef.current.scale.setScalar(pulse)
     pulseRef.current.rotation.y = clock.elapsedTime * 0.55
   })
-  const color = activated ? '#6DCF92' : current ? '#FFD166' : '#385164'
+  const highlighted = previewOrder !== null || nearby
+  const color = activated ? '#6DCF92' : previewOrder !== null ? '#FFD166' : nearby ? '#8DFFF2' : '#385164'
   return (
     <group position={position}>
       <group ref={pulseRef}>
         <mesh position={[0, 0.08, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.72, 1.02, 36]} />
-          <meshBasicMaterial color={color} transparent opacity={activated ? 0.55 : current ? 0.92 : 0.22} />
+          <meshBasicMaterial color={color} transparent opacity={activated ? 0.55 : highlighted ? 0.92 : 0.16} />
         </mesh>
-        {current && (
-          <mesh position={[0, 1.9, 0]}>
-            <octahedronGeometry args={[0.22, 0]} />
-            <meshBasicMaterial color="#FFD166" />
-          </mesh>
+        {previewOrder !== null && (
+          <>
+            <mesh position={[0, 3.2, 0]}>
+              <cylinderGeometry args={[0.14, 0.52, 6.2, 12, 1, true]} />
+              <meshBasicMaterial
+                color="#FFD166" transparent opacity={0.38} depthWrite={false}
+                blending={THREE.AdditiveBlending}
+              />
+            </mesh>
+            <mesh position={[0, 2.15, 0]}>
+              <octahedronGeometry args={[0.28, 0]} />
+              <meshBasicMaterial color="#FFF2A8" />
+            </mesh>
+          </>
         )}
       </group>
-      <pointLight position={[0, 1.15, 0]} color={color} intensity={current ? 10 : activated ? 4 : 0.5} distance={current ? 7 : 3.5} />
-      {(current || activated) && (
+      <pointLight position={[0, 1.15, 0]} color={color} intensity={highlighted ? 10 : activated ? 4 : 0.5} distance={highlighted ? 7 : 3.5} />
+      {(highlighted || activated) && (
         <Html position={[0, 2.35, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
           <div style={{
             whiteSpace: 'nowrap', padding: '7px 11px', borderRadius: 8,
             border: `1px solid ${color}`, color: activated ? '#CFFFE0' : '#FFE7A3',
             background: 'rgba(5,15,22,.94)', fontSize: 12, fontWeight: 800,
           }}>
-            {activated ? `완료 · ${label}` : `E · ${label} 동기화 (${progress + 1}/${total})`}
+            {activated
+              ? `입력 완료 · ${label}`
+              : previewOrder !== null
+                ? `${previewOrder + 1}번째 · ${label}`
+                : `E · 기억한 순서 입력 (${progress + 1}/${total})`}
           </div>
         </Html>
       )}
@@ -112,32 +129,56 @@ function RooftopSignalObjectives({ playerRef }: {
   playerRef: React.RefObject<THREE.Group | null>
 }) {
   const state = useGameStore((store) => store.rooftopSignal)
-  const nextSignalId = state ? state.nextSignalId : 'center'
   const activated = new Set(state?.activatedSignalIds ?? [])
-  const nearbyRef = useRef(false)
+  const sequence = state?.signalSequence?.length
+    ? state.signalSequence
+    : ROOFTOP_SIGNALS.map((signal) => signal.id)
+  const sequenceKey = sequence.join('|')
+  const [previewStep, setPreviewStep] = useState(-1)
+  const [nearbySignalId, setNearbySignalId] = useState<RooftopSignalId | null>(null)
+  const nearbyRef = useRef<RooftopSignalId | null>(null)
+
+  useEffect(() => {
+    const timers: number[] = []
+    const previewLength = sequenceKey.split('|').filter(Boolean).length
+    for (let index = 0; index < previewLength; index++) {
+      timers.push(window.setTimeout(() => setPreviewStep(index), index * 1400))
+    }
+    timers.push(window.setTimeout(() => setPreviewStep(-1), previewLength * 1400 + 700))
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [sequenceKey])
 
   useFrame(() => {
     const player = playerRef.current
-    const signal = ROOFTOP_SIGNALS.find((item) => item.id === nextSignalId)
-    const position = signal ? positionOf(slots[signal.slotId]) : null
     if (player) player.getWorldPosition(_playerPosition)
-    nearbyRef.current = Boolean(player && position
-      && Math.abs(_playerPosition.y - position[1]) < 1.6
-      && Math.hypot(_playerPosition.x - position[0], _playerPosition.z - position[2]) <= 2.25)
+    let closest: RooftopSignalId | null = null
+    let closestDistance = 2.25
+    if (player) for (const signal of ROOFTOP_SIGNALS) {
+      const position = positionOf(slots[signal.slotId])
+      const distance = Math.hypot(_playerPosition.x - position[0], _playerPosition.z - position[2])
+      if (Math.abs(_playerPosition.y - position[1]) < 1.6 && distance <= closestDistance) {
+        closest = signal.id
+        closestDistance = distance
+      }
+    }
+    if (closest !== nearbyRef.current) {
+      nearbyRef.current = closest
+      setNearbySignalId(closest)
+    }
   })
 
   useEffect(() => {
     const interact = (event: KeyboardEvent) => {
-      if (event.code !== 'KeyE' || event.repeat || !nearbyRef.current || !nextSignalId) return
+      if (event.code !== 'KeyE' || event.repeat || !nearbyRef.current || previewStep >= 0) return
       event.preventDefault()
       sendGameMessage({
         type: 'action',
-        payload: { action_type: 'interact_stage_mission', signal_id: nextSignalId },
+        payload: { action_type: 'interact_stage_mission', signal_id: nearbyRef.current },
       })
     }
     window.addEventListener('keydown', interact)
     return () => window.removeEventListener('keydown', interact)
-  }, [nextSignalId])
+  }, [previewStep])
 
   return <>
     {ROOFTOP_SIGNALS.map((signal) => (
@@ -145,7 +186,8 @@ function RooftopSignalObjectives({ playerRef }: {
         key={signal.id}
         position={positionOf(slots[signal.slotId])}
         label={signal.label}
-        current={signal.id === nextSignalId}
+        previewOrder={previewStep >= 0 && sequence[previewStep] === signal.id ? previewStep : null}
+        nearby={previewStep < 0 && nearbySignalId === signal.id && !activated.has(signal.id)}
         activated={activated.has(signal.id)}
         progress={state?.progress ?? 0}
         total={state?.total ?? 3}

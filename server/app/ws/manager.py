@@ -1997,35 +1997,18 @@ class ConnectionManager:
                     "closed_floor": closed_floor.value if closed_floor else None,
                     "progression": session.vertical_progression_payload(),
                 })
-        elif action["type"] == "rooftop_signal_ready":
+        elif action["type"] == "rooftop_signal_observed":
             signal_id = str(action.get("signal_id", ""))
-            try:
-                signal = activate_rooftop_signal(session, companion_id, signal_id)
-            except InvalidProgression:
-                # 다른 actor가 같은 틱에 먼저 조작했거나 아직 순서가 아닌 경우다.
-                # 다음 AI 판단 틱에서 현재 서버 상태를 다시 평가한다.
-                return
-            message = speech_event.text if speech_event else "내 담당 신호를 지금 동기화할게!"
+            signal_label = {"east": "동쪽", "west": "서쪽"}.get(signal_id, "담당")
+            message = speech_event.text if speech_event else f"{signal_label} 중계기 위치 확보. 입력은 네가 맡아!"
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report",
                 "companion_id": companion_id,
                 "message": message,
                 "phase": VerticalRoundPhase.ROOFTOP_INTRO.value,
-                "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
             }, companion_id)
-            await self.broadcast(room_id, {
-                "type": "intercom_ai_ready",
-                "companion_id": companion_id,
-            })
-            await self.broadcast(room_id, {
-                "type": "rooftop_signal_progress",
-                "actor_id": companion_id,
-                **signal,
-            })
-            if signal["completed"]:
-                event = complete_current_stage(session, companion_id)
-                await self._publish_vertical_stage_advance(room_id, companion_id, event)
         elif action["type"] == "route_scout_report":
             route_label = {
                 "east": "동쪽 계단",

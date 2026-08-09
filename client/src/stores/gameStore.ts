@@ -77,6 +77,7 @@ export interface VerticalProgressionState {
 }
 
 export interface RooftopSignalState {
+  signalSequence: Array<'center' | 'east' | 'west'>
   activatedSignalIds: string[]
   nextSignalId: 'center' | 'east' | 'west' | null
   progress: number

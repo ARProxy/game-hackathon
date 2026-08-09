@@ -156,6 +156,7 @@ export default function useWebSocket() {
         }
         if (data.state.rooftop_signal) {
           useGameStore.getState().setRooftopSignal({
+            signalSequence: data.state.rooftop_signal.signal_sequence ?? ['center', 'east', 'west'],
             activatedSignalIds: data.state.rooftop_signal.activated_signal_ids ?? [],
             nextSignalId: data.state.rooftop_signal.next_signal_id ?? null,
             progress: data.state.rooftop_signal.progress ?? 0,
@@ -200,6 +201,9 @@ export default function useWebSocket() {
 
       case 'rooftop_signal_progress':
         useGameStore.getState().setRooftopSignal({
+          signalSequence: data.signal_sequence
+            ?? useGameStore.getState().rooftopSignal?.signalSequence
+            ?? ['center', 'east', 'west'],
           activatedSignalIds: data.activated_signal_ids ?? [],
           nextSignalId: data.next_signal_id ?? null,
           progress: data.progress ?? 0,
@@ -207,8 +211,8 @@ export default function useWebSocket() {
           completed: Boolean(data.completed),
         })
         addSubtitle('system', data.completed
-          ? '삼점 신호 동기화 완료. 북서 계단실 방화문이 열립니다.'
-          : `옥상 신호 ${data.progress ?? 0}/${data.total ?? 3} 동기화 — 다음 점등 장치로 이동하세요.`)
+          ? '기억한 신호열 복원 완료. 북서 계단실 방화문이 열립니다.'
+          : `옥상 신호 ${data.progress ?? 0}/${data.total ?? 3} 입력 — 기억한 다음 위치로 이동하세요.`)
         break
 
       case 'vertical_mission_started':

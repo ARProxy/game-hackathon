@@ -52,14 +52,15 @@ def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None
     session.setup_game([], dynamic_forbidden=True)
     session.final_route_choice = FinalRoute.FIELD
 
-    for actor_id, signal_id, slot_id in (
-        ("human", "center", "ROOF_SIGNAL_CENTER"),
-        ("partner", "east", "ROOF_SIGNAL_EAST"),
-        ("partner-2", "west", "ROOF_SIGNAL_WEST"),
-    ):
-        _place_actor_at_slot(session, actor_id, slot_id)
-        assert activate_rooftop_signal(session, actor_id, signal_id)["success"]
-    assert complete_current_stage(session, "partner-2")["next_phase"] == "floor_3"
+    slot_by_signal = {
+        "center": "ROOF_SIGNAL_CENTER",
+        "east": "ROOF_SIGNAL_EAST",
+        "west": "ROOF_SIGNAL_WEST",
+    }
+    for signal_id in session.vertical_missions.rooftop.sequence:
+        _place_actor_at_slot(session, "human", slot_by_signal[signal_id])
+        assert activate_rooftop_signal(session, "human", signal_id)["success"]
+    assert complete_current_stage(session, "human")["next_phase"] == "floor_3"
     _walk_all_from_roof_to_f3(session)
     assert session.vertical_round.to_dict()["accessible_floors"] == ["F3"]
 

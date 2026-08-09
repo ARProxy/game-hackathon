@@ -167,11 +167,13 @@ class TestVerticalStageInteraction:
             player = session.state.get_player("player1")
             player.position.floor = WorldFloor.ROOF
 
-            for signal_id, slot_id in [
-                ("center", "ROOF_SIGNAL_CENTER"),
-                ("east", "ROOF_SIGNAL_EAST"),
-                ("west", "ROOF_SIGNAL_WEST"),
-            ]:
+            slot_by_signal = {
+                "center": "ROOF_SIGNAL_CENTER",
+                "east": "ROOF_SIGNAL_EAST",
+                "west": "ROOF_SIGNAL_WEST",
+            }
+            for signal_id in session.vertical_missions.rooftop.sequence:
+                slot_id = slot_by_signal[signal_id]
                 slot = get_map_slot(slot_id)
                 player.position.x, player.position.y, player.position.z = slot["interactionPosition"]
                 ws.send_json({

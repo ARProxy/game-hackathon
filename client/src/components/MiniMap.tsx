@@ -25,7 +25,7 @@ const MISSION_SLOT: Record<string, string> = {
   field_final: 'FIELD_FINAL_STATION_B',
 }
 const PHASE_LABEL: Record<string, string> = {
-  rooftop_intro: '옥상 삼점 신호',
+  rooftop_intro: '옥상 기억 신호',
   floor_3: '3층 방송 장치',
   floor_2: '2층 인터폰',
   floor_1: '1층 동시 장치',
@@ -83,9 +83,12 @@ function currentObjectives(
     const slotId = progression.final_route === 'basement' ? 'BASEMENT_ESCAPE_GATE' : 'FIELD_ESCAPE_GATE'
     const objective = slots[slotId]?.floor === floor ? slotPoint(slotId, '열린 탈출구') : null
     objectives = objective ? [objective] : []
-  } else if (progression.phase === 'rooftop_intro' && rooftopSignal?.nextSignalId) {
-    const objective = slotPoint(SIGNAL_SLOT[rooftopSignal.nextSignalId], '현재 점등 신호')
-    objectives = objective ? [objective] : []
+  } else if (progression.phase === 'rooftop_intro') {
+    const activated = new Set(rooftopSignal?.activatedSignalIds ?? [])
+    objectives = (['center', 'east', 'west'] as const)
+      .filter((signalId) => !activated.has(signalId))
+      .map((signalId) => slotPoint(SIGNAL_SLOT[signalId], '미입력 신호'))
+      .filter((point): point is MapPoint => point !== null)
   } else if (progression.phase === 'basement_final') {
     objectives = [
       ['BASEMENT_DEVICE_PANEL', '배전반'],

@@ -141,6 +141,7 @@ export default class DemoTransport {
         },
         vertical_progression: ROOFTOP_PROGRESSION,
         rooftop_signal: {
+          signal_sequence: [...ROOFTOP_SIGNALS],
           activated_signal_ids: [], next_signal_id: 'center',
           progress: 0, total: ROOFTOP_SIGNALS.length, completed: false,
         },
@@ -253,6 +254,7 @@ export default class DemoTransport {
       this.send({
         type: 'rooftop_signal_progress', actor_id: this.playerId,
         signal_id: expected,
+        signal_sequence: [...ROOFTOP_SIGNALS],
         activated_signal_ids: ROOFTOP_SIGNALS.slice(0, this.rooftopSignalIndex),
         next_signal_id: completed ? null : ROOFTOP_SIGNALS[this.rooftopSignalIndex],
         progress: this.rooftopSignalIndex, total: ROOFTOP_SIGNALS.length, completed,

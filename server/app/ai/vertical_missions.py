@@ -1,7 +1,7 @@
 """층별 고유 미션 메커니즘.
 
 각 층은 다른 게임플레이를 요구한다:
-- 옥상: 중앙→동쪽→서쪽 삼점 신호 동기화
+- 옥상: 점멸 순서를 기억하고 직접 옥상을 횡단하는 신호 복원
 - 3층: 방송 미션 (음성으로 의미 전달) -- 이미 vertical_flow.py에 구현됨
 - 2층: 인터폰 협동 (AI가 기호를 읽고 플레이어가 입력)
 - 1층: 동시 조작 (AI와 플레이어가 제한시간 내 동시 장치 작동)
@@ -19,7 +19,7 @@ from app.ai.speech import avoid_forbidden_words
 
 
 # ---------------------------------------------------------------------------
-# 옥상 삼점 신호 미션
+# 옥상 기억 신호 미션
 # ---------------------------------------------------------------------------
 
 ROOFTOP_SIGNAL_SLOT_BY_ID = {
@@ -31,7 +31,7 @@ ROOFTOP_SIGNAL_SLOT_BY_ID = {
 
 @dataclass
 class RooftopSignalMission:
-    """옥상 전체를 한 바퀴 읽게 만드는 짧은 이동·상호작용 튜토리얼."""
+    """점멸 순서를 기억한 플레이어가 옥상을 횡단하는 기억·이동 미션."""
 
     sequence: list[str] = field(default_factory=lambda: ["center", "east", "west"])
     activated_signal_ids: list[str] = field(default_factory=list)
@@ -60,6 +60,7 @@ class RooftopSignalMission:
 
     def public_state(self) -> dict:
         return {
+            "signal_sequence": list(self.sequence),
             "activated_signal_ids": list(self.activated_signal_ids),
             "next_signal_id": self.next_signal_id,
             "progress": len(self.activated_signal_ids),
@@ -343,6 +344,8 @@ def create_vertical_missions(
 ) -> VerticalMissions:
     """금기어 목록과 시드로 2층/1층/지하 미션을 초기화한다."""
     effective_seed = seed if seed is not None else 0
+    rooftop_sequence = list(ROOFTOP_SIGNAL_SLOT_BY_ID)
+    random.Random(effective_seed ^ 0x524F4F46).shuffle(rooftop_sequence)
     intercom = IntercomMission(
         sequence=IntercomMission.generate_sequence(
             3, seed=seed, forbidden_words=forbidden_words,
@@ -350,4 +353,9 @@ def create_vertical_missions(
     )
     simultaneous = SimultaneousMission()
     basement = create_basement_mission(seed=effective_seed)
-    return VerticalMissions(intercom=intercom, simultaneous=simultaneous, basement=basement)
+    return VerticalMissions(
+        rooftop=RooftopSignalMission(sequence=rooftop_sequence),
+        intercom=intercom,
+        simultaneous=simultaneous,
+        basement=basement,
+    )

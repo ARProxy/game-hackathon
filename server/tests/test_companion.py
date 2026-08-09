@@ -335,7 +335,7 @@ def test_rooftop_companions_do_not_reverse_near_signal_consoles() -> None:
         assert previous_distance <= intent["arrival_distance"] + 0.05
 
 
-def test_rooftop_companion_waits_at_assigned_signal_until_its_turn() -> None:
+def test_rooftop_companion_reports_assigned_signal_once_on_arrival() -> None:
     session = make_session("companion-rooftop-signal-wait")
     session.round_data = None
     seeker = session.state.get_player("seeker")
@@ -345,16 +345,14 @@ def test_rooftop_companion_waits_at_assigned_signal_until_its_turn() -> None:
     partner.position.x, partner.position.y, partner.position.z = east_position
     partner.position.floor = WorldFloor.ROOF
 
-    _, early_action = advance_companion(session, "partner")
+    _, observed_action = advance_companion(session, "partner")
 
-    assert early_action is None
-    assert "roof_signal_scout_east" not in session.companion_states["partner"].memory
+    assert observed_action == {"type": "rooftop_signal_observed", "signal_id": "east"}
+    assert "roof_signal_scout_east" in session.companion_states["partner"].memory
 
-    session.vertical_missions.rooftop.activate("center")
-    _, ready_action = advance_companion(session, "partner")
+    _, repeated_action = advance_companion(session, "partner")
 
-    assert ready_action == {"type": "rooftop_signal_ready", "signal_id": "east"}
-    assert "roof_signal_scout_east" not in session.companion_states["partner"].memory
+    assert repeated_action is None
 
 
 def test_vertical_companions_split_mission_support_and_route_scout_roles() -> None:

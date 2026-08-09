@@ -467,11 +467,16 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         and str(intent["target_id"]).startswith("roof_signal_scout_")
     ):
         signal_id = str(intent["target_id"]).removeprefix("roof_signal_scout_")
-        rooftop = session.vertical_missions.rooftop if session.vertical_missions is not None else None
-        # 너무 일찍 도착해도 목표를 소모하지 않는다. 담당 신호가 현재 순서가
-        # 되는 판단 틱에만 서버에 실제 조작을 요청한다.
-        if rooftop is not None and rooftop.next_signal_id == signal_id:
-            action = {"type": "rooftop_signal_ready", "signal_id": signal_id}
+        # 동료는 정답 순서를 대신 입력하지 않는다. 담당 중계기까지 실제로
+        # 이동한 뒤 한 번만 위치 확보를 보고하고, 입력은 플레이어가 직접
+        # 옥상을 횡단하며 수행한다.
+        if intent["target_id"] not in runtime.memory:
+            runtime.memory[intent["target_id"]] = {
+                "discovered_at": now,
+                "position": intent["target"],
+                "zone": session.vertical_round.phase.value,
+            }
+            action = {"type": "rooftop_signal_observed", "signal_id": signal_id}
     elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] == "intercom_mission":
         intercom = session.vertical_missions.intercom if session.vertical_missions is not None else None
         if (
@@ -607,7 +612,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "escape": (SpeechIntent.DECLARE_ACTION, "탈출구로 달려갈게!"),
     "trap": (SpeechIntent.REPORT_OBSERVATION, "트랩에 걸렸어!"),
     "vertical_objective": (SpeechIntent.REPORT_OBSERVATION, "장치를 찾았어."),
-    "rooftop_signal_ready": (SpeechIntent.DECLARE_ACTION, "내 담당 신호를 지금 동기화할게!"),
+    "rooftop_signal_observed": (SpeechIntent.REPORT_OBSERVATION, "담당 중계기 위치를 확보했어. 입력은 네가 맡아!"),
     "route_scout_report": (SpeechIntent.REPORT_OBSERVATION, "다음 층으로 이어지는 경로를 확인했어."),
     "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
     "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),

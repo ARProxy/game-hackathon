@@ -76,11 +76,13 @@ def test_rooftop_mission_advances_only_when_actor_is_near_device() -> None:
     with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
         activate_rooftop_signal(session, "human", "center")
 
-    for signal_id, slot_id in [
-        ("center", "ROOF_SIGNAL_CENTER"),
-        ("east", "ROOF_SIGNAL_EAST"),
-        ("west", "ROOF_SIGNAL_WEST"),
-    ]:
+    slot_by_signal = {
+        "center": "ROOF_SIGNAL_CENTER",
+        "east": "ROOF_SIGNAL_EAST",
+        "west": "ROOF_SIGNAL_WEST",
+    }
+    for signal_id in session.vertical_missions.rooftop.sequence:
+        slot_id = slot_by_signal[signal_id]
         slot = get_map_slot(slot_id)
         human.position.x, human.position.y, human.position.z = slot["interactionPosition"]
         progress = activate_rooftop_signal(session, "human", signal_id)

@@ -1,4 +1,4 @@
-"""2층 인터폰 미션 / 1층 동시 조작 미션 테스트."""
+"""옥상 기억 신호와 층별 협동 미션 테스트."""
 
 import time
 
@@ -88,6 +88,23 @@ class TestRooftopSignalMission:
         result = mission.activate("west")
         assert result["completed"]
         assert result["next_signal_id"] is None
+
+    def test_public_state_exposes_preview_sequence(self) -> None:
+        mission = RooftopSignalMission(sequence=["west", "center", "east"])
+
+        assert mission.public_state()["signal_sequence"] == ["west", "center", "east"]
+
+    def test_session_sequence_is_seeded_permutation(self) -> None:
+        first = create_vertical_missions([], seed=17).rooftop.sequence
+        repeated = create_vertical_missions([], seed=17).rooftop.sequence
+        variants = {
+            tuple(create_vertical_missions([], seed=seed).rooftop.sequence)
+            for seed in range(8)
+        }
+
+        assert first == repeated
+        assert set(first) == {"center", "east", "west"}
+        assert len(variants) >= 3
 
 
 # ---------------------------------------------------------------------------

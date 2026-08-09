@@ -37,7 +37,7 @@ const COMPANION_LABELS: Record<string, string> = {
 }
 
 const COMPANION_REASON_LABELS: Record<string, string> = {
-  rooftop_signal_scout: '담당 옥상 신호로 이동',
+  rooftop_signal_scout: '담당 옥상 중계기 시야 확보',
   vertical_stage_objective: '현재 미션 장치 지원',
   intercom_ai_position: '인터폰 판독 위치로 이동',
   simultaneous_ai_position: '동시 조작 B 장치 준비',
@@ -59,7 +59,7 @@ function companionSummary(
 }
 
 const VERTICAL_INSTRUCTIONS: Record<string, string> = {
-  rooftop_intro: '중앙 신호는 직접 맡고, 동쪽·서쪽 신호는 AI 동료가 순서대로 동기화합니다.',
+  rooftop_intro: '세 중계기의 점멸 순서를 기억하세요. 안내가 꺼지면 그 순서대로 옥상을 달려 직접 입력합니다.',
   floor_3: '방송실 안 ON AIR 콘솔에 E로 접속하세요. 그 순간 첫 추격이 시작되며, Q로 원문의 세 의미를 우회 전달해야 합니다.',
   floor_2: '인터폰에서 E를 누른 뒤 AI가 읽은 색과 도형을 Q로 순서대로 전달하세요.',
   floor_1: 'AI가 반대편 장치에 준비되면 A 장치 앞에서 E를 눌러 동시에 작동하세요.',
@@ -69,7 +69,7 @@ const VERTICAL_INSTRUCTIONS: Record<string, string> = {
 }
 
 const VERTICAL_PHASE_LABELS: Record<string, string> = {
-  rooftop_intro: '옥상 · 삼점 신호 협동',
+  rooftop_intro: '옥상 · 기억 신호 탈취',
   floor_3: '3층 · 방송실 우회 전달',
   floor_2: '2층 · 인터폰 기호 전달',
   floor_1: '1층 · 동시 장치 조작',
@@ -85,12 +85,6 @@ const SEEKER_THREAT_LABELS: Record<string, string> = {
   full_hunt: '완전 추격 · 소리와 시야를 모두 경계',
   pincer: '복수 위협 · 서로 다른 접근 신호를 경계',
   enraged: '광분 · 최종 출구까지 압박 지속',
-}
-
-const ROOFTOP_SIGNAL_LABELS: Record<string, string> = {
-  center: '플레이어 · 중앙',
-  east: 'AI 동료 1 · 동쪽',
-  west: 'AI 동료 2 · 서쪽',
 }
 
 function formatElapsed(totalSeconds: number): string {
@@ -542,14 +536,14 @@ export default function HUD() {
                 borderTop: '1px solid rgba(82,229,255,.22)',
                 color: rooftopSignal.completed ? '#B6FF3D' : '#FFE7A3',
               }}>
-                신호 동기화 {rooftopSignal.progress}/{rooftopSignal.total}
+                기억 신호 입력 {rooftopSignal.progress}/{rooftopSignal.total}
                 {' · '}
                 {rooftopSignal.nextSignalId
-                  ? `다음: ${ROOFTOP_SIGNAL_LABELS[rooftopSignal.nextSignalId]}`
+                  ? '다음: 기억한 위치'
                   : '완료'}
-                {rooftopSignal.nextSignalId !== 'center' && rooftopSignal.nextSignalId !== null && (
+                {rooftopSignal.nextSignalId !== null && (
                   <div style={{ marginTop: 3, color: '#BDEFFF', opacity: .8 }}>
-                    동료가 막히면 점등된 신호 앞에서 E로 대신 조작할 수 있습니다.
+                    AI 동료는 동·서 중계기에서 위치를 보고하지만 입력은 대신하지 않습니다.
                   </div>
                 )}
               </div>
