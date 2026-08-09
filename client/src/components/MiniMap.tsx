@@ -85,9 +85,16 @@ function currentObjectives(
     objectives = objective ? [objective] : []
   } else if (progression.phase === 'rooftop_intro') {
     const activated = new Set(rooftopSignal?.activatedSignalIds ?? [])
-    objectives = (['center', 'east', 'west'] as const)
+    const pending = (['center', 'east', 'west'] as const)
       .filter((signalId) => !activated.has(signalId))
-      .map((signalId) => slotPoint(SIGNAL_SLOT[signalId], '미입력 신호'))
+    const ordered = rooftopSignal?.nextSignalId
+      ? [rooftopSignal.nextSignalId, ...pending.filter((signalId) => signalId !== rooftopSignal.nextSignalId)]
+      : pending
+    objectives = ordered
+      .map((signalId, index) => slotPoint(
+        SIGNAL_SLOT[signalId],
+        index === 0 ? 'AI 안내 · 다음 신호' : '미입력 신호',
+      ))
       .filter((point): point is MapPoint => point !== null)
   } else if (progression.phase === 'basement_final') {
     objectives = [

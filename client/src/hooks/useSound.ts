@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useSettingsStore } from '../stores/settingsStore'
 
 type ToneShape = OscillatorType
 
+// 플레이어·술래·HUD가 서로 다른 AudioContext를 만들면 브라우저의 사용자
+// 제스처 잠금 상태가 갈라진다. 게임 전체가 하나의 엔진과 마스터 게인을 공유한다.
+let sharedContext: AudioContext | null = null
+let sharedMaster: GainNode | null = null
+
 export default function useSound() {
   const masterVolume = useSettingsStore((state) => state.masterVolume)
-  const contextRef = useRef<AudioContext | null>(null)
-  const masterRef = useRef<GainNode | null>(null)
 
   const ensureContext = useCallback(() => {
-    let context = contextRef.current
+    let context = sharedContext
     if (!context) {
       try {
         context = new AudioContext()
@@ -20,9 +23,10 @@ export default function useSound() {
       const master = context.createGain()
       master.gain.value = masterVolume
       master.connect(context.destination)
-      contextRef.current = context
-      masterRef.current = master
+      sharedContext = context
+      sharedMaster = master
     }
+    if (sharedMaster) sharedMaster.gain.value = masterVolume
     if (context.state === 'suspended') {
       void context.resume().catch((error) => {
         console.warn('[Audio] resume blocked:', error)
@@ -32,7 +36,7 @@ export default function useSound() {
   }, [masterVolume])
 
   useEffect(() => {
-    if (masterRef.current) masterRef.current.gain.value = masterVolume
+    if (sharedMaster) sharedMaster.gain.value = masterVolume
   }, [masterVolume])
 
   useEffect(() => {
@@ -42,18 +46,13 @@ export default function useSound() {
     return () => {
       window.removeEventListener('pointerdown', unlock)
       window.removeEventListener('keydown', unlock)
-      void contextRef.current?.close().catch((error) => {
-        console.warn('[Audio] close failed:', error)
-      })
-      contextRef.current = null
-      masterRef.current = null
     }
   }, [ensureContext])
 
   const tone = useCallback((frequency: number, delay: number, duration: number, volume: number,
     endFrequency = frequency, shape: ToneShape = 'sine', pan = 0) => {
-    const context = contextRef.current
-    const master = masterRef.current
+    const context = sharedContext
+    const master = sharedMaster
     if (!context || context.state !== 'running' || !master) return
     const start = context.currentTime + delay
     const oscillator = context.createOscillator()
@@ -72,8 +71,8 @@ export default function useSound() {
   }, [])
 
   const noise = useCallback((delay: number, duration: number, volume: number, highpass: number, pan = 0) => {
-    const context = contextRef.current
-    const master = masterRef.current
+    const context = sharedContext
+    const master = sharedMaster
     if (!context || context.state !== 'running' || !master) return
     const start = context.currentTime + delay
     const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate)
@@ -163,10 +162,33 @@ export default function useSound() {
     const strength = Math.min(1, Math.max(0, intensity))
     if (strength <= 0) return
     const pan = rightFoot ? 0.06 : -0.06
-    const volume = 0.018 + strength * 0.022
+    const volume = 0.04 + strength * 0.045
     tone(rightFoot ? 118 : 108, 0, 0.065, volume, 62, 'triangle', pan)
-    noise(0.008, 0.055, volume * 0.42, 260, pan)
+    noise(0.008, 0.065, volume * 0.55, 220, pan)
   }, [noise, tone])
+
+  const playAmbientPulse = useCallback(() => {
+    tone(48, 0, 2.8, 0.075, 42, 'sine')
+    tone(96, 0.18, 2.1, 0.025, 82, 'triangle', -0.18)
+    noise(0.05, 1.4, 0.018, 120, 0.22)
+  }, [noise, tone])
+
+  const playRooftopSignal = useCallback((step: number) => {
+    const base = 420 + Math.max(0, step) * 110
+    tone(base, 0, 0.16, 0.17, base * 1.35, 'triangle')
+    tone(base * 1.5, 0.09, 0.2, 0.11, base * 1.8, 'sine')
+  }, [tone])
+
+  const playMissionProgress = useCallback((progress: number) => {
+    const base = 360 + Math.max(0, progress) * 120
+    tone(base, 0, 0.16, 0.15, base * 1.2, 'square')
+    tone(base * 1.32, 0.12, 0.24, 0.13, base * 1.7, 'triangle')
+  }, [tone])
+
+  const playCompanionCue = useCallback(() => {
+    tone(540, 0, 0.11, 0.11, 680, 'triangle', -0.12)
+    tone(720, 0.1, 0.17, 0.09, 860, 'sine', 0.12)
+  }, [tone])
 
   return {
     playFreeze,
@@ -179,5 +201,9 @@ export default function useSound() {
     playSeekerFootstep,
     playSeekerSiren,
     playPlayerFootstep,
+    playAmbientPulse,
+    playRooftopSignal,
+    playMissionProgress,
+    playCompanionCue,
   }
 }

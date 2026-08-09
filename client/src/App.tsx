@@ -459,6 +459,8 @@ function GameApp() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#07090D' }}>
+      {/* 타이틀 클릭 자체가 오디오 잠금 해제 제스처가 되도록 항상 마운트한다. */}
+      <SoundController />
       {!isGameRunning && (
         <StartFlow screen={entryScreen} onScreenChange={setEntryScreen} onStartSolo={startSolo} onQuickStart={startQuickGame} />
       )}
@@ -467,7 +469,6 @@ function GameApp() {
         onRetry={() => setSceneKey((key) => key + 1)}
         onMainMenu={returnToMainMenu}
       >
-      <SoundController />
       <GameController />
 
       <Canvas

@@ -175,17 +175,27 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
         from app.game.vertical_flow import final_station_position, mission_interaction_position
         from app.game.map_slots import get_map_slot as _get_map_slot
 
-        # 옥상 시작 시 플레이어는 중앙, 두 동료는 동·서 신호기를 맡는다.
-        # 먼저 도착한 동료는 순서가 올 때까지 현장에서 대기한다.
+        # 옥상에서는 현재 정답 신호의 담당 동료가 그 위치로 직접 안내한다.
+        # 나머지 동료는 반대편 중계기를 정찰해 목표 변경에도 계속 움직인다.
         if session.vertical_round.phase == VerticalRoundPhase.ROOFTOP_INTRO:
-            signal_side = "east" if companion_id == "partner" else "west"
+            next_signal_id = (
+                session.vertical_missions.rooftop.next_signal_id
+                if session.vertical_missions is not None
+                else "center"
+            ) or "center"
+            guide_companion_id = "partner-2" if next_signal_id == "west" else "partner"
+            guiding = companion_id == guide_companion_id
+            if guiding:
+                signal_side = next_signal_id
+            else:
+                signal_side = "east" if companion_id == "partner" else "west"
             signal_slot = _get_map_slot(f"ROOF_SIGNAL_{signal_side.upper()}")
             sx, _, sz = signal_slot.get("approachPosition", signal_slot["position"])
             return {
                 "state": "EXPLORE_ZONE",
-                "target_id": f"roof_signal_scout_{signal_side}",
+                "target_id": f"roof_signal_{'guide' if guiding else 'scout'}_{signal_side}",
                 "target": {"x": sx, "z": sz},
-                "reason": "rooftop_signal_scout",
+                "reason": "rooftop_signal_guide" if guiding else "rooftop_signal_scout",
                 "arrival_distance": float(
                     signal_slot.get("approachRadius", CONTRACT["arrivalDistance"]),
                 ),
@@ -464,19 +474,26 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
     elif (
         intent["state"] == "EXPLORE_ZONE"
         and arrived
-        and str(intent["target_id"]).startswith("roof_signal_scout_")
+        and str(intent["target_id"]).startswith(("roof_signal_scout_", "roof_signal_guide_"))
     ):
-        signal_id = str(intent["target_id"]).removeprefix("roof_signal_scout_")
-        # 동료는 정답 순서를 대신 입력하지 않는다. 담당 중계기까지 실제로
-        # 이동한 뒤 한 번만 위치 확보를 보고하고, 입력은 플레이어가 직접
-        # 옥상을 횡단하며 수행한다.
+        target_id = str(intent["target_id"])
+        guiding = target_id.startswith("roof_signal_guide_")
+        signal_id = target_id.removeprefix(
+            "roof_signal_guide_" if guiding else "roof_signal_scout_"
+        )
+        # 동료는 정답을 대신 입력하지 않지만 현재 순서의 위치까지 실제로
+        # 이동해 플레이어가 멈추지 않도록 시각·음성으로 안내한다.
         if intent["target_id"] not in runtime.memory:
             runtime.memory[intent["target_id"]] = {
                 "discovered_at": now,
                 "position": intent["target"],
                 "zone": session.vertical_round.phase.value,
             }
-            action = {"type": "rooftop_signal_observed", "signal_id": signal_id}
+            action = {
+                "type": "rooftop_signal_observed",
+                "signal_id": signal_id,
+                "guiding": guiding,
+            }
     elif intent["state"] == "EXPLORE_ZONE" and arrived and intent["target_id"] == "intercom_mission":
         intercom = session.vertical_missions.intercom if session.vertical_missions is not None else None
         if (

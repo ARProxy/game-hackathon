@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useGameStore } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
+import useSound from '../hooks/useSound'
 import contract from './verticalMapContract.json'
 
 type Slot = { position?: number[]; interactionPosition?: number[]; floor: string; zone?: string }
@@ -64,24 +65,25 @@ const positionOf = (slot: Slot): [number, number, number] => {
 
 type RooftopSignalId = typeof ROOFTOP_SIGNALS[number]['id']
 
-function RooftopSignalBeacon({ position, label, previewOrder, nearby, activated, progress, total }: {
+function RooftopSignalBeacon({ position, label, previewOrder, nearby, guided, activated, progress, total }: {
   position: [number, number, number]
   label: string
   previewOrder: number | null
   nearby: boolean
+  guided: boolean
   activated: boolean
   progress: number
   total: number
 }) {
   const pulseRef = useRef<THREE.Group>(null)
   useFrame(({ clock }) => {
-    if (!pulseRef.current || (previewOrder === null && !nearby)) return
+    if (!pulseRef.current || (previewOrder === null && !nearby && !guided)) return
     const pulse = 1 + Math.sin(clock.elapsedTime * 4.5) * 0.12
     pulseRef.current.scale.setScalar(pulse)
     pulseRef.current.rotation.y = clock.elapsedTime * 0.55
   })
-  const highlighted = previewOrder !== null || nearby
-  const color = activated ? '#6DCF92' : previewOrder !== null ? '#FFD166' : nearby ? '#8DFFF2' : '#385164'
+  const highlighted = previewOrder !== null || nearby || guided
+  const color = activated ? '#6DCF92' : previewOrder !== null ? '#FFD166' : guided ? '#B6FF3D' : nearby ? '#8DFFF2' : '#385164'
   return (
     <group position={position}>
       <group ref={pulseRef}>
@@ -117,6 +119,8 @@ function RooftopSignalBeacon({ position, label, previewOrder, nearby, activated,
               ? `입력 완료 · ${label}`
               : previewOrder !== null
                 ? `${previewOrder + 1}번째 · ${label}`
+                : guided
+                  ? `AI 안내 · 다음은 ${label}${nearby ? ' · E 입력' : ''}`
                 : `E · 기억한 순서 입력 (${progress + 1}/${total})`}
           </div>
         </Html>
@@ -138,6 +142,11 @@ function RooftopSignalObjectives({ playerRef }: {
   const [previewRun, setPreviewRun] = useState(0)
   const [nearbySignalId, setNearbySignalId] = useState<RooftopSignalId | null>(null)
   const nearbyRef = useRef<RooftopSignalId | null>(null)
+  const { playRooftopSignal } = useSound()
+
+  useEffect(() => {
+    if (previewStep >= 0) playRooftopSignal(previewStep)
+  }, [playRooftopSignal, previewStep])
 
   useEffect(() => {
     const timers: number[] = []
@@ -196,6 +205,7 @@ function RooftopSignalObjectives({ playerRef }: {
         label={signal.label}
         previewOrder={previewStep >= 0 && sequence[previewStep] === signal.id ? previewStep : null}
         nearby={previewStep < 0 && nearbySignalId === signal.id && !activated.has(signal.id)}
+        guided={previewStep < 0 && state?.nextSignalId === signal.id}
         activated={activated.has(signal.id)}
         progress={state?.progress ?? 0}
         total={state?.total ?? 3}

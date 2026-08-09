@@ -15,7 +15,7 @@ from app.game.map_slots import get_map_slot
 from app.game.session import GameSession
 from app.game.progression import FinalRoute, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, PlayerRole
-from app.game.vertical_flow import mission_interaction_position, start_intercom_mission
+from app.game.vertical_flow import activate_rooftop_signal, mission_interaction_position, start_intercom_mission
 
 
 def make_session(room_id: str) -> GameSession:
@@ -258,44 +258,64 @@ def test_vertical_companion_reports_when_it_reaches_active_objective() -> None:
     assert "floor_2" in session.companion_states["partner"].memory
 
 
-def test_rooftop_companions_split_east_and_west_signal_scouts() -> None:
+def test_rooftop_companions_split_live_signal_guide_and_opposite_scout() -> None:
     session = make_session("companion-rooftop-scouts")
     session.round_data = None
     seeker = session.state.get_player("seeker")
     seeker.position.floor = WorldFloor.F1
 
-    east = decide_companion_intent(session, "partner")
-    west = decide_companion_intent(session, "partner-2")
-    east_slot = get_map_slot("ROOF_SIGNAL_EAST")
-    west_slot = get_map_slot("ROOF_SIGNAL_WEST")
+    intents = {
+        "partner": decide_companion_intent(session, "partner"),
+        "partner-2": decide_companion_intent(session, "partner-2"),
+    }
+    next_signal_id = session.vertical_missions.rooftop.next_signal_id
+    guide_id = "partner-2" if next_signal_id == "west" else "partner"
+    scout_id = "partner" if guide_id == "partner-2" else "partner-2"
+    guide, scout = intents[guide_id], intents[scout_id]
+    guide_slot = get_map_slot(f"ROOF_SIGNAL_{next_signal_id.upper()}")
 
-    assert east["reason"] == west["reason"] == "rooftop_signal_scout"
-    assert east["target_id"] == "roof_signal_scout_east"
-    assert west["target_id"] == "roof_signal_scout_west"
-    assert east["target"] == {
-        "x": east_slot["approachPosition"][0],
-        "z": east_slot["approachPosition"][2],
+    assert guide["reason"] == "rooftop_signal_guide"
+    assert guide["target_id"] == f"roof_signal_guide_{next_signal_id}"
+    assert guide["target"] == {
+        "x": guide_slot["approachPosition"][0],
+        "z": guide_slot["approachPosition"][2],
     }
-    assert west["target"] == {
-        "x": west_slot["approachPosition"][0],
-        "z": west_slot["approachPosition"][2],
-    }
-    assert east["arrival_distance"] == east_slot["approachRadius"]
-    assert west["arrival_distance"] == west_slot["approachRadius"]
-    assert east["target"] != west["target"]
+    assert guide["arrival_distance"] == guide_slot["approachRadius"]
+    assert scout["reason"] == "rooftop_signal_scout"
+    assert scout["target_id"].startswith("roof_signal_scout_")
+    assert guide["target"] != scout["target"]
 
     partner = session.state.get_player("partner")
+    partner_intent = intents["partner"]
     distance_before_tick = math.hypot(
-        east["target"]["x"] - partner.position.x,
-        east["target"]["z"] - partner.position.z,
+        partner_intent["target"]["x"] - partner.position.x,
+        partner_intent["target"]["z"] - partner.position.z,
     )
     session.companion_states["partner"].last_tick = time.monotonic() - 0.25
     advance_companion(session, "partner")
     distance_after_tick = math.hypot(
-        east["target"]["x"] - partner.position.x,
-        east["target"]["z"] - partner.position.z,
+        partner_intent["target"]["x"] - partner.position.x,
+        partner_intent["target"]["z"] - partner.position.z,
     )
     assert distance_after_tick < distance_before_tick
+
+
+def test_rooftop_guide_retargets_when_human_enters_the_next_signal() -> None:
+    session = make_session("companion-rooftop-live-retarget")
+    session.round_data = None
+    human = session.state.get_player("human")
+    human.position.floor = WorldFloor.ROOF
+    first_signal = session.vertical_missions.rooftop.next_signal_id
+    first_slot = get_map_slot(f"ROOF_SIGNAL_{first_signal.upper()}")
+    human.position.x, human.position.y, human.position.z = first_slot["interactionPosition"]
+
+    activate_rooftop_signal(session, "human", first_signal)
+
+    next_signal = session.vertical_missions.rooftop.next_signal_id
+    guide_id = "partner-2" if next_signal == "west" else "partner"
+    guide = decide_companion_intent(session, guide_id)
+    assert guide["reason"] == "rooftop_signal_guide"
+    assert guide["target_id"] == f"roof_signal_guide_{next_signal}"
 
 
 def test_rooftop_companions_do_not_reverse_near_signal_consoles() -> None:
@@ -341,14 +361,20 @@ def test_rooftop_companion_reports_assigned_signal_once_on_arrival() -> None:
     seeker = session.state.get_player("seeker")
     seeker.position.floor = WorldFloor.F1
     partner = session.state.get_player("partner")
-    east_position = get_map_slot("ROOF_SIGNAL_EAST")["approachPosition"]
-    partner.position.x, partner.position.y, partner.position.z = east_position
+    intent = decide_companion_intent(session, "partner")
+    signal_id = intent["target_id"].rsplit("_", 1)[-1]
+    signal_position = get_map_slot(f"ROOF_SIGNAL_{signal_id.upper()}")["approachPosition"]
+    partner.position.x, partner.position.y, partner.position.z = signal_position
     partner.position.floor = WorldFloor.ROOF
 
     _, observed_action = advance_companion(session, "partner")
 
-    assert observed_action == {"type": "rooftop_signal_observed", "signal_id": "east"}
-    assert "roof_signal_scout_east" in session.companion_states["partner"].memory
+    assert observed_action == {
+        "type": "rooftop_signal_observed",
+        "signal_id": signal_id,
+        "guiding": intent["reason"] == "rooftop_signal_guide",
+    }
+    assert intent["target_id"] in session.companion_states["partner"].memory
 
     _, repeated_action = advance_companion(session, "partner")
 

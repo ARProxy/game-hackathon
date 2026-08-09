@@ -1,6 +1,7 @@
 /** 서버가 선택한 독립 목표를 표현하는 AI 동료 캐릭터. */
 import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { useGameStore, type CompanionState } from '../stores/gameStore'
 import { CharacterModel } from './Characters'
@@ -75,6 +76,10 @@ export default function Partner({
   const lastThink = useRef(-Infinity)
   const lastRescueAttempt = useRef(0)
   const partnerFrozen = useGameStore((state) => state.players[playerId]?.status === 'frozen')
+  const guidanceActive = useGameStore((state) => (
+    state.companionIntents[playerId]
+      ?? (playerId === 'partner' ? state.companionIntent : null)
+  )?.reason === 'rooftop_signal_guide')
 
   useEffect(() => {
     const rescue = (event: KeyboardEvent) => {
@@ -216,6 +221,18 @@ export default function Partner({
   return (
     <group ref={groupRef} position={spawn}>
       <CharacterModel id={characterId} frozen={partnerFrozen} movementRef={movementRef} />
+      {guidanceActive && (
+        <Html position={[0, 2.35, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
+          <div style={{
+            whiteSpace: 'nowrap', padding: '6px 10px', borderRadius: 999,
+            border: '1px solid rgba(182,255,61,.78)', color: '#E9FFC2',
+            background: 'rgba(7,20,17,.92)', fontSize: 11, fontWeight: 900,
+            boxShadow: '0 0 16px rgba(182,255,61,.18)',
+          }}>
+            AI 안내 · 다음 신호는 여기
+          </div>
+        </Html>
+      )}
     </group>
   )
 }

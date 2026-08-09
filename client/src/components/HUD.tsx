@@ -38,6 +38,7 @@ const COMPANION_LABELS: Record<string, string> = {
 
 const COMPANION_REASON_LABELS: Record<string, string> = {
   rooftop_signal_scout: '담당 옥상 중계기 시야 확보',
+  rooftop_signal_guide: '다음 정답 신호로 플레이어 안내 중',
   vertical_stage_objective: '현재 미션 장치 지원',
   intercom_ai_position: '인터폰 판독 위치로 이동',
   simultaneous_ai_position: '동시 조작 B 장치 준비',
@@ -76,6 +77,12 @@ const VERTICAL_PHASE_LABELS: Record<string, string> = {
   field_final: '운동장 · 삼인 장치 가동',
   basement_final: '지하 · 설비 복구',
   escape_open: '최종 · 탈출구 개방',
+}
+
+const ROOFTOP_SIGNAL_LABELS: Record<string, string> = {
+  center: '중앙',
+  east: '동쪽',
+  west: '서쪽',
 }
 
 const SEEKER_THREAT_LABELS: Record<string, string> = {
@@ -546,7 +553,7 @@ export default function HUD() {
                 기억 신호 입력 {rooftopSignal.progress}/{rooftopSignal.total}
                 {' · '}
                 {rooftopSignal.nextSignalId
-                  ? '다음: 기억한 위치'
+                  ? `다음: AI가 ${ROOFTOP_SIGNAL_LABELS[rooftopSignal.nextSignalId] ?? '목표'} 신호 안내 중`
                   : '완료'}
                 {rooftopSignal.nextSignalId !== null && (
                   <div style={{ marginTop: 3, color: '#BDEFFF', opacity: .8 }}>

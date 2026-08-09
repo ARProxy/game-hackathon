@@ -1999,8 +1999,13 @@ class ConnectionManager:
                 })
         elif action["type"] == "rooftop_signal_observed":
             signal_id = str(action.get("signal_id", ""))
-            signal_label = {"east": "동쪽", "west": "서쪽"}.get(signal_id, "담당")
-            message = speech_event.text if speech_event else f"{signal_label} 중계기 위치 확보. 입력은 네가 맡아!"
+            signal_label = {"center": "중앙", "east": "동쪽", "west": "서쪽"}.get(signal_id, "담당")
+            message = (
+                f"다음 입력은 {signal_label} 신호야. 내 위치로 와서 E를 눌러!"
+                if action.get("guiding")
+                else speech_event.text if speech_event
+                else f"{signal_label} 중계기 위치 확보. 입력은 네가 맡아!"
+            )
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report",
                 "companion_id": companion_id,

@@ -5,7 +5,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock
 
-from app.ai.companion import TRAP_CONTRACT, advance_companion
+from app.ai.companion import TRAP_CONTRACT, advance_companion, decide_companion_intent
 from app.game.map_slots import get_map_slot
 from app.game.progression import FinalRoute, VerticalRoundPhase, WorldFloor
 from app.game.session import session_manager
@@ -63,19 +63,20 @@ class TestTeamRiskFlow(unittest.IsolatedAsyncioTestCase):
         seeker = self.session.state.get_player("seeker")
         seeker.position.floor = WorldFloor.F1
 
-        east = get_map_slot("ROOF_SIGNAL_EAST")["approachPosition"]
-        west = get_map_slot("ROOF_SIGNAL_WEST")["approachPosition"]
-        partner.position.x, partner.position.y, partner.position.z = east
-        partner_two.position.x, partner_two.position.y, partner_two.position.z = west
         human.position.floor = partner.position.floor = partner_two.position.floor = WorldFloor.ROOF
 
-        _, east_action = advance_companion(self.session, "partner")
-        assert east_action == {"type": "rooftop_signal_observed", "signal_id": "east"}
-        await self.manager._handle_companion_action(self.room_id, "partner", east_action)
-
-        _, west_action = advance_companion(self.session, "partner-2")
-        assert west_action == {"type": "rooftop_signal_observed", "signal_id": "west"}
-        await self.manager._handle_companion_action(self.room_id, "partner-2", west_action)
+        for companion_id, actor in (("partner", partner), ("partner-2", partner_two)):
+            intent = decide_companion_intent(self.session, companion_id)
+            actor.position.x = intent["target"]["x"]
+            actor.position.y = 10.8
+            actor.position.z = intent["target"]["z"]
+            _, action = advance_companion(self.session, companion_id)
+            assert action == {
+                "type": "rooftop_signal_observed",
+                "signal_id": intent["target_id"].rsplit("_", 1)[-1],
+                "guiding": intent["reason"] == "rooftop_signal_guide",
+            }
+            await self.manager._handle_companion_action(self.room_id, companion_id, action)
 
         slot_by_signal = {
             "center": "ROOF_SIGNAL_CENTER",
