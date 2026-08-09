@@ -102,8 +102,8 @@ def test_rooftop_transition_uses_the_authored_fire_door() -> None:
     roof_lock = get_map_slot("ROOF_TO_F3_FIRE_DOOR")
 
     assert roof_lock["kind"] == "transition_lock"
-    assert roof_lock["authoredDoorIds"] == ["roof_to_f3"]
-    assert "실제 방화문" in roof_lock["note"]
+    assert roof_lock["authoredDoorIds"] == ["roof_to_f3", "stair_nw_F3"]
+    assert "두 문이 함께 열린다" in roof_lock["note"]
 
 
 def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
@@ -118,6 +118,8 @@ def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
     assert path["down"][0] == top["position"]
     assert path["down"][-1] == bottom["position"]
     assert path["durationSeconds"] >= 3.0
+    assert path["minimumFireDoorClearWidth"] >= 1.7
+    assert path["minimumLandingDepth"] >= 1.3
     door_to_door = path["doorToDoorDown"]
     assert door_to_door[0] == get_map_slot("ROOF_TO_F3_FIRE_DOOR")["position"]
     assert door_to_door[-1] == get_map_slot("F3_TO_F2_STAIR_WEST")["position"]

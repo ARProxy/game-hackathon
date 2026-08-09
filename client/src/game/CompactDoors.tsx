@@ -6,17 +6,12 @@ import * as THREE from 'three'
 import { COMPACT_SCHOOL, type CompactDoor, type CompactFloor } from './compactSchoolData.js'
 import { useGameStore } from '../stores/gameStore'
 import type { PlayerHandle } from './Player'
+import { isStageDoor, stageDoorUnlocked } from './stageDoorAccess.js'
 
 const INTERACTION_DISTANCE = 1.75
 const MOTION_EPSILON = 0.0005
 const NO_ACCESSIBLE_FLOORS: string[] = []
 const _playerPosition = new THREE.Vector3()
-
-function stageDoorUnlocked(door: CompactDoor, accessibleFloors: readonly string[]) {
-  if (!door.unlockFloor) return false
-  const accessible = new Set(accessibleFloors)
-  return accessible.has(door.f) && accessible.has(door.unlockFloor)
-}
 
 export default function CompactDoors({ visibleFloors, playerRef }: {
   visibleFloors?: CompactFloor[]
@@ -33,13 +28,13 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
 
   const isUnlocked = useCallback((door: CompactDoor) => {
     if (door.permanentlyLocked) return false
-    if (door.unlockFloor) return stageDoorUnlocked(door, accessibleFloors)
+    if (isStageDoor(door)) return stageDoorUnlocked(door, accessibleFloors)
     return true
   }, [accessibleFloors])
 
   useEffect(() => {
     for (const door of COMPACT_SCHOOL.doors) {
-      if (!door.unlockFloor) continue
+      if (!isStageDoor(door)) continue
       const next = isUnlocked(door)
       if (targets.current.get(door.id) === next) continue
       targets.current.set(door.id, next)
@@ -50,7 +45,7 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
   useEffect(() => {
     const toggle = (event: KeyboardEvent) => {
       const door = nearbyRef.current
-      if (event.code !== 'KeyE' || event.repeat || !door || door.unlockFloor) return
+      if (event.code !== 'KeyE' || event.repeat || !door || isStageDoor(door)) return
       if (!isUnlocked(door)) return
       event.preventDefault()
       targets.current.set(door.id, !targets.current.get(door.id))
@@ -115,8 +110,8 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
           border: `1px solid ${nearbyUnlocked ? 'rgba(189,239,255,.55)' : 'rgba(255,96,96,.7)'}`,
           fontSize: 12, fontWeight: 800,
         }}>
-          {nearby.unlockFloor
-            ? nearbyUnlocked ? `${nearby.unlockFloor} 이동 경로 개방` : '현재 미션 완료 전 잠김'
+          {isStageDoor(nearby)
+            ? nearbyUnlocked ? '층간 이동 경로 개방' : '현재 미션 완료 전 잠김'
             : nearbyUnlocked ? `E · ${targets.current.get(nearby.id) ? '문 닫기' : '문 열기'}` : '잠긴 문'}
         </div>
       </Html>

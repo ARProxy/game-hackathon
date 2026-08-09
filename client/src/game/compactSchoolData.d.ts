@@ -41,6 +41,7 @@ export interface CompactDoor {
   swing: number
   kind: string
   unlockFloor?: string
+  unlockFloors?: string[]
   permanentlyLocked: boolean
   material: string
   c: string

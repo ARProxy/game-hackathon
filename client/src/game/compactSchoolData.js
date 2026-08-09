@@ -75,7 +75,7 @@ function addFullWallSegment(floor, axis, fixed, start, end, opt = {}) {
   if (height > baseHeight) addWallSlice(floor, axis, fixed, start, end, baseHeight, height - baseHeight, opt.upper ?? 'corrWall', opt.role ?? 'wall', opt.thickness)
 }
 
-/** opening: { center, width, type:'door'|'window', sill?, head?, id?, kind?, unlockFloor? } */
+/** opening: { center, width, type:'door'|'window', sill?, head?, id?, kind?, unlockFloor?, unlockFloors? } */
 function addWallRun(floor, axis, fixed, start, end, openings = [], opt = {}) {
   const sorted = openings.slice().sort((a, b) => a.center - b.center)
   let cursor = start
@@ -111,6 +111,7 @@ function addWallRun(floor, axis, fixed, start, end, openings = [], opt = {}) {
         height: head - 0.04,
         kind: opening.kind ?? 'room',
         unlockFloor: opening.unlockFloor,
+        unlockFloors: opening.unlockFloors,
         permanentlyLocked: opening.permanentlyLocked,
         swing: opening.swing ?? 1,
         material: opening.material,
@@ -121,7 +122,7 @@ function addWallRun(floor, axis, fixed, start, end, openings = [], opt = {}) {
   addFullWallSegment(floor, axis, fixed, cursor, end, opt)
 }
 
-function addDoor({ id = nextId('door'), floor, axis, fixed, center, width = 1.05, height = 2.18, kind = 'room', unlockFloor, permanentlyLocked = false, swing = 1, material = 'door' }) {
+function addDoor({ id = nextId('door'), floor, axis, fixed, center, width = 1.05, height = 2.18, kind = 'room', unlockFloor, unlockFloors, permanentlyLocked = false, swing = 1, material = 'door' }) {
   const hinge = axis === 'x'
     ? [center - width / 2, FY[floor], fixed]
     : [fixed, FY[floor], center - width / 2]
@@ -137,6 +138,7 @@ function addDoor({ id = nextId('door'), floor, axis, fixed, center, width = 1.05
     swing,
     kind,
     unlockFloor,
+    unlockFloors,
     permanentlyLocked,
     material,
     c: COMPACT_PALETTE[material] || material,
@@ -271,22 +273,27 @@ function addFloorShell(floor) {
   addWallRun(floor, 'z', C.x0, C.z0, C.z1, corridorWindowOpenings('z'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
   addWallRun(floor, 'z', C.x1, C.z0, C.z1, corridorWindowOpenings('z'), { lower: 'corrBase', upper: 'corrWall', glass: 'glass' })
 
-  const nextFloor = floor === 'F3' ? 'F2' : floor === 'F2' ? 'F1' : undefined
+  const stairUnlockFloors = {
+    F3: { nw: ['ROOF', 'F3', 'F2'], se: ['F3', 'F2'] },
+    F2: { nw: ['F3', 'F2', 'F1'], se: ['F3', 'F2', 'F1'] },
+    F1: { nw: ['F2', 'F1', 'B1'], se: ['F2', 'F1'] },
+  }[floor]
   const northDoors = [-36, -28, -20, -12].map((center, index) => ({
-    center, width: index === 0 ? 1.25 : 1.05, type: 'door',
+    center, width: index === 0 ? 1.8 : 1.05, type: 'door',
     id: index === 0 ? `stair_nw_${floor}` : `north_room_${floor}_${index}`,
     kind: index === 0 ? 'fire' : 'room',
-    unlockFloor: index === 0 ? nextFloor : undefined,
+    unlockFloors: index === 0 ? stairUnlockFloors.nw : undefined,
     permanentlyLocked: index === 3,
+    swing: index === 0 ? -1 : 1,
     head: index === 0 ? 2.35 : 2.2,
   }))
   addWallRun(floor, 'x', -40, -40, -8, northDoors, { lower: 'corrBase', upper: 'corrWall' })
 
   const southDoors = [-36, -28, -20, -12].map((center, index) => ({
-    center, width: index === 3 ? 1.25 : 1.05, type: 'door',
+    center, width: index === 3 ? 1.8 : 1.05, type: 'door',
     id: index === 3 ? `stair_se_${floor}` : `south_room_${floor}_${index}`,
     kind: index === 3 ? 'fire' : 'room',
-    unlockFloor: index === 3 ? nextFloor : undefined,
+    unlockFloors: index === 3 ? stairUnlockFloors.se : undefined,
     permanentlyLocked: floor === 'F1' && index === 0,
     head: index === 3 ? 2.35 : 2.2,
   }))
@@ -600,7 +607,7 @@ function addSwitchbackStair(floor, core, dir, coreId) {
   // 통과한 캡슐이 수직 보이드로 떨어지므로, 상부 층계참은 문 폭부터 두
   // 레인의 첫 디딤판까지 하나의 연속된 구조체로 잇는다. 이 층계참은 바로
   // 위 계단의 하부 출발참도 겸해 각 층에서 실제 U자 동선을 만든다.
-  const upperLandingDepth = 0.92
+  const upperLandingDepth = 1.4
   const upperLandingZ = entryZ + dir * 0.4
   addBox({
     id: `stair_${coreId}_${floor}_level_landing`,
@@ -706,7 +713,7 @@ function addParapet(floor, axis, fixed, start, end, material = 'extConcrete') {
 function addPenthouse(id, rect, doorSide, doorCenter, unlockFloor, locked = false) {
   const floor = 'ROOF'
   const y = FY.ROOF
-  const openings = [{ center: doorCenter, width: 1.25, type: 'door', id, kind: 'fire', unlockFloor, permanentlyLocked: locked, head: 2.35 }]
+  const openings = [{ center: doorCenter, width: 1.8, type: 'door', id, kind: 'fire', unlockFloor, permanentlyLocked: locked, head: 2.35 }]
   addWallRun(floor, 'x', rect.z0, rect.x0, rect.x1, doorSide === 'north' ? openings : [], { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
   addWallRun(floor, 'x', rect.z1, rect.x0, rect.x1, doorSide === 'south' ? openings : [], { lower: 'corrBase', upper: 'corrWall', height: 2.9 })
   addFullWallSegment(floor, 'z', rect.x0, rect.z0, rect.z1, { lower: 'corrBase', upper: 'corrWall', height: 2.9 })

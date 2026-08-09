@@ -8,6 +8,7 @@ import {
   FLOOR_HEIGHT,
   FLOOR_Y,
 } from '../src/game/compactSchoolData.js'
+import { stageDoorUnlocked } from '../src/game/stageDoorAccess.js'
 import collisionContract from '../src/game/serverCollisionContract.json' with { type: 'json' }
 import verticalMapContract from '../src/game/verticalMapContract.json' with { type: 'json' }
 
@@ -74,10 +75,25 @@ for (const floor of ['F1', 'F2', 'F3']) {
 
 const doorById = Object.fromEntries(COMPACT_SCHOOL.doors.map((door) => [door.id, door]))
 const slots = verticalMapContract.slots
-for (const id of ['roof_to_f3', 'roof_se_locked', 'stair_nw_F3', 'stair_se_F3', 'stair_nw_F2', 'stair_se_F2', 'main_entry']) {
+for (const id of ['roof_to_f3', 'roof_se_locked', 'stair_nw_F3', 'stair_se_F3', 'stair_nw_F2', 'stair_se_F2', 'stair_nw_F1', 'stair_se_F1', 'main_entry']) {
   assert.ok(doorById[id], `수직 동선 문 ${id}가 없다`)
 }
 assert.equal(doorById.roof_to_f3.unlockFloor, 'F3', '옥상 방화문은 3층 단계가 열릴 때만 개방되어야 한다')
+assert.deepEqual(doorById.stair_nw_F3.unlockFloors, ['ROOF', 'F3', 'F2'], '3층 북서 문은 옥상 도착 뒤 3층이 활성인 동안 열려야 한다')
+assert.deepEqual(doorById.stair_se_F3.unlockFloors, ['F3', 'F2'], '3층 남동 문은 3층 활성과 2층 하강 때 열려야 한다')
+assert.deepEqual(doorById.stair_nw_F2.unlockFloors, ['F3', 'F2', 'F1'], '2층 북서 문은 도착 뒤 2층이 활성인 동안 열려야 한다')
+assert.deepEqual(doorById.stair_nw_F1.unlockFloors, ['F2', 'F1', 'B1'], '1층 북서 문은 도착 뒤 1층과 지하 진입 때 열려야 한다')
+for (const id of ['roof_to_f3', 'stair_nw_F3']) {
+  assert.ok(
+    doorById[id].w >= verticalMapContract.paths.ROOF_F3_STAIRS.minimumFireDoorClearWidth,
+    `${id} 방화문 유효 폭이 플레이어 회전 여유 기준보다 좁다`,
+  )
+}
+assert.equal(doorById.stair_nw_F3.swing, -1, '3층 북서 문은 계단이 아니라 복도 방향으로 열려야 한다')
+assert.equal(stageDoorUnlocked(doorById.roof_to_f3, ['ROOF', 'F3']), true, '옥상 미션 완료 뒤 옥상 방화문이 열리지 않는다')
+assert.equal(stageDoorUnlocked(doorById.stair_nw_F3, ['ROOF', 'F3']), true, '옥상에서 내려온 뒤 3층 방화문이 열리지 않는다')
+assert.equal(stageDoorUnlocked(doorById.stair_nw_F3, ['F3']), true, '옥상 폐쇄 직후 3층 문이 닫혀 플레이어를 계단실에 가둔다')
+assert.equal(stageDoorUnlocked(doorById.stair_nw_F3, ['F3', 'F2']), true, '3층에서 2층으로 내려갈 때 북서 방화문이 열리지 않는다')
 assert.equal(doorById.roof_se_locked.permanentlyLocked, true, '옥상 보조 코어는 첫 수직 슬라이스에서 우회로가 되면 안 된다')
 assert.ok(COMPACT_SCHOOL.doors.every((door) => door.w >= 0.97), '캐릭터 캡슐보다 좁은 문이 있다')
 
@@ -129,6 +145,7 @@ const assertContinuouslySupported = (path, label) => {
 
 const roofLevelLanding = COMPACT_SCHOOL.boxes.find((item) => item.id === 'stair_nw_F3_level_landing')
 assert.ok(roofLevelLanding, '옥상 방화문과 북서 계단을 잇는 층계참이 없다')
+assert.ok(roofLevelLanding.s[2] >= verticalMapContract.paths.ROOF_F3_STAIRS.minimumLandingDepth, '옥상 방화문 앞 층계참이 너무 얕다')
 assert.ok(pointInsideBoxXZ(-36, -40.4, roofLevelLanding), '옥상 층계참이 방화문 정면을 받치지 않는다')
 assert.ok(pointInsideBoxXZ(-33.65, -40.4, roofLevelLanding), '옥상 층계참이 하강 레인까지 이어지지 않는다')
 assert.equal(roofLevelLanding.p[1] + roofLevelLanding.s[1] / 2, FLOOR_Y.ROOF, '옥상 층계참 높이가 옥상 바닥과 어긋났다')
