@@ -32,6 +32,7 @@ class JudgeResult:
     confidence: float = 0.0
     elapsed_ms: float = 0.0
     transcript: str = ""
+    requires_confirmation: bool = False
 
 
 class ForbiddenWordEngine:
@@ -73,8 +74,13 @@ class ForbiddenWordEngine:
         # 3단계: 유사 발음 매칭
         phonetic_match, score = self._phonetic_check(transcript)
         if phonetic_match:
+            # 음운 유사도는 STT 오인식과 실제 금기어를 구분하기 어렵다.
+            # 정확·형태소 적중과 달리 즉시 빙결하지 않고 비공개 재발화를
+            # 요청한다. 플레이어가 같은 뜻을 다른 표현으로 말할 수 있게 해
+            # 숨은 규칙을 유지하면서도 오탐으로 진행을 잃지 않게 한다.
             return self._result(
-                True, start, transcript, phonetic_match, "phonetic", score
+                False, start, transcript, phonetic_match, "phonetic", score,
+                requires_confirmation=True,
             )
 
         return self._result(False, start, transcript)
@@ -132,6 +138,8 @@ class ForbiddenWordEngine:
         matched_word: str | None = None,
         matched_stage: str | None = None,
         confidence: float = 0.0,
+        *,
+        requires_confirmation: bool = False,
     ) -> JudgeResult:
         elapsed = (time.perf_counter() - start) * 1000
         result = JudgeResult(
@@ -141,6 +149,7 @@ class ForbiddenWordEngine:
             confidence=confidence,
             elapsed_ms=round(elapsed, 2),
             transcript=transcript,
+            requires_confirmation=requires_confirmation,
         )
         if is_forbidden:
             logger.warning(

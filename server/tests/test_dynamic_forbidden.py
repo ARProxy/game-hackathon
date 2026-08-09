@@ -19,7 +19,7 @@ def test_first_profile_waits_for_three_utterances() -> None:
 def test_rotation_requires_both_five_utterances_and_45_seconds() -> None:
     profile = DynamicForbiddenProfile()
     profile.total_utterances = 3
-    profile.apply(["문", "복도", "장치"], analyzed_through=3, now=100.0, reason="initial")
+    profile.apply(["마이크", "책상", "버튼"], analyzed_through=3, now=100.0, reason="initial")
     for _ in range(5):
         profile.record_human_utterance("복도 문 장치를 확인해")
     assert not profile.should_refresh(now=144.9)
@@ -50,7 +50,7 @@ def test_model_cannot_invent_unobserved_word() -> None:
 
 def test_public_state_never_contains_words() -> None:
     profile = DynamicForbiddenProfile()
-    profile.apply(["문", "복도", "장치"], analyzed_through=3, now=100.0, reason="initial")
+    profile.apply(["마이크", "책상", "버튼"], analyzed_through=3, now=100.0, reason="initial")
     payload = profile.public_state(shifted=True)
     assert payload == {"status": "shifted"}
     assert "words" not in payload
@@ -60,9 +60,11 @@ def test_mission_and_final_exact_words_never_become_candidates() -> None:
     candidates = extract_observed_candidates([
         "빨간 삼각형 파란 네모를 보고 달빛 교정 탈출 순서로 외쳐",
         "주황 다이아몬드와 보라 십자를 다시 확인해",
+        "직진 왼쪽 오른쪽으로 안내하고 배전반 밸브 발전기를 작동해",
     ])
     words = {candidate["word"] for candidate in candidates}
     assert words.isdisjoint({
         "빨간", "삼각형", "파란", "네모", "달빛", "교정", "탈출",
         "주황", "다이아몬드", "보라", "십자",
+        "직진", "왼쪽", "오른쪽", "배전반", "밸브", "발전기", "작동",
     })

@@ -88,14 +88,16 @@ class TestPhoneticMatch:
     def test_similar_sound(self, engine):
         # "열세" → "열쇠"와 유사
         r = engine.check("열세 가져와")
-        assert r.is_forbidden
+        assert not r.is_forbidden
+        assert r.requires_confirmation
         assert r.matched_word == "열쇠"
         assert r.matched_stage == "phonetic"
 
     def test_similar_sound_coffee(self, engine):
         # "커피"의 오인식 가능성
         r = engine.check("커히 마시자")
-        assert r.is_forbidden
+        assert not r.is_forbidden
+        assert r.requires_confirmation
         assert r.matched_word == "커피"
         assert r.matched_stage == "phonetic"
 

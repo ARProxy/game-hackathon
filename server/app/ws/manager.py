@@ -250,6 +250,16 @@ class ConnectionManager:
         ):
             self._record_dynamic_forbidden_utterance(room_id, session, transcript)
 
+        if result.requires_confirmation and player and player.role == PlayerRole.HUMAN:
+            # 어느 단어와 비슷했는지, 글자 수나 판정 단계는 보내지 않는다.
+            # 발화 소리 핑은 이미 발생했지만 미션 입력과 금기어 위반에는
+            # 반영하지 않아 낮은 확신의 STT 오탐이 즉시 빙결이 되지 않는다.
+            await self.send_to(room_id, player_id, {
+                "type": "speech_uncertain",
+                "message": "음성이 불분명했습니다. 같은 뜻을 다른 표현으로 다시 말해 주세요.",
+            })
+            return
+
         if result.is_forbidden and player and player.role == PlayerRole.HUMAN:
             rage_policy = session.vertical_round.record_human_forbidden_word_violation()
             player.freeze()

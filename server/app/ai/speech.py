@@ -104,16 +104,14 @@ def build_speech_event(
 # ---------------------------------------------------------------------------
 
 def avoid_forbidden_words(text: str, forbidden_words: list[str]) -> tuple[str, bool]:
-    """텍스트에서 금기어를 회피 연출로 교체한다. (변경 여부도 반환)
-
-    "열쇠" → "열... 아, 그 금속 물건"
-    """
+    """금기어의 글자·길이·유의어를 노출하지 않는 일반 표현으로 바꾼다."""
     modified = False
     result = text
     for word in forbidden_words:
         if word in result:
-            # 첫 글자만 남기고 회피 연출
-            replacement = f"{word[0]}... 아, 그거 있잖아"
+            # 첫 글자나 동의어도 금기어를 역추론할 단서가 된다. 문맥상 특정
+            # 대상을 가리킨다는 사실만 남기고 원문의 표면형은 완전히 지운다.
+            replacement = "잠깐, 표현을 바꿀게. 그 물체"
             result = result.replace(word, replacement, 1)
             modified = True
     return result, modified

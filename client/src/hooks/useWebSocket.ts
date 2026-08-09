@@ -387,6 +387,11 @@ export default function useWebSocket() {
         addSubtitle(data.player_id, data.transcript)
         break
 
+      case 'speech_uncertain':
+        addSubtitle('system', data.message
+          ?? '음성이 불분명했습니다. 같은 뜻을 다른 표현으로 다시 말해 주세요.')
+        break
+
       case 'sound_ping':
         setLastSoundEvent({
           playerId: data.player_id,

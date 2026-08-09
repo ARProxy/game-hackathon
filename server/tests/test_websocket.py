@@ -129,6 +129,22 @@ class TestSpeechJudgment:
             assert "matched_stage" not in freeze
             assert "confidence" not in freeze
 
+    def test_low_confidence_phonetic_match_requests_private_rephrase(self, client):
+        with client.websocket_connect("/ws/phonetic-recheck/player1") as ws:
+            self._start_game(ws)
+            ws.send_json({
+                "type": "speech",
+                "payload": {"transcript": "열세 가져와", "is_final": True},
+            })
+            assert ws.receive_json()["type"] == "sound_ping"
+            recheck = ws.receive_json()
+            assert recheck == {
+                "type": "speech_uncertain",
+                "message": "음성이 불분명했습니다. 같은 뜻을 다른 표현으로 다시 말해 주세요.",
+            }
+            assert "word" not in recheck
+            assert "confidence" not in recheck
+
 
 class TestVerticalStageInteraction:
     def _start_game(self, ws):
