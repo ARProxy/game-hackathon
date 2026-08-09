@@ -576,7 +576,10 @@ def companion_snapshot(session: Any, companion_id: str = "partner") -> dict:
     return {
         **intent,
         "companion_id": companion_id,
-        "partner_position": {"x": partner.position.x, "z": partner.position.z},
+        "partner_position": {
+            "x": partner.position.x if partner else 0.0,
+            "z": partner.position.z if partner else 0.0,
+        },
     }
 
 

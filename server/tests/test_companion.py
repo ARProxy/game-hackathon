@@ -6,6 +6,7 @@ import time
 from app.ai.companion import (
     advance_companion,
     command_companion,
+    companion_snapshot,
     decide_companion_intent,
     request_companion_rescue,
 )
@@ -38,6 +39,17 @@ def test_idle_partner_explores_a_mission_candidate_not_the_human() -> None:
     }
     human = session.state.get_player("human")
     assert intent["target"] != {"x": human.position.x, "z": human.position.z}
+
+
+def test_companion_snapshot_is_safe_before_reserved_actor_registration() -> None:
+    session = make_session("companion-pre-setup-snapshot")
+    session.state.players.pop("partner-2")
+
+    snapshot = companion_snapshot(session, "partner-2")
+
+    assert snapshot["state"] == "INCAPACITATED"
+    assert snapshot["reason"] == "partner_unavailable"
+    assert snapshot["partner_position"] == {"x": 0.0, "z": 0.0}
 
 
 def test_exploration_reports_and_remembers_without_solving_mission() -> None:
