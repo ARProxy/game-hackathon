@@ -320,17 +320,20 @@ function addFloorShell(floor) {
   }
 }
 
-function addRailBarrier(floor, p, s, rot) {
-  addBox({ floor, p, s, rot, material: 'rail', role: 'rail', collider: true, visible: false })
+function addRailBarrier(floor, p, s, rot, id) {
+  addBox({ id, floor, p, s, rot, material: 'rail', role: 'rail', collider: true, visible: false })
 }
 
-function addVisualRail(floor, p, s, rot) {
-  addBox({ floor, p, s, rot, material: 'rail', role: 'railVisual', collider: false })
+function addVisualRail(floor, p, s, rot, id) {
+  addBox({ id, floor, p, s, rot, material: 'rail', role: 'railVisual', collider: false })
 }
 
-function addSwitchbackStair(floor, core, dir) {
+function addSwitchbackStair(floor, core, dir, coreId) {
   const y = FY[floor]
   const laneWidth = 2.65
+  const coreWidth = core.x1 - core.x0
+  const landingWidth = coreWidth - 0.55
+  const landingX = (core.x0 + core.x1) / 2
   const leftX = core.x0 + 1.65
   const rightX = core.x1 - 1.65
   const entryZ = dir < 0 ? core.z1 : core.z0
@@ -357,27 +360,63 @@ function addSwitchbackStair(floor, core, dir) {
 
   const center1 = entryZ + dir * (0.8 + run / 2)
   const center2 = farZ - dir * run / 2
-  addBox({ floor, p: [leftX, y + rise / 2 - 0.08, center1], s: [laneWidth, 0.18, length + 0.08], rot: [-dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
-  addBox({ floor, p: [rightX, y + rise + rise / 2 - 0.08, center2], s: [laneWidth, 0.18, length + 0.08], rot: [dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
+  addBox({ id: `stair_${coreId}_${floor}_lower_ramp`, floor, p: [leftX, y + rise / 2 - 0.08, center1], s: [laneWidth, 0.18, length + 0.08], rot: [-dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
+  addBox({ id: `stair_${coreId}_${floor}_upper_ramp`, floor, p: [rightX, y + rise + rise / 2 - 0.08, center2], s: [laneWidth, 0.18, length + 0.08], rot: [dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
 
   const farLandingZ = farZ + dir * 0.55
-  addBox({ floor, p: [(core.x0 + core.x1) / 2, y + rise - 0.09, farLandingZ], s: [core.x1 - core.x0 - 0.55, 0.18, 1.25], material: 'stairTread', role: 'landing' })
-  const upperLandingZ = entryZ + dir * 0.34
-  addBox({ floor, p: [rightX, y + FLOOR_HEIGHT - 0.09, upperLandingZ], s: [laneWidth, 0.18, 0.72], material: 'stairTread', role: 'landing' })
+  addBox({ id: `stair_${coreId}_${floor}_mid_landing`, floor, p: [landingX, y + rise - 0.09, farLandingZ], s: [landingWidth, 0.18, 1.25], material: 'stairTread', role: 'landing' })
 
-  // 계단 중앙과 외곽의 연속 난간. 보이는 손스침과 충돌 장벽은 동일 축을 공유한다.
-  for (const [x, z, rot, yMid] of [
-    [leftX + laneWidth / 2, center1, [-dir * angle, 0, 0], y + rise / 2 + 0.58],
-    [rightX - laneWidth / 2, center2, [dir * angle, 0, 0], y + rise + rise / 2 + 0.58],
-  ]) {
-    addRailBarrier(floor, [x, yMid, z], [0.14, 1.02, length + 0.2], rot)
+  // 층 출입문은 두 레인의 중앙에 있다. 한쪽 레인만 덮으면 문을 정면으로
+  // 통과한 캡슐이 수직 보이드로 떨어지므로, 상부 층계참은 문 폭부터 두
+  // 레인의 첫 디딤판까지 하나의 연속된 구조체로 잇는다. 이 층계참은 바로
+  // 위 계단의 하부 출발참도 겸해 각 층에서 실제 U자 동선을 만든다.
+  const upperLandingDepth = 0.92
+  const upperLandingZ = entryZ + dir * 0.4
+  addBox({
+    id: `stair_${coreId}_${floor}_level_landing`,
+    floor,
+    p: [landingX, y + FLOOR_HEIGHT - 0.09, upperLandingZ],
+    s: [landingWidth, 0.18, upperLandingDepth],
+    material: 'stairTread', role: 'landing',
+  })
+
+  // 두 경사로의 안쪽과 바깥쪽 모두 연속 충돌 난간을 둔다. 보이는
+  // 손스침과 실제 장벽은 같은 축을 공유해 외형과 물리가 어긋나지 않는다.
+  const flightRails = [
+    ['lower_outer', leftX - laneWidth / 2, center1, [-dir * angle, 0, 0], y + rise / 2 + 0.58],
+    ['lower_inner', leftX + laneWidth / 2, center1, [-dir * angle, 0, 0], y + rise / 2 + 0.58],
+    ['upper_inner', rightX - laneWidth / 2, center2, [dir * angle, 0, 0], y + rise + rise / 2 + 0.58],
+    ['upper_outer', rightX + laneWidth / 2, center2, [dir * angle, 0, 0], y + rise + rise / 2 + 0.58],
+  ]
+  for (const [railId, x, z, rot, yMid] of flightRails) {
+    addRailBarrier(floor, [x, yMid, z], [0.14, 1.02, length + 0.2], rot, `stair_${coreId}_${floor}_${railId}_guard`)
     addVisualRail(floor, [x, yMid + 0.52, z], [0.08, 0.08, length + 0.26], rot)
   }
   for (let i = 0; i <= steps; i += 2) {
     const z = entryZ + dir * (0.8 + i * tread)
-    addVisualRail(floor, [leftX + laneWidth / 2, y + i * riser + 0.5, z], [0.06, 1.0, 0.06])
+    for (const side of [-1, 1]) addVisualRail(floor, [leftX + side * laneWidth / 2, y + i * riser + 0.5, z], [0.06, 1.0, 0.06])
     const zBack = farZ - dir * (i * tread)
-    addVisualRail(floor, [rightX - laneWidth / 2, y + rise + i * riser + 0.5, zBack], [0.06, 1.0, 0.06])
+    for (const side of [-1, 1]) addVisualRail(floor, [rightX + side * laneWidth / 2, y + rise + i * riser + 0.5, zBack], [0.06, 1.0, 0.06])
+  }
+
+  // U턴 중간참의 먼 가장자리와 층계참 중앙 보이드를 막는다. 레인 입구는
+  // 비워 실제 보행선은 유지하면서도 어느 방향으로 틀어도 추락하지 않는다.
+  const farGuardZ = farLandingZ + dir * 0.625
+  addRailBarrier(floor, [landingX, y + rise + 0.58, farGuardZ], [landingWidth, 1.16, 0.12], undefined, `stair_${coreId}_${floor}_mid_landing_guard`)
+  addVisualRail(floor, [landingX, y + rise + 1.12, farGuardZ], [landingWidth, 0.08, 0.08])
+  for (let i = 0; i <= 6; i++) {
+    const x = landingX - landingWidth / 2 + landingWidth * i / 6
+    addVisualRail(floor, [x, y + rise + 0.56, farGuardZ], [0.055, 1.05, 0.055])
+  }
+
+  const gapStart = leftX + laneWidth / 2
+  const gapEnd = rightX - laneWidth / 2
+  const upperGapZ = upperLandingZ + dir * upperLandingDepth / 2
+  addRailBarrier(floor, [(gapStart + gapEnd) / 2, y + FLOOR_HEIGHT + 0.58, upperGapZ], [gapEnd - gapStart, 1.16, 0.12], undefined, `stair_${coreId}_${floor}_level_gap_guard`)
+  addVisualRail(floor, [(gapStart + gapEnd) / 2, y + FLOOR_HEIGHT + 1.12, upperGapZ], [gapEnd - gapStart, 0.08, 0.08])
+  for (let i = 0; i <= 2; i++) {
+    const x = gapStart + (gapEnd - gapStart) * i / 2
+    addVisualRail(floor, [x, y + FLOOR_HEIGHT + 0.56, upperGapZ], [0.055, 1.05, 0.055])
   }
 }
 
@@ -404,8 +443,8 @@ function addWellRails(floor, well, openSide) {
 
 function addStairs() {
   for (const floor of ['F1', 'F2', 'F3']) {
-    addSwitchbackStair(floor, { x0: -40, x1: -32, z0: -48, z1: -40 }, -1)
-    addSwitchbackStair(floor, { x0: -16, x1: -8, z0: -16, z1: -8 }, 1)
+    addSwitchbackStair(floor, { x0: -40, x1: -32, z0: -48, z1: -40 }, -1, 'nw')
+    addSwitchbackStair(floor, { x0: -16, x1: -8, z0: -16, z1: -8 }, 1, 'se')
   }
   for (const floor of ['F2', 'F3', 'ROOF']) {
     addWellRails(floor, NW_WELL, 'S')

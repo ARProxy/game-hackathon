@@ -36,6 +36,17 @@ assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'rail').every((ite
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'railVisual').every((item) => !item.collider && item.visible), '난간 장식과 충돌 프록시가 섞였다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').length, 12, '두 코어 × 세 층 × 두 경사로가 필요하다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'parapet').length, 8, '옥상 외곽과 중정에 연속 파라펫이 필요하다')
+for (const floor of ['F1', 'F2', 'F3']) {
+  for (const core of ['nw', 'se']) {
+    for (const suffix of [
+      'lower_outer_guard', 'lower_inner_guard', 'upper_inner_guard', 'upper_outer_guard',
+      'mid_landing_guard', 'level_gap_guard',
+    ]) {
+      const guard = COMPACT_SCHOOL.boxes.find((item) => item.id === `stair_${core}_${floor}_${suffix}`)
+      assert.ok(guard?.collider && guard.role === 'rail' && !guard.visible, `${core} ${floor} 계단의 ${suffix} 연속 난간이 없다`)
+    }
+  }
+}
 
 const doorById = Object.fromEntries(COMPACT_SCHOOL.doors.map((door) => [door.id, door]))
 const slots = verticalMapContract.slots
@@ -59,6 +70,49 @@ const slabAt = (floor, x, z) => COMPACT_SCHOOL.boxes.some((item) => (
 const walkableSurfaceAt = (floor, x, z) => floor === 'FIELD'
   ? COMPACT_SCHOOL.boxes.some((item) => item.f === 'OUT' && item.role === 'fieldGround' && pointInsideBoxXZ(x, z, item))
   : slabAt(floor, x, z)
+
+const SUPPORT_ROLES = new Set(['slab', 'landing', 'stairRamp'])
+const supportsFootPoint = ([x, y, z], box) => {
+  if (!box.collider || !SUPPORT_ROLES.has(box.role)) return false
+  const angleX = box.rot?.[0] ?? 0
+  const dx = x - box.p[0]
+  const dy = y - box.p[1]
+  const dz = z - box.p[2]
+  const localY = Math.cos(angleX) * dy + Math.sin(angleX) * dz
+  const localZ = -Math.sin(angleX) * dy + Math.cos(angleX) * dz
+  return Math.abs(dx) <= box.s[0] / 2 + 0.025
+    && Math.abs(localZ) <= box.s[2] / 2 + 0.025
+    && Math.abs(localY - box.s[1] / 2) <= 0.045
+}
+
+const assertContinuouslySupported = (path, label) => {
+  let sampleCount = 0
+  for (let index = 1; index < path.length; index++) {
+    const from = path[index - 1]
+    const to = path[index]
+    const distance = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2])
+    const steps = Math.max(1, Math.ceil(distance / 0.12))
+    for (let step = 0; step <= steps; step++) {
+      const t = step / steps
+      const point = from.map((value, axis) => value + (to[axis] - value) * t)
+      const support = COMPACT_SCHOOL.boxes.find((box) => supportsFootPoint(point, box))
+      assert.ok(support, `${label} ${index - 1}→${index} 구간의 [${point.map((value) => value.toFixed(2)).join(', ')}] 아래 지지 구조가 없다`)
+      sampleCount += 1
+    }
+  }
+  assert.ok(sampleCount >= 100, `${label} 연속 지지 검사가 지나치게 성겼다`)
+}
+
+const roofLevelLanding = COMPACT_SCHOOL.boxes.find((item) => item.id === 'stair_nw_F3_level_landing')
+assert.ok(roofLevelLanding, '옥상 방화문과 북서 계단을 잇는 층계참이 없다')
+assert.ok(pointInsideBoxXZ(-36, -40.4, roofLevelLanding), '옥상 층계참이 방화문 정면을 받치지 않는다')
+assert.ok(pointInsideBoxXZ(-33.65, -40.4, roofLevelLanding), '옥상 층계참이 하강 레인까지 이어지지 않는다')
+assert.equal(roofLevelLanding.p[1] + roofLevelLanding.s[1] / 2, FLOOR_Y.ROOF, '옥상 층계참 높이가 옥상 바닥과 어긋났다')
+assertContinuouslySupported(
+  verticalMapContract.paths.ROOF_F3_STAIRS.doorToDoorDown,
+  '옥상 방화문→3층 방화문 실보행선',
+)
+
 for (const floor of ['F1', 'F2', 'F3', 'ROOF', 'B1', 'FIELD']) {
   for (const node of COMPACT_SCHOOL.navNodes.filter((item) => item.floor === floor)) {
     assert.ok(walkableSurfaceAt(floor, node.p[0], node.p[2]), `${node.id} 아래에 바닥이 없다`)

@@ -118,6 +118,10 @@ def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
     assert path["down"][0] == top["position"]
     assert path["down"][-1] == bottom["position"]
     assert path["durationSeconds"] >= 3.0
+    door_to_door = path["doorToDoorDown"]
+    assert door_to_door[0] == get_map_slot("ROOF_TO_F3_FIRE_DOOR")["position"]
+    assert door_to_door[-1] == get_map_slot("F3_TO_F2_STAIR_WEST")["position"]
+    assert len(door_to_door) >= 12
 
 
 def test_third_floor_uses_dedicated_broadcast_console_inside_the_room() -> None:
