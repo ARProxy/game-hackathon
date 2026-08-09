@@ -24,7 +24,7 @@ from app.ai.speech import (
     select_speech_mode,
 )
 from app.game.authority import MovementSample, has_clear_catch_line
-from app.game.progression import FinalRoute
+from app.game.progression import FinalRoute, WorldFloor
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
 
 CONTRACT_PATH = Path(__file__).parents[3] / "client/src/game/companionContract.json"
@@ -137,16 +137,26 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
 
             if not has_reason_to_stay:
                 # 플레이어를 따라 이동 (자발적 판단)
-                runtime.player_floor_changed = None  # 이벤트 소비
+                target_x = float(floor_event["position"]["x"])
+                target_z = float(floor_event["position"]["z"])
+                stair_direction = None
+                lateral_offset = -0.38 if companion_id == "partner" else 0.38
+                if current_floor == WorldFloor.ROOF and player_floor == WorldFloor.F3:
+                    from app.game.map_slots import get_map_slot as _get_stair_slot
+                    target_position = _get_stair_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")["position"]
+                    target_x, target_z = float(target_position[0]), float(target_position[2])
+                    stair_direction = "down"
                 return {
                     "state": "FOLLOW_TO_FLOOR",
                     "target_id": None,
                     "target": {
-                        "x": floor_event["position"]["x"],
-                        "z": floor_event["position"]["z"],
+                        "x": target_x + (lateral_offset if stair_direction else 0),
+                        "z": target_z,
                     },
                     "reason": "player_descended",
                     "_floor_event": floor_event,
+                    "_stair_direction": stair_direction,
+                    "arrival_distance": 0.42 if stair_direction else CONTRACT["arrivalDistance"],
                 }
             # 이유가 있으면 현재 목표 유지 (독립 동선) — 이벤트는 유지
         else:
@@ -443,6 +453,11 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
         floor_event = intent.get("_floor_event")
         if floor_event:
             action = {"type": "floor_transition", "target_floor": floor_event["position"]}
+            if intent.get("_stair_direction"):
+                action.update({
+                    "traversal": "stairs",
+                    "direction": intent["_stair_direction"],
+                })
     elif intent["state"] == "AVOID_SEEKER" and sighting and not sighting.get("reported"):
         sighting["reported"] = True
         action = {"type": "seeker_report", "position": sighting["position"]}

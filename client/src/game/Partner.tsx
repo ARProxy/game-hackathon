@@ -9,6 +9,7 @@ import { sendGameMessage } from '../hooks/useWebSocket'
 import { floorHeight } from './spawnContract'
 import { useCollisionAwarePlanarMotion } from './useCollisionAwarePlanarMotion'
 import { projectAuthorityPosition } from './aiNavigation'
+import verticalMapContract from './verticalMapContract.json'
 
 interface PartnerProps {
   playerRef: React.RefObject<THREE.Group | null>
@@ -31,6 +32,33 @@ const ACTOR_CORRECTION_SPEED = 7
 const _partnerPosition = new THREE.Vector3()
 const _playerPosition = new THREE.Vector3()
 const _displayTarget = { x: 0, z: 0 }
+const _stairSample = new THREE.Vector3()
+const _stairHeading = new THREE.Vector3()
+const STAIR_PATH = verticalMapContract.paths.ROOF_F3_STAIRS
+
+type StairTraversal = {
+  startedAt: number
+  duration: number
+  points: THREE.Vector3[]
+  segmentLengths: number[]
+  totalLength: number
+}
+
+function sampleStairPath(traversal: StairTraversal, progress: number, output: THREE.Vector3) {
+  let remaining = THREE.MathUtils.clamp(progress, 0, 1) * traversal.totalLength
+  for (let index = 0; index < traversal.segmentLengths.length; index += 1) {
+    const segmentLength = traversal.segmentLengths[index]
+    if (remaining <= segmentLength || index === traversal.segmentLengths.length - 1) {
+      return output.lerpVectors(
+        traversal.points[index],
+        traversal.points[index + 1],
+        segmentLength > 0 ? Math.min(1, remaining / segmentLength) : 1,
+      )
+    }
+    remaining -= segmentLength
+  }
+  return output.copy(traversal.points[traversal.points.length - 1])
+}
 
 export default function Partner({
   playerRef,
@@ -40,6 +68,9 @@ export default function Partner({
   requestsThink = false,
 }: PartnerProps) {
   const groupRef = useRef<THREE.Group>(null)
+  const movementRef = useRef(0)
+  const previousFloorRef = useRef<string | null>(null)
+  const stairTraversalRef = useRef<StairTraversal | null>(null)
   const moveToward = useCollisionAwarePlanarMotion()
   const lastThink = useRef(-Infinity)
   const lastRescueAttempt = useRef(0)
@@ -71,7 +102,10 @@ export default function Partner({
     const group = groupRef.current
     if (!group) return
     const store = useGameStore.getState()
-    if (store.isPaused) return
+    if (store.isPaused) {
+      movementRef.current = 0
+      return
+    }
     const gameActive = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
     if (requestsThink && gameActive && clock.elapsedTime - lastThink.current >= companion.thinkIntervalSeconds) {
       sendGameMessage({ type: 'action', payload: { action_type: 'companion_think' } })
@@ -79,19 +113,66 @@ export default function Partner({
     }
     const partnerState = store.players[playerId]
     if (partnerState?.status === 'eliminated' || partnerState?.status === 'escaped') {
+      movementRef.current = 0
       group.visible = false
       return
     }
     group.visible = true
+    const currentFloor = partnerState?.position.floor ?? null
+    const previousFloor = previousFloorRef.current
+    if (!previousFloor) previousFloorRef.current = currentFloor
+    else if (currentFloor && currentFloor !== previousFloor) {
+      const zone = partnerState?.position.zone
+      const direction = previousFloor === 'ROOF' && currentFloor === 'F3'
+        && zone === 'roof_northwest_stair_bottom' ? 'down'
+        : previousFloor === 'F3' && currentFloor === 'ROOF'
+          && zone === 'f3_northwest_stair_top' ? 'up'
+          : null
+      if (direction) {
+        const lateralOffset = playerId === 'partner' ? -0.38 : 0.38
+        const authored = direction === 'down'
+          ? STAIR_PATH.down
+          : [...STAIR_PATH.down].reverse()
+        const points = authored.map(([x, y, z]) => new THREE.Vector3(x + lateralOffset, y, z))
+        // 서버가 허용한 계단참 부근의 현재 표시 위치에서 자연스럽게 경사로로 잇는다.
+        points[0].copy(group.position)
+        const segmentLengths = points.slice(1).map((point, index) => point.distanceTo(points[index]))
+        stairTraversalRef.current = {
+          startedAt: clock.elapsedTime,
+          duration: STAIR_PATH.durationSeconds,
+          points,
+          segmentLengths,
+          totalLength: segmentLengths.reduce((sum, length) => sum + length, 0),
+        }
+      }
+      previousFloorRef.current = currentFloor
+    }
+
+    const stairTraversal = stairTraversalRef.current
+    if (stairTraversal) {
+      const progress = (clock.elapsedTime - stairTraversal.startedAt) / stairTraversal.duration
+      sampleStairPath(stairTraversal, progress, _stairSample)
+      sampleStairPath(stairTraversal, Math.min(1, progress + 0.015), _stairHeading)
+      group.position.copy(_stairSample)
+      const dx = _stairHeading.x - _stairSample.x
+      const dz = _stairHeading.z - _stairSample.z
+      if (Math.hypot(dx, dz) > 0.001) group.rotation.y = Math.atan2(dx, dz)
+      movementRef.current = 1
+      if (progress >= 1) stairTraversalRef.current = null
+      return
+    }
+
     const actorBaseY = partnerState?.position.floor
       ? partnerState.position.y ?? floorHeight(partnerState.position.floor)
       : spawn[1]
     if (partnerState?.status === 'frozen') {
+      movementRef.current = 0
       group.position.y = actorBaseY
       return
     }
     const intent = store.companionIntents[playerId] ?? (playerId === 'partner' ? store.companionIntent : null)
     if (!intent) {
+      movementRef.current = 0
       group.position.y = actorBaseY
       return
     }
@@ -128,12 +209,13 @@ export default function Partner({
       group.rotation.y = THREE.MathUtils.lerp(group.rotation.y, Math.atan2(dx, dz), 0.15)
     }
     const active = partnerState?.status === 'alive' && (speed > 0 || intent.state === 'INSPECT_CANDIDATE')
+    movementRef.current = active ? 1 : 0
     group.position.y = actorBaseY + (active ? Math.abs(Math.sin(clock.elapsedTime * 7)) * 0.08 : 0)
   })
 
   return (
     <group ref={groupRef} position={spawn}>
-      <CharacterModel id={characterId} frozen={partnerFrozen} />
+      <CharacterModel id={characterId} frozen={partnerFrozen} movementRef={movementRef} />
     </group>
   )
 }

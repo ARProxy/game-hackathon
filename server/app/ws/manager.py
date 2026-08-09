@@ -1964,11 +1964,17 @@ class ConnectionManager:
         elif action["type"] == "floor_transition":
             # AI의 자율 층 이동
             target = action["target_floor"]
-            offset = (DEFAULT_AI_PARTNER_IDS.index(companion_id) + 1) * 1.1 if companion_id in DEFAULT_AI_PARTNER_IDS else 1.1
+            uses_stairs = action.get("traversal") == "stairs"
+            if uses_stairs:
+                offset = -0.38 if companion_id == "partner" else 0.38
+                z_offset = 0.0
+            else:
+                offset = (DEFAULT_AI_PARTNER_IDS.index(companion_id) + 1) * 1.1 if companion_id in DEFAULT_AI_PARTNER_IDS else 1.1
+                z_offset = 0.7
             if partner:
                 partner.position.x = target["x"] + offset
                 partner.position.y = target["y"]
-                partner.position.z = target["z"] + 0.7
+                partner.position.z = target["z"] + z_offset
                 partner.position.floor = WorldFloor(target["floor"])
                 partner.position.zone = target.get("zone", partner.position.zone)
                 session.position_samples[partner.player_id] = MovementSample(
@@ -1979,6 +1985,8 @@ class ConnectionManager:
                     "type": "actor_floor_changed",
                     "actor_id": companion_id,
                     "route": "companion_follow",
+                    "traversal": action.get("traversal"),
+                    "direction": action.get("direction"),
                     "position": {
                         "x": partner.position.x,
                         "y": partner.position.y,

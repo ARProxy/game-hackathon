@@ -416,3 +416,45 @@ def test_companion_holds_active_floor_role_when_human_returns_to_previous_floor(
     assert intent["state"] != "FOLLOW_TO_FLOOR"
     assert intent["reason"] == "intercom_ai_position"
     assert session.companion_states["partner"].player_floor_changed is not None
+
+
+def test_rooftop_companions_use_separate_stair_lanes_before_following_player_down() -> None:
+    bottom = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
+    top = get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")
+    for companion_id, lateral_offset in (("partner", -0.38), ("partner-2", 0.38)):
+        session = make_session(f"companion-physical-roof-stair-{companion_id}")
+        session.round_data = None
+        session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+        partner = session.state.get_player(companion_id)
+        seeker = session.state.get_player("seeker")
+        partner.position.floor = WorldFloor.ROOF
+        seeker.position.floor = WorldFloor.F1
+        runtime = session.companion_states[companion_id]
+        runtime.player_floor_changed = {
+            "floor": "F3",
+            "position": {
+                "x": bottom["position"][0], "y": bottom["position"][1],
+                "z": bottom["position"][2], "floor": "F3", "zone": bottom["zone"],
+            },
+            "timestamp": time.monotonic(),
+        }
+
+        intent = decide_companion_intent(session, companion_id)
+
+        assert intent["state"] == "FOLLOW_TO_FLOOR"
+        assert intent["_stair_direction"] == "down"
+        assert intent["target"] == {
+            "x": top["position"][0] + lateral_offset,
+            "z": top["position"][2],
+        }
+        assert runtime.player_floor_changed is not None
+
+        partner.position.x, partner.position.z = intent["target"]["x"], intent["target"]["z"]
+        _, action = advance_companion(session, companion_id)
+
+        assert action == {
+            "type": "floor_transition",
+            "target_floor": runtime.player_floor_changed["position"],
+            "traversal": "stairs",
+            "direction": "down",
+        }

@@ -299,6 +299,8 @@ export default function useWebSocket() {
           addSubtitle('system', `${data.position.floor} 구역으로 이동했습니다.`)
         } else if (data.actor_id?.startsWith('seeker')) {
           addSubtitle('system', `술래가 ${data.position.floor} 구역에 나타났습니다.`)
+        } else if (data.traversal === 'stairs') {
+          addSubtitle(data.actor_id, `동료가 계단으로 ${data.position.floor} 구역에 합류 중입니다.`)
         } else {
           addSubtitle(data.actor_id, `동료가 ${data.position.floor} 구역으로 이동했습니다.`)
         }

@@ -1,8 +1,20 @@
 {
-  "version": 1,
+  "version": 2,
   "source": "compactSchoolData.js",
   "enabled": true,
   "floorY": { "B1": -3.6, "F1": 0, "F2": 3.6, "F3": 7.2, "ROOF": 10.8, "FIELD": 0 },
+  "paths": {
+    "ROOF_F3_STAIRS": {
+      "kind": "stair_path",
+      "durationSeconds": 3.6,
+      "down": [
+        [-33.65, 10.8, -40.34],
+        [-33.65, 9.0, -44.75],
+        [-38.35, 9.0, -44.75],
+        [-38.35, 7.2, -40.8]
+      ]
+    }
+  },
   "slots": {
     "ROOF_RUNNER_SPAWN_A": { "kind": "spawn", "floor": "ROOF", "position": [-27, 10.8, -37.4], "zone": "roof_north" },
     "ROOF_RUNNER_SPAWN_B": { "kind": "spawn", "floor": "ROOF", "position": [-24, 10.8, -37.4], "zone": "roof_north" },

@@ -113,6 +113,11 @@ def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
     assert bottom["kind"] == top["kind"] == "stair_boundary"
     assert bottom["floor"] == "ROOF" and bottom["position"] == [-38.35, 7.2, -40.8]
     assert top["floor"] == "F3" and top["position"] == [-33.65, 10.8, -40.34]
+    path = VERTICAL_MAP_CONTRACT["paths"]["ROOF_F3_STAIRS"]
+    assert path["kind"] == "stair_path"
+    assert path["down"][0] == top["position"]
+    assert path["down"][-1] == bottom["position"]
+    assert path["durationSeconds"] >= 3.0
 
 
 def test_third_floor_uses_dedicated_broadcast_console_inside_the_room() -> None:
