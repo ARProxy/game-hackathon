@@ -167,8 +167,8 @@
     "F1_FIELD_INSIDE_CROSSING": { "kind": "door_boundary", "floor": "F1", "position": [-24, 0, -8.65], "zone": "f1_main_lobby" },
     "F1_FIELD_OUTSIDE_CROSSING": { "kind": "door_boundary", "floor": "FIELD", "position": [-24, 0, -6.7], "zone": "field_north_entry" },
 
-    "ELEVATOR_SHAFT_PASSENGER": { "kind": "elevator", "floor": "F1", "position": [-12, 0, -44], "zone": "passenger_elevator", "elevatorId": "evp", "servedFloors": ["B1", "F1", "F2", "F3", "ROOF"] },
-    "ELEVATOR_SHAFT_CARGO": { "kind": "elevator", "floor": "F1", "position": [-44, 0, -44], "zone": "cargo_elevator", "elevatorId": "evc", "servedFloors": ["B1", "F1", "F2", "F3"] },
+    "ELEVATOR_SHAFT_PASSENGER": { "kind": "elevator", "floor": "F1", "position": [-12, 0, -41.7], "landingPosition": [-12, 0, -39.25], "zone": "passenger_elevator", "elevatorId": "evp", "servedFloors": ["B1", "F1", "F2", "F3", "ROOF"] },
+    "ELEVATOR_SHAFT_CARGO": { "kind": "elevator", "floor": "F1", "position": [-20, 0, -41.75], "landingPosition": [-20, 0, -39.25], "zone": "cargo_elevator", "elevatorId": "evc", "servedFloors": ["B1", "F1", "F2", "F3"] },
 
     "BASEMENT_FINAL_ENTRY": { "kind": "final_entry", "floor": "B1", "position": [-36, -3.6, -42], "zone": "b1_stair", "anchorRoom": "b1_stair" },
     "BASEMENT_FINAL_DEVICE_POOL": { "kind": "room_pool", "floor": "B1", "interactionPosition": [-24, -3.6, -44], "roomIds": ["b1_mach", "b1_elec", "b1_archive", "b1_shelter"], "deviceIds": ["ip_b1_mach", "ip_b1_elec", "ip_b1_archive", "ip_b1_shelter"] },

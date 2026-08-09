@@ -65,6 +65,16 @@ export interface CompactSchoolData {
   bounds: { x0: number; x1: number; z0: number; z1: number }
   courtyard: { x0: number; x1: number; z0: number; z1: number }
   floorY: Record<CompactFloor, number>
+  elevators: CompactElevator[]
+}
+
+export interface CompactElevator {
+  id: 'evp' | 'evc'
+  name: string
+  x: [number, number]
+  z: [number, number]
+  roof: boolean
+  servedFloors: CompactFloor[]
 }
 
 export const FLOOR_HEIGHT: number
@@ -76,6 +86,7 @@ export const CORRIDOR_WIDTH: number
 export const WALL_HEIGHT: number
 export const WALL_THICKNESS: number
 export const SLAB_THICKNESS: number
+export const COMPACT_ELEVATORS: CompactElevator[]
 export const COMPACT_PALETTE: Record<string, string>
 export const COMPACT_SCHOOL: CompactSchoolData
 export function buildCompactSchool(): CompactSchoolData

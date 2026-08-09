@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import SchoolCampusV4 from './SchoolCampusV4'
+import OriginalElevators from './OriginalElevators'
 import type { PlayerHandle } from './Player'
 import { useFrame } from '@react-three/fiber'
 import { RigidBody, CuboidCollider } from '@react-three/rapier'
@@ -290,6 +291,7 @@ export default function SchoolCampus({ playerRef, visibleFloors, referenceMode =
   return (
     <group>
       <SchoolCampusV4 visibleFloors={visibleFloors} playerRef={playerRef} />
+      <OriginalElevators visibleFloors={visibleFloors} playerRef={playerRef} />
       {/* 원본 비교 시 메시만 숨기고 물리 객체의 생명주기는 그대로 유지한다. */}
       <group visible={!referenceMode}>
         {TRAP_SLOTS.map((trap) => (

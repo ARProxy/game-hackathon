@@ -107,10 +107,24 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     if (!previousFloor) previousFloorRef.current = currentFloor
     else if (currentFloor && currentFloor !== previousFloor) {
       const zone = seekerState?.position.zone
+      if (zone?.includes('hunter_elevator_')) {
+        const targetY = floorHeight(currentFloor)
+        const targetX = seekerState?.position.x ?? group.position.x
+        const targetZ = seekerState?.position.z ?? group.position.z
+        const points = [group.position.clone(), new THREE.Vector3(targetX, targetY, targetZ)]
+        const lengths = [points[0].distanceTo(points[1])]
+        traversalRef.current = {
+          startedAt: clock.elapsedTime,
+          duration: 1.2 + Math.abs(targetY - floorHeight(previousFloor)) / 2.2,
+          points,
+          lengths,
+          total: lengths[0],
+        }
+      }
       const route = zone?.includes('east') ? 'east'
         : zone?.includes('field') || zone === 'f1_main_lobby' ? 'field'
         : 'west'
-      const selected = Object.values(TRAVERSAL_PATHS).find((path) => {
+      const selected = zone?.includes('hunter_elevator_') ? undefined : Object.values(TRAVERSAL_PATHS).find((path) => {
         const matches = (
           (path.upperFloor === previousFloor && path.lowerFloor === currentFloor)
           || (path.upperFloor === currentFloor && path.lowerFloor === previousFloor)

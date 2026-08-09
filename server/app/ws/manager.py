@@ -59,16 +59,19 @@ from app.game.vertical_flow import (
     BROADCAST_MEANING_LABELS,
     BROADCAST_MISSION_PROMPT,
     activate_rooftop_signal,
+    announce_elevator_arrival,
     activate_basement_device,
     activate_final_station,
     activate_simultaneous_device,
     command_basement_device,
+    call_elevator,
     complete_current_stage,
     cross_rooftop_stair_boundary,
     evaluate_broadcast_phrase,
     final_escape_slot,
     parse_basement_device_command,
     refresh_closing_floor,
+    request_elevator_trip,
     start_intercom_mission,
     start_security_guidance,
     submit_intercom_answer,
@@ -877,9 +880,25 @@ class ConnectionManager:
                     "reason": str(error),
                 })
                 return
+            closed_floor = refresh_closing_floor(session)
             await self.broadcast(room_id, {
-                "type": "actor_floor_changed", "route": "elevator", **event,
+                "type": "actor_floor_changed", "route": "elevator",
+                "traversal": "elevator", **event,
+                "closed_floor": closed_floor.value if closed_floor else None,
+                "progression": session.vertical_progression_payload(),
             })
+            if player and player.role == PlayerRole.HUMAN:
+                for companion_id in DEFAULT_AI_PARTNER_IDS:
+                    runtime = session.companion_states.get(companion_id)
+                    if runtime:
+                        runtime.player_floor_changed = {
+                            "floor": event["position"]["floor"],
+                            "position": event["position"],
+                            "route": "elevator",
+                            "traversal": "elevator",
+                            "elevator_id": event["elevator_id"],
+                            "timestamp": time.monotonic(),
+                        }
             # A5: 엘리베이터 도착 소리 핑 — 술래 감지
             if "sound_ping" in event:
                 ping = event["sound_ping"]
@@ -893,6 +912,61 @@ class ConnectionManager:
                     "source": "elevator_arrival",
                     "radius": ping["radius"],
                 })
+
+        elif action_type == "call_elevator":
+            try:
+                event = call_elevator(
+                    session, player_id, str(payload.get("elevator_id", "")),
+                    str(payload.get("target_floor", "")),
+                )
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type,
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {"type": "elevator_called", **event})
+
+        elif action_type == "request_elevator_trip":
+            try:
+                event = request_elevator_trip(
+                    session, player_id, str(payload.get("elevator_id", "")),
+                    str(payload.get("target_floor", "")),
+                )
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type,
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {"type": "elevator_called", **event, "ride": True})
+
+        elif action_type == "announce_elevator_arrival":
+            try:
+                event = announce_elevator_arrival(
+                    session, player_id, str(payload.get("elevator_id", "")),
+                    str(payload.get("target_floor", "")),
+                )
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": action_type,
+                    "reason": str(error),
+                })
+                return
+            ping = event["sound_ping"]
+            await self.broadcast(room_id, {
+                "type": "elevator_arrived", "elevator_id": event["elevator_id"],
+                "target_floor": event["floor"], "empty": True,
+            })
+            record_hunter_signal(
+                session, player_id, ping["position"], "elevator",
+                floor_override=ping["floor"],
+            )
+            await self.broadcast(room_id, {
+                "type": "sound_ping", "player_id": player_id,
+                "position": ping["position"], "source": ping["source"],
+                "radius": ping["radius"], "floor": ping["floor"],
+            })
 
         elif action_type == "intercom_submit":
             await self._handle_speech(room_id, player_id, {
@@ -2072,8 +2146,12 @@ class ConnectionManager:
             # AI의 자율 층 이동
             target = action["target_floor"]
             uses_stairs = action.get("traversal") == "stairs"
+            uses_elevator = action.get("traversal") == "elevator"
             if uses_stairs:
                 offset = -0.38 if companion_id == "partner" else 0.38
+                z_offset = 0.0
+            elif uses_elevator:
+                offset = -0.32 if companion_id == "partner" else 0.32
                 z_offset = 0.0
             else:
                 offset = (DEFAULT_AI_PARTNER_IDS.index(companion_id) + 1) * 1.1 if companion_id in DEFAULT_AI_PARTNER_IDS else 1.1
@@ -2095,6 +2173,7 @@ class ConnectionManager:
                     "traversal": action.get("traversal"),
                     "direction": action.get("direction"),
                     "path_id": action.get("path_id"),
+                    "elevator_id": action.get("elevator_id"),
                     "position": {
                         "x": partner.position.x,
                         "y": partner.position.y,

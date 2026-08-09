@@ -190,6 +190,18 @@ export default function useSound() {
     tone(720, 0.1, 0.17, 0.09, 860, 'sine', 0.12)
   }, [tone])
 
+  const playElevatorMotor = useCallback(() => {
+    tone(72, 0, 1.1, 0.055, 92, 'sawtooth')
+    tone(144, 0.08, 0.9, 0.025, 166, 'triangle')
+    noise(0.02, 0.75, 0.018, 90)
+  }, [noise, tone])
+
+  const playElevatorArrival = useCallback(() => {
+    tone(660, 0, 0.16, 0.12, 880, 'triangle')
+    tone(880, 0.13, 0.22, 0.1, 1100, 'sine')
+    noise(0.03, 0.32, 0.045, 420)
+  }, [noise, tone])
+
   return {
     playFreeze,
     playRescue,
@@ -205,5 +217,7 @@ export default function useSound() {
     playRooftopSignal,
     playMissionProgress,
     playCompanionCue,
+    playElevatorMotor,
+    playElevatorArrival,
   }
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 
 import {
   BUILDING_BOUNDS,
+  COMPACT_ELEVATORS,
   COMPACT_SCHOOL,
   CORRIDOR_WIDTH,
   COURTYARD_BOUNDS,
@@ -18,6 +19,7 @@ const SERVER_BARRIER_ROLES = new Set([
   'wall', 'window', 'rail', 'parapet', 'equipmentCollider', 'hvac', 'furniture',
   'roofEquipment', 'missionConsole', 'entryPost',
   'fieldFence',
+  'elevatorShaft',
 ])
 const isServerBarrier = (item) => {
   if (!item.collider || !SERVER_BARRIER_ROLES.has(item.role)) return false
@@ -30,6 +32,7 @@ assert.equal(CORRIDOR_WIDTH, 4.2, '순환 복도 유효 폭은 4.2m여야 한다
 assert.deepEqual(BUILDING_BOUNDS, { x0: -48, x1: 0, z0: -48, z1: -8 })
 assert.deepEqual(COURTYARD_BOUNDS, { x0: -35.8, x1: -12.2, z0: -35.8, z1: -20.2 })
 assert.equal(COMPACT_SCHOOL.rooms.length, 24, '3개 실내층에 8개씩 의미 공간이 필요하다')
+assert.equal(COMPACT_ELEVATORS.length, 2, '승객용·화물용 실제 승강로가 모두 필요하다')
 
 const allAuthored = [...COMPACT_SCHOOL.boxes, ...COMPACT_SCHOOL.cylinders, ...COMPACT_SCHOOL.doors]
 assert.equal(new Set(allAuthored.map((item) => item.id)).size, allAuthored.length, '구조물 ID가 중복되었다')
@@ -110,6 +113,20 @@ const slabAt = (floor, x, z) => COMPACT_SCHOOL.boxes.some((item) => (
 const walkableSurfaceAt = (floor, x, z) => floor === 'FIELD'
   ? COMPACT_SCHOOL.boxes.some((item) => item.f === 'OUT' && item.role === 'fieldGround' && pointInsideBoxXZ(x, z, item))
   : slabAt(floor, x, z)
+
+for (const elevator of COMPACT_ELEVATORS) {
+  const centerX = (elevator.x[0] + elevator.x[1]) / 2
+  const centerZ = (elevator.z[0] + elevator.z[1]) / 2
+  const slot = elevator.id === 'evp' ? slots.ELEVATOR_SHAFT_PASSENGER : slots.ELEVATOR_SHAFT_CARGO
+  assert.deepEqual([slot.position[0], slot.position[2]], [centerX, centerZ], `${elevator.id} 서버 슬롯과 실제 승강로 중심이 다르다`)
+  assert.deepEqual(slot.servedFloors, elevator.servedFloors, `${elevator.id} 운행 층 계약이 다르다`)
+  for (const floor of elevator.servedFloors) {
+    const shaftParts = COMPACT_SCHOOL.boxes.filter((item) => item.id.startsWith(`${elevator.id}_${floor}_shaft_`))
+    assert.equal(shaftParts.length, 3, `${elevator.id} ${floor} 승강로의 배면·측벽이 완성되지 않았다`)
+    assert.ok(slabAt(floor, centerX, elevator.z[1] + 1), `${elevator.id} ${floor} 승강장 앞 바닥이 없다`)
+    if (floor !== 'B1') assert.equal(slabAt(floor, centerX, centerZ), false, `${elevator.id} ${floor} 승강로가 슬래브에 막혔다`)
+  }
+}
 
 const SUPPORT_ROLES = new Set(['slab', 'landing', 'stairRamp'])
 const supportsFootPoint = ([x, y, z], box) => {

@@ -205,6 +205,23 @@ def test_hunter_chooses_nearest_parallel_stair() -> None:
     assert intent["floor_transition"]["path_id"] == "F3_F2_STAIRS_EAST"
 
 
+def test_hunter_uses_nearby_elevator_for_multi_floor_pursuit() -> None:
+    session = make_session("hunter-elevator")
+    seeker = session.state.get_player("seeker")
+    seeker.position.floor = WorldFloor.F3
+    seeker.position.x, seeker.position.y, seeker.position.z = -12.0, 7.2, -41.7
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
+    session.hunter_last_tick = time.monotonic() - 0.5
+
+    intent = advance_hunter(session)
+
+    assert intent["floor_transition"]["traversal"] == "elevator"
+    assert intent["floor_transition"]["path_id"] == "ELEVATOR_EVP"
+    assert intent["actor_floor_changed"]["position"]["floor"] == "F1"
+    assert session.hunter_transit_until["seeker"] > time.monotonic() + 3.0
+    assert not seeker_can_capture(session, "seeker")
+
+
 def test_server_step_does_not_cross_a_wall_segment() -> None:
     wall = next(rect for rect in WALL_RECTS_BY_FLOOR["F1"] if min(rect[2], rect[3]) <= 0.5)
     x, z, sx, sz = wall

@@ -104,6 +104,7 @@ class GameSession:
         self.hunter_last_tick = 0.0
         self.hunter_last_intent: dict | None = None
         self.hunter_transit_until: dict[str, float] = {}
+        self.elevator_calls: dict[str, dict] = {}
         self.secondary_hunter_signal: dict | None = None
         self.blocker_forward = {"x": 0.0, "z": -1.0}
         self.blocker_zone_share: dict | None = None
@@ -176,6 +177,7 @@ class GameSession:
         self.hunter_last_tick = time.monotonic()
         self.hunter_last_intent = None
         self.hunter_transit_until.clear()
+        self.elevator_calls.clear()
         self.secondary_hunter_signal = None
         self.blocker_forward = {"x": 0.0, "z": -1.0}
         self.blocker_zone_share = None

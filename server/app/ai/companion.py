@@ -142,7 +142,10 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                 stair_direction = floor_event.get("direction")
                 path_id = floor_event.get("path_id")
                 lateral_offset = -0.38 if companion_id == "partner" else 0.38
-                if current_floor == WorldFloor.ROOF and player_floor == WorldFloor.F3:
+                if (
+                    current_floor == WorldFloor.ROOF and player_floor == WorldFloor.F3
+                    and traversal != "elevator"
+                ):
                     from app.game.map_slots import get_map_slot as _get_stair_slot
                     target_position = _get_stair_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")["position"]
                     target_x, target_z = float(target_position[0]), float(target_position[2])
@@ -169,6 +172,7 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                     "_stair_direction": stair_direction,
                     "_traversal": traversal,
                     "_path_id": path_id,
+                    "_elevator_id": floor_event.get("elevator_id"),
                     "arrival_distance": 0.42 if traversal else CONTRACT["arrivalDistance"],
                 }
             # 이유가 있으면 현재 목표 유지 (독립 동선) — 이벤트는 유지
@@ -485,6 +489,8 @@ def advance_companion(session: Any, companion_id: str = "partner") -> tuple[dict
                 "target_floor": floor_event["position"],
                 "path_id": intent.get("_path_id"),
             }
+            if intent.get("_elevator_id"):
+                action["elevator_id"] = intent["_elevator_id"]
             if intent.get("_traversal"):
                 action.update({
                     "traversal": intent["_traversal"],

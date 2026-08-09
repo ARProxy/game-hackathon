@@ -573,3 +573,33 @@ def test_companion_walks_to_authored_stair_entry_before_following_between_floors
         "traversal": "stairs", "direction": "down",
         "path_id": "F3_F2_STAIRS_EAST",
     }
+
+
+def test_companion_follows_human_through_same_elevator_contract() -> None:
+    session = make_session("companion-elevator-follow")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    partner = session.state.get_player("partner")
+    session.state.get_player("seeker").position.floor = WorldFloor.F1
+    partner.position.floor = WorldFloor.ROOF
+    runtime = session.companion_states["partner"]
+    runtime.player_floor_changed = {
+        "floor": "F3",
+        "position": {"x": -12.0, "y": 7.2, "z": -41.7, "floor": "F3", "zone": "evp_f3"},
+        "route": "elevator", "traversal": "elevator", "elevator_id": "evp",
+        "timestamp": time.monotonic(),
+    }
+
+    intent = decide_companion_intent(session, "partner")
+
+    assert intent["state"] == "FOLLOW_TO_FLOOR"
+    assert intent["target"] == {"x": -12.0, "z": -41.7}
+    assert intent["_traversal"] == "elevator"
+    partner.position.x, partner.position.z = -12.0, -41.7
+    _, action = advance_companion(session, "partner")
+    assert action == {
+        "type": "floor_transition",
+        "target_floor": runtime.player_floor_changed["position"],
+        "traversal": "elevator", "direction": None,
+        "path_id": None, "elevator_id": "evp",
+    }

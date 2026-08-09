@@ -326,6 +326,12 @@ export default function useWebSocket() {
         break
 
       case 'actor_floor_changed':
+        if (data.route === 'elevator' || data.traversal === 'elevator') {
+          window.dispatchEvent(new CustomEvent('game:elevator-arrived', { detail: {
+            elevator_id: data.elevator_id,
+            target_floor: data.position.floor,
+          } }))
+        }
         useGameStore.getState().updatePlayer(data.actor_id, { position: data.position })
         if (data.progression) {
           useGameStore.getState().setVerticalProgression({
@@ -345,6 +351,14 @@ export default function useWebSocket() {
         } else {
           addSubtitle(data.actor_id, `동료가 ${data.position.floor} 구역으로 이동했습니다.`)
         }
+        break
+
+      case 'elevator_called':
+        window.dispatchEvent(new CustomEvent('game:elevator-called', { detail: data }))
+        break
+
+      case 'elevator_arrived':
+        window.dispatchEvent(new CustomEvent('game:elevator-arrived', { detail: data }))
         break
 
       case 'game_paused':
@@ -525,7 +539,11 @@ export default function useWebSocket() {
           || data.action_type === 'activate_basement_device'
           || data.action_type === 'use_floor_transition'
           || data.action_type === 'cross_rooftop_stair_boundary'
-          || data.action_type === 'vertical_escape') {
+          || data.action_type === 'vertical_escape'
+          || data.action_type === 'use_elevator'
+          || data.action_type === 'call_elevator'
+          || data.action_type === 'request_elevator_trip'
+          || data.action_type === 'announce_elevator_arrival') {
           addSubtitle('system', data.reason ?? '현재 위치에서는 장치를 사용할 수 없습니다.')
         }
         break

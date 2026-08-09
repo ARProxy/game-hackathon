@@ -4,15 +4,15 @@ import { useFrame } from '@react-three/fiber'
 import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { EVS, FLOOR_Y, type CampusFloor } from './campusV4Data.js'
+import { COMPACT_ELEVATORS, FLOOR_Y, type CompactElevator, type CompactFloor } from './compactSchoolData.js'
 import { buildElevatorRig, elevatorMaterials } from './claudeDesign/elevator.js'
 import type { PlayerHandle } from './Player'
 import { useGameStore } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
+import useSound from '../hooks/useSound'
 
-const ORDER = ['B1', 'F1', 'F2', 'F3']
 const DEFAULT_ACCESSIBLE_FLOORS = ['F1']
-const LABEL: Record<string, string> = { B1: 'B1', F1: '1', F2: '2', F3: '3' }
+const LABEL: Record<string, string> = { B1: 'B1', F1: '1', F2: '2', F3: '3', ROOF: 'R' }
 const _playerPosition = new THREE.Vector3()
 type ElevatorMode = 'idle' | 'closing' | 'moving' | 'opening'
 type Runtime = {
@@ -26,17 +26,18 @@ type Runtime = {
 }
 
 export default function OriginalElevators({ visibleFloors, playerRef }: {
-  visibleFloors?: CampusFloor[]
+  visibleFloors?: CompactFloor[]
   playerRef: React.RefObject<PlayerHandle | null>
 }) {
+  const { playElevatorArrival, playElevatorMotor } = useSound()
   const result = useMemo(() => {
     const materials = elevatorMaterials(THREE)
     const floorObjects = new Map<string, THREE.Object3D[]>()
-    const roots = EVS.map((elevator) => buildElevatorRig(THREE, {
+    const roots = COMPACT_ELEVATORS.map((elevator) => buildElevatorRig(THREE, {
       EV: elevator,
       mat: materials,
       FY: FLOOR_Y,
-      order: ORDER,
+      order: elevator.servedFloors,
       label: LABEL,
       onFloor: (floor, object) => {
         const objects = floorObjects.get(floor) ?? []
@@ -67,15 +68,49 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
   useEffect(() => {
     const visible = visibleFloors ? new Set(visibleFloors) : null
     for (const [floor, objects] of result.floorObjects) {
-      for (const object of objects) object.visible = !visible || visible.has(floor as CampusFloor)
+      for (const object of objects) object.visible = !visible || visible.has(floor as CompactFloor)
     }
   }, [result, visibleFloors])
+
+  useEffect(() => {
+    const onCalled = (rawEvent: Event) => {
+      const detail = (rawEvent as CustomEvent<{ elevator_id: string; target_floor: string }>).detail
+      const index = COMPACT_ELEVATORS.findIndex((elevator) => elevator.id === detail.elevator_id)
+      if (index < 0 || !COMPACT_ELEVATORS[index].servedFloors.includes(detail.target_floor as CompactFloor)) return
+      const runtime = runtimes.current[index]
+      if (runtime.at === detail.target_floor) {
+        runtime.mode = 'opening'
+        runtime.wait = 6
+        return
+      }
+      runtime.target = detail.target_floor
+      runtime.mode = runtime.door > 0 ? 'closing' : 'moving'
+      playElevatorMotor()
+    }
+    const onArrived = (rawEvent: Event) => {
+      const detail = (rawEvent as CustomEvent<{ elevator_id?: string; target_floor: string }>).detail
+      const index = COMPACT_ELEVATORS.findIndex((elevator) => elevator.id === detail.elevator_id)
+      if (index < 0 || !COMPACT_ELEVATORS[index].servedFloors.includes(detail.target_floor as CompactFloor)) return
+      const runtime = runtimes.current[index]
+      runtime.at = detail.target_floor
+      runtime.y = FLOOR_Y[detail.target_floor as CompactFloor]
+      runtime.target = null
+      runtime.mode = 'opening'
+      runtime.wait = 6
+    }
+    window.addEventListener('game:elevator-called', onCalled)
+    window.addEventListener('game:elevator-arrived', onArrived)
+    return () => {
+      window.removeEventListener('game:elevator-called', onCalled)
+      window.removeEventListener('game:elevator-arrived', onArrived)
+    }
+  }, [playElevatorMotor])
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (event.repeat) return
       const { near, inside } = proximityRef.current
-      if (event.code === 'KeyE' && near !== null && playerFloor && ORDER.includes(playerFloor)) {
+      if (event.code === 'KeyE' && near !== null && playerFloor && COMPACT_ELEVATORS[near].servedFloors.includes(playerFloor as CompactFloor)) {
         const runtime = runtimes.current[near]
         if (runtime.mode === 'moving' || runtime.mode === 'closing') return
         event.preventDefault()
@@ -83,31 +118,36 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
           runtime.mode = 'opening'
           runtime.wait = 6
         } else {
-          runtime.target = playerFloor
-          runtime.mode = runtime.door > 0 ? 'closing' : 'moving'
+          sendGameMessage({
+            type: 'action',
+            payload: { action_type: 'call_elevator', elevator_id: COMPACT_ELEVATORS[near].id, target_floor: playerFloor },
+          })
         }
         return
       }
       if (inside === null) return
-      const target = ({ Digit0: 'B1', Digit1: 'F1', Digit2: 'F2', Digit3: 'F3' } as Record<string, string>)[event.code]
-      if (!target || !accessibleFloors.includes(target)) return
+      const target = ({ Digit0: 'B1', Digit1: 'F1', Digit2: 'F2', Digit3: 'F3', KeyR: 'ROOF' } as Record<string, string>)[event.code]
+      if (!target || !accessibleFloors.includes(target) || !COMPACT_ELEVATORS[inside].servedFloors.includes(target as CompactFloor)) return
       const runtime = runtimes.current[inside]
       if (runtime.mode === 'moving' || target === runtime.at) return
       event.preventDefault()
-      runtime.target = target
-      runtime.mode = runtime.door > 0 ? 'closing' : 'moving'
+      sendGameMessage({
+        type: 'action',
+        payload: { action_type: 'request_elevator_trip', elevator_id: COMPACT_ELEVATORS[inside].id, target_floor: target },
+      })
     }
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
-  }, [accessibleFloors, playerFloor])
+  }, [accessibleFloors, playerFloor, playElevatorMotor])
 
   useFrame((_, delta) => {
     const player = playerRef.current?.getGroup()
     let near: number | null = null
     let inside: number | null = null
-    if (player && playerFloor && ORDER.includes(playerFloor)) {
+    if (player && playerFloor) {
       player.getWorldPosition(_playerPosition)
-      EVS.forEach((elevator, index) => {
+      COMPACT_ELEVATORS.forEach((elevator, index) => {
+        if (!elevator.servedFloors.includes(playerFloor as CompactFloor)) return
         const centerX = (elevator.x[0] + elevator.x[1]) / 2
         const landingZ = elevator.z[1] + 0.7
         if (Math.hypot(_playerPosition.x - centerX, _playerPosition.z - landingZ) <= 2.1) near = index
@@ -123,12 +163,13 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
 
     runtimes.current.forEach((runtime, index) => {
       const rig = result.roots[index]
+      const elevator = COMPACT_ELEVATORS[index]
       runtime.previousY = runtime.y
       if (runtime.mode === 'closing') {
         runtime.door = Math.max(0, runtime.door - delta * 1.6)
         if (runtime.door <= 0.001) runtime.mode = 'moving'
       } else if (runtime.mode === 'moving' && runtime.target) {
-        const targetY = FLOOR_Y[runtime.target as CampusFloor]
+        const targetY = FLOOR_Y[runtime.target as CompactFloor]
         const distance = targetY - runtime.y
         runtime.y += Math.sign(distance) * Math.min(Math.abs(distance), delta * 2.2)
         if (Math.abs(targetY - runtime.y) < 0.01) {
@@ -137,9 +178,14 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
           runtime.target = null
           runtime.mode = 'opening'
           runtime.wait = 6
+          playElevatorArrival()
           sendGameMessage({
             type: 'action',
-            payload: { action_type: 'use_elevator', elevator_id: EVS[index].id, target_floor: runtime.at },
+            payload: {
+              action_type: inside === index ? 'use_elevator' : 'announce_elevator_arrival',
+              elevator_id: elevator.id,
+              target_floor: runtime.at,
+            },
           })
         }
       } else if (runtime.mode === 'opening') {
@@ -155,38 +201,38 @@ export default function OriginalElevators({ visibleFloors, playerRef }: {
       }
       const slide = runtime.door * (rig.PANEL_W - 0.02)
       for (const door of rig.carDoors) door.m.position.x = door.home + door.sd * slide
-      for (const floor of ORDER) {
+      for (const floor of elevator.servedFloors) {
         const open = floor === runtime.at && runtime.mode !== 'moving' ? runtime.door : 0
         for (const [doorIndex, door] of (rig.landing[floor] ?? []).entries()) {
           door.position.x = door.userData.home + door.userData.sd * open * (rig.PANEL_W - 0.02)
           physicsBodies.current.get(`landing-${index}-${floor}-${doorIndex}`)?.setNextKinematicTranslation({
             x: door.position.x,
-            y: FLOOR_Y[floor as CampusFloor] + rig.DOOR_H / 2,
-            z: EVS[index].z[1] - 0.03,
+            y: FLOOR_Y[floor as CompactFloor] + rig.DOOR_H / 2,
+            z: elevator.z[1] - 0.03,
           })
         }
       }
-      syncCarPhysics(physicsBodies.current, index, EVS[index], rig, runtime.y, slide)
+      syncCarPhysics(physicsBodies.current, index, elevator, rig, runtime.y, slide)
     })
   })
 
   const promptIndex = insideElevator ?? nearElevator
-  const promptElevator = promptIndex === null ? null : EVS[promptIndex]
+  const promptElevator = promptIndex === null ? null : COMPACT_ELEVATORS[promptIndex]
   return <>
-    {result.roots.map((rig, index) => <primitive key={EVS[index].id} object={rig.root} />)}
+    {result.roots.map((rig, index) => <primitive key={COMPACT_ELEVATORS[index].id} object={rig.root} />)}
     {result.roots.map((rig, index) => (
       <ElevatorPhysics
-        key={`physics-${EVS[index].id}`}
+        key={`physics-${COMPACT_ELEVATORS[index].id}`}
         index={index}
         rig={rig}
         bodies={physicsBodies}
       />
     ))}
     {promptElevator && playerFloor && (
-      <Html position={[(promptElevator.x[0] + promptElevator.x[1]) / 2, FLOOR_Y[playerFloor as CampusFloor] + 2.4, promptElevator.z[1] + 0.8]} center>
+      <Html position={[(promptElevator.x[0] + promptElevator.x[1]) / 2, FLOOR_Y[playerFloor as CompactFloor] + 2.4, promptElevator.z[1] + 0.8]} center>
         <div style={{ width: 'max-content', padding: '7px 11px', borderRadius: 7, color: '#ffe1aa', background: 'rgba(8,12,16,.9)', border: '1px solid #b79a68', fontSize: 12, fontWeight: 800 }}>
           {insideElevator !== null
-            ? `이동 층 선택 · ${accessibleFloors.map((floor) => LABEL[floor]).join(' / ')}`
+            ? `층 선택 · 0:B1 / 1:1F / 2:2F / 3:3F${promptElevator.roof ? ' / R:옥상' : ''}`
             : `E · ${promptElevator.name} 호출`}
         </div>
       </Html>
@@ -210,7 +256,7 @@ function ElevatorPhysics({ index, rig, bodies }: {
   rig: ElevatorRig
   bodies: React.RefObject<Map<string, RapierRigidBody>>
 }) {
-  const elevator = EVS[index]
+  const elevator = COMPACT_ELEVATORS[index]
   const centerX = (elevator.x[0] + elevator.x[1]) / 2
   const centerZ = (elevator.z[0] + elevator.z[1]) / 2
   const carWidth = Math.min(elevator.x[1] - elevator.x[0] - 0.42, 2)
@@ -219,7 +265,7 @@ function ElevatorPhysics({ index, rig, bodies }: {
   const carHalfDepth = carDepth / 2
 
   return <>
-    {ORDER.flatMap((floor) => (
+    {elevator.servedFloors.flatMap((floor) => (
       [-1, 1].map((side, doorIndex) => (
         <RigidBody
           key={`${floor}-${side}`}
@@ -228,7 +274,7 @@ function ElevatorPhysics({ index, rig, bodies }: {
           colliders={false}
           position={[
             centerX + side * rig.PANEL_W / 2,
-            FLOOR_Y[floor as CampusFloor] + rig.DOOR_H / 2,
+            FLOOR_Y[floor as CompactFloor] + rig.DOOR_H / 2,
             elevator.z[1] - 0.03,
           ]}
         >
@@ -258,7 +304,7 @@ function ElevatorPhysics({ index, rig, bodies }: {
 function syncCarPhysics(
   bodies: Map<string, RapierRigidBody>,
   index: number,
-  elevator: (typeof EVS)[number],
+  elevator: CompactElevator,
   rig: ElevatorRig,
   y: number,
   slide: number,

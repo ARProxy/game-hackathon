@@ -17,6 +17,13 @@ export const WALL_HEIGHT = 3.2
 export const WALL_THICKNESS = 0.22
 export const SLAB_THICKNESS = 0.3
 
+// 현재 compact 학교의 북측 복도에 직접 열린 실제 승강로. 이 좌표는
+// 렌더·충돌·서버 권위·AI 경로가 함께 사용하는 단일 계약이다.
+export const COMPACT_ELEVATORS = [
+  { id: 'evp', name: '승객용 승강기', x: [-13.2, -10.8], z: [-43.15, -40.25], roof: true, servedFloors: ['B1', 'F1', 'F2', 'F3', 'ROOF'] },
+  { id: 'evc', name: '화물용 승강기', x: [-21.25, -18.75], z: [-43.25, -40.25], roof: false, servedFloors: ['B1', 'F1', 'F2', 'F3'] },
+]
+
 export const COMPACT_PALETTE = {
   ...PAL,
   roofMembrane: '#737b80',
@@ -100,7 +107,7 @@ function addWallRun(floor, axis, fixed, start, end, openings = [], opt = {}) {
       const mid = (o0 + o1) / 2
       addWallSlice(floor, axis, fixed, mid - 0.025, mid + 0.025, sill, head - sill, frameMaterial, 'trim', (opt.thickness ?? WALL_THICKNESS) + 0.04)
       boxes[boxes.length - 1].collider = false
-    } else {
+    } else if (opening.kind !== 'elevator') {
       addDoor({
         id: opening.id,
         floor,
@@ -201,7 +208,12 @@ function addSlabRect(floor, rect, material) {
 function addRingSlab(floor) {
   // 1층 북서 코어도 지하까지 실제로 이어진다. 남동 코어만 1층에서
   // 끝나므로 F1은 북서 보이드 하나를 남긴다.
-  const holes = floor === 'F1' ? [NW_WELL] : [NW_WELL, SE_WELL]
+  const holes = [
+    ...(floor === 'F1' ? [NW_WELL] : [NW_WELL, SE_WELL]),
+    ...COMPACT_ELEVATORS
+      .filter((elevator) => elevator.servedFloors.includes(floor))
+      .map((elevator) => ({ x0: elevator.x[0], x1: elevator.x[1], z0: elevator.z[0], z1: elevator.z[1] })),
+  ]
   const bands = [
     { x0: B.x0, x1: B.x1, z0: B.z0, z1: C.z0 },
     { x0: B.x0, x1: B.x1, z0: C.z1, z1: B.z1 },
@@ -281,11 +293,11 @@ function addFloorShell(floor) {
     F1: { nw: ['F2', 'F1', 'B1'], se: ['F2', 'F1'] },
   }[floor]
   const northDoors = [-36, -28, -20, -12].map((center, index) => ({
-    center, width: index === 0 ? 1.8 : 1.05, type: 'door',
-    id: index === 0 ? `stair_nw_${floor}` : `north_room_${floor}_${index}`,
-    kind: index === 0 ? 'fire' : 'room',
+    center, width: index === 0 ? 1.8 : index >= 2 ? 1.5 : 1.05, type: 'door',
+    id: index === 0 ? `stair_nw_${floor}` : index === 2 ? `evc_${floor}` : index === 3 ? `evp_${floor}` : `north_room_${floor}_${index}`,
+    kind: index === 0 ? 'fire' : index >= 2 ? 'elevator' : 'room',
     unlockFloors: index === 0 ? stairUnlockFloors.nw : undefined,
-    permanentlyLocked: index === 3,
+    permanentlyLocked: false,
     swing: index === 0 ? -1 : 1,
     head: index === 0 ? 2.35 : 2.2,
   }))
@@ -520,7 +532,23 @@ function addRoomDensity(room) {
 }
 
 function addInteriorDensity() {
-  for (const room of rooms) addRoomDensity(room)
+  for (const room of rooms) {
+    const starts = { boxes: boxes.length, cylinders: cylinders.length, fixtures: fixtures.length }
+    addRoomDensity(room)
+    const shafts = COMPACT_ELEVATORS.filter((elevator) => (
+      elevator.servedFloors.includes(room.floor)
+      && elevator.x[0] < room.x1 && elevator.x[1] > room.x0
+      && elevator.z[0] < room.z1 && elevator.z[1] > room.z0
+    ))
+    if (shafts.length === 0) continue
+    const outsideShaft = (item) => shafts.every((shaft) => !(
+      item.p[0] > shaft.x[0] - 0.35 && item.p[0] < shaft.x[1] + 0.35
+      && item.p[2] > shaft.z[0] - 0.35 && item.p[2] < shaft.z[1] + 0.35
+    ))
+    boxes.splice(starts.boxes, boxes.length - starts.boxes, ...boxes.slice(starts.boxes).filter(outsideShaft))
+    cylinders.splice(starts.cylinders, cylinders.length - starts.cylinders, ...cylinders.slice(starts.cylinders).filter(outsideShaft))
+    fixtures.splice(starts.fixtures, fixtures.length - starts.fixtures, ...fixtures.slice(starts.fixtures).filter(outsideShaft))
+  }
   for (const floor of ['F1', 'F2', 'F3']) {
     const y = FY[floor]
     for (const [side, z] of [['north', -39.56], ['south', -16.44]]) {
@@ -533,6 +561,19 @@ function addInteriorDensity() {
       id: `${floor}_${side}_corridor_bench`, floor, p: [x, y + 0.4, -28], s: [0.48, 0.8, 2.05],
       material: 'wood', role: 'furniture', collider: true,
     })
+  }
+}
+
+function addElevatorShafts() {
+  for (const elevator of COMPACT_ELEVATORS) {
+    for (const floor of elevator.servedFloors) {
+      const y = FY[floor]
+      const x0 = elevator.x[0], x1 = elevator.x[1]
+      const z0 = elevator.z[0], z1 = elevator.z[1]
+      addBox({ id: `${elevator.id}_${floor}_shaft_back`, floor, p: [(x0 + x1) / 2, y + 1.6, z0], s: [x1 - x0, 3.2, 0.18], material: 'extConcrete', role: 'elevatorShaft' })
+      addBox({ id: `${elevator.id}_${floor}_shaft_left`, floor, p: [x0, y + 1.6, (z0 + z1) / 2], s: [0.18, 3.2, z1 - z0], material: 'extConcrete', role: 'elevatorShaft' })
+      addBox({ id: `${elevator.id}_${floor}_shaft_right`, floor, p: [x1, y + 1.6, (z0 + z1) / 2], s: [0.18, 3.2, z1 - z0], material: 'extConcrete', role: 'elevatorShaft' })
+    }
   }
 }
 
@@ -862,13 +903,29 @@ function addRoof() {
 function addBasementShell() {
   const floor = 'B1', y = FY.B1
   addBox({ floor, p: [-24, y - 0.15, -44], s: [32, 0.3, 8], material: 'machFloor', role: 'slab' })
+  // 기존 지하 본체는 z=-40에서 끝난다. 승강기 문 앞에 밀폐된 로비를
+  // 증축해 카에서 내린 뒤 연결문을 통해 기계실로 들어가게 한다.
+  addBox({ id: 'b1_elevator_lobby_slab', floor, p: [-15.5, y - 0.15, -38.4], s: [15, 0.3, 3.2], material: 'machFloor', role: 'slab' })
   addFullWallSegment(floor, 'x', -48, -40, -8, { lower: 'machBase', upper: 'machWall' })
-  addFullWallSegment(floor, 'x', -40, -40, -8, { lower: 'machBase', upper: 'machWall' })
+  addWallRun(floor, 'x', -40, -40, -8, [
+    ...COMPACT_ELEVATORS.map((elevator) => ({
+      center: (elevator.x[0] + elevator.x[1]) / 2,
+      width: 1.5,
+      type: 'door',
+      id: `${elevator.id}_B1`,
+      kind: 'elevator',
+      head: 2.35,
+    })),
+    { center: -15, width: 1.5, type: 'door', id: 'b1_elevator_lobby_link', kind: 'room', head: 2.35 },
+  ], { lower: 'machBase', upper: 'machWall' })
+  addFullWallSegment(floor, 'x', -36.8, -23, -8, { lower: 'machBase', upper: 'machWall' })
+  addFullWallSegment(floor, 'z', -23, -40, -36.8, { lower: 'machBase', upper: 'machWall' })
+  addFullWallSegment(floor, 'z', -8, -40, -36.8, { lower: 'machBase', upper: 'machWall' })
   addFullWallSegment(floor, 'z', -40, -48, -40, { lower: 'machBase', upper: 'machWall' })
   addFullWallSegment(floor, 'z', -8, -48, -40, { lower: 'machBase', upper: 'machWall' })
   for (const [index, x] of [-32, -24, -16].entries()) {
     addWallRun(floor, 'z', x, -48, -40, [{
-      center: -43,
+      center: -44.2,
       width: 1.45,
       type: 'door',
       id: `b1_partition_${index + 1}`,
@@ -1036,7 +1093,7 @@ function addNavigation() {
     navNodes.push(corridorNode, roomNode)
   }
 
-  const basementSpine = [[-36, -43], [-28, -43], [-20, -43], [-12, -43], [-9.5, -43]]
+  const basementSpine = [[-36, -44.2], [-28, -44.2], [-20, -44.2], [-12, -44.2], [-9.5, -44.2]]
   basementSpine.forEach(([x, z], index) => navNodes.push({
     id: `B1_ring_${index}`, floor: 'B1', p: [x, FY.B1, z],
     links: [index > 0 ? `B1_ring_${index - 1}` : null, index + 1 < basementSpine.length ? `B1_ring_${index + 1}` : null].filter(Boolean),
@@ -1050,11 +1107,40 @@ function addNavigation() {
     id: `FIELD_ring_${index}`, floor: 'FIELD', p: [x, FY.FIELD, z],
     links: [`FIELD_ring_${(index + fieldRing.length - 1) % fieldRing.length}`, `FIELD_ring_${(index + 1) % fieldRing.length}`],
   }))
+
+  const basementLobbyNodes = [
+    { id: 'B1_elevator_lobby_hub', p: [-15, FY.B1, -39.1], links: ['B1_elevator_lobby_inner'] },
+    { id: 'B1_elevator_lobby_inner', p: [-15, FY.B1, -40.8], links: ['B1_elevator_lobby_hub', 'B1_elevator_lobby_spine'] },
+    { id: 'B1_elevator_lobby_spine', p: [-15, FY.B1, -44.2], links: ['B1_elevator_lobby_inner', 'B1_ring_3'] },
+  ]
+  navNodes.find((node) => node.id === 'B1_ring_3')?.links.push('B1_elevator_lobby_spine')
+  navNodes.push(...basementLobbyNodes.map((node) => ({ ...node, floor: 'B1' })))
+
+  for (const elevator of COMPACT_ELEVATORS) {
+    for (const floor of elevator.servedFloors) {
+      const x = (elevator.x[0] + elevator.x[1]) / 2
+      const z = elevator.z[1] + 1.0
+      const elevatorNode = {
+        id: `${floor}_${elevator.id}_landing`, floor, p: [x, FY[floor], z], links: [],
+      }
+      const nearest = floor === 'B1'
+        ? navNodes.find((node) => node.id === 'B1_elevator_lobby_hub')
+        : navNodes
+          .filter((node) => node.floor === floor && node.id.includes('_ring_'))
+          .sort((left, right) => Math.hypot(left.p[0] - x, left.p[2] - z) - Math.hypot(right.p[0] - x, right.p[2] - z))[0]
+      if (nearest) {
+        elevatorNode.links.push(nearest.id)
+        nearest.links.push(elevatorNode.id)
+      }
+      navNodes.push(elevatorNode)
+    }
+  }
 }
 
 addGrounds()
 for (const floor of ['F1', 'F2', 'F3']) addFloorShell(floor)
 addInteriorDensity()
+addElevatorShafts()
 addStairs()
 addRoof()
 addBasementShell()
@@ -1071,6 +1157,7 @@ export const COMPACT_SCHOOL = Object.freeze({
   bounds: BUILDING_BOUNDS,
   courtyard: COURTYARD_BOUNDS,
   floorY: FLOOR_Y,
+  elevators: COMPACT_ELEVATORS,
 })
 
 export function buildCompactSchool() {

@@ -17,6 +17,7 @@ const SERVER_BARRIER_ROLES = new Set([
   'missionConsole',
   'entryPost',
   'fieldFence',
+  'elevatorShaft',
 ])
 
 const walls = COMPACT_SCHOOL.boxes

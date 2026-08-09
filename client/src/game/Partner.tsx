@@ -140,11 +140,25 @@ export default function Partner({
     if (!previousFloor) previousFloorRef.current = currentFloor
     else if (currentFloor && currentFloor !== previousFloor) {
       const zone = partnerState?.position.zone
+      if (zone?.startsWith('evp_') || zone?.startsWith('evc_')) {
+        const targetY = floorHeight(currentFloor)
+        const targetX = partnerState?.position.x ?? group.position.x
+        const targetZ = partnerState?.position.z ?? group.position.z
+        const points = [group.position.clone(), new THREE.Vector3(targetX, targetY, targetZ)]
+        const segmentLengths = [points[0].distanceTo(points[1])]
+        stairTraversalRef.current = {
+          startedAt: clock.elapsedTime,
+          duration: 1.2 + Math.abs(targetY - floorHeight(previousFloor)) / 2.2,
+          points,
+          segmentLengths,
+          totalLength: segmentLengths[0],
+        }
+      }
       const route = zone?.includes('southeast') ? 'east'
         : zone?.includes('northwest') || zone?.includes('basement') || zone?.startsWith('b1_') ? 'west'
         : zone?.startsWith('field_') || zone === 'f1_main_lobby' ? 'field'
         : null
-      const selected = Object.values(TRAVERSAL_PATHS).find((path) => {
+      const selected = zone?.startsWith('evp_') || zone?.startsWith('evc_') ? undefined : Object.values(TRAVERSAL_PATHS).find((path) => {
         const floorPairMatches = (
           (path.upperFloor === previousFloor && path.lowerFloor === currentFloor)
           || (path.upperFloor === currentFloor && path.lowerFloor === previousFloor)

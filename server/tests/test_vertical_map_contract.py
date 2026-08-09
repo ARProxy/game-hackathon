@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots, get_map_slot
+from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots, elevator_slot, get_map_slot
 
 
 REQUIRED_SLOT_IDS = {
@@ -97,6 +97,9 @@ def test_passenger_elevator_reaches_roof_but_cargo_elevator_does_not() -> None:
 
     assert passenger["servedFloors"] == ["B1", "F1", "F2", "F3", "ROOF"]
     assert cargo["servedFloors"] == ["B1", "F1", "F2", "F3"]
+    assert elevator_slot("evp") is passenger
+    assert passenger["position"] == [-12, 0, -41.7]
+    assert cargo["position"] == [-20, 0, -41.75]
 
 
 def test_missing_slot_fails_loudly() -> None:

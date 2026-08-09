@@ -6,14 +6,17 @@ from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPh
 from app.game.session import GameSession
 from app.game.state import PlayerRole
 from app.game.vertical_flow import (
+    announce_elevator_arrival,
     activate_rooftop_signal,
     activate_final_station,
+    call_elevator,
     complete_current_stage,
     cross_rooftop_stair_boundary,
     evaluate_broadcast_phrase,
     final_escape_position,
     final_station_position,
     mission_interaction_position,
+    request_elevator_trip,
     validate_current_stage_interaction,
     use_open_floor_transition,
     use_elevator,
@@ -423,12 +426,71 @@ def test_field_final_requires_every_alive_runner_at_their_station() -> None:
 def test_elevator_only_serves_accessible_floors_from_inside_car() -> None:
     session, human = active_session()
     session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
-    human.position.x, human.position.z = 2.35, -56.0
+    human.position.x, human.position.z = -12.0, -41.7
     human.position.floor = WorldFloor.F3
 
+    request_elevator_trip(session, human.player_id, "evp", "F2")
     event = use_elevator(session, human.player_id, "evp", "F2")
     assert event["position"]["floor"] == "F2"
     assert human.position.y == pytest.approx(3.6)
 
     with pytest.raises(InvalidProgression, match="열리지 않은"):
         use_elevator(session, human.player_id, "evp", "F1")
+
+
+def test_passenger_elevator_reaches_roof_but_cargo_does_not() -> None:
+    session, human = active_session()
+    session.vertical_round.phase = VerticalRoundPhase.ROOFTOP_INTRO
+    human.position.x, human.position.z = -12.0, -41.7
+    human.position.floor = WorldFloor.F3
+
+    request_elevator_trip(session, human.player_id, "evp", "ROOF")
+    event = use_elevator(session, human.player_id, "evp", "ROOF")
+    assert event["position"]["floor"] == "ROOF"
+    assert human.position.y == pytest.approx(10.8)
+
+    human.position.x, human.position.z = -20.0, -41.75
+    human.position.floor = WorldFloor.F3
+    with pytest.raises(InvalidProgression, match="운행하지 않는"):
+        use_elevator(session, human.player_id, "evc", "ROOF")
+
+
+def test_empty_elevator_call_creates_one_authorized_arrival_ping() -> None:
+    session, human = active_session()
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    human.position.floor = WorldFloor.F2
+    human.position.x, human.position.z = -12.0, -39.25
+
+    called = call_elevator(session, human.player_id, "evp", "F2")
+    assert called["target_floor"] == "F2"
+    arrival = announce_elevator_arrival(session, human.player_id, "evp", "F2")
+    assert arrival["sound_ping"]["source"] == "empty_elevator_arrival"
+    assert arrival["sound_ping"]["floor"] == "F2"
+    assert human.position.floor == WorldFloor.F2
+
+    with pytest.raises(InvalidProgression, match="호출 기록"):
+        announce_elevator_arrival(session, human.player_id, "evp", "F2")
+
+
+def test_empty_elevator_call_requires_real_landing_proximity() -> None:
+    session, human = active_session()
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    human.position.floor = WorldFloor.F2
+    human.position.x, human.position.z = 20.0, 20.0
+
+    with pytest.raises(InvalidProgression, match="호출 버튼"):
+        call_elevator(session, human.player_id, "evp", "F2")
+
+
+def test_elevator_trip_request_is_authoritative_and_targets_open_floor() -> None:
+    session, human = active_session()
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    human.position.floor = WorldFloor.F3
+    human.position.x, human.position.z = -12.0, -41.7
+
+    trip = request_elevator_trip(session, human.player_id, "evp", "F2")
+    assert trip["target_floor"] == "F2"
+    assert session.elevator_calls["evp"]["ride"] is True
+
+    with pytest.raises(InvalidProgression, match="열리지 않은"):
+        request_elevator_trip(session, human.player_id, "evp", "F1")

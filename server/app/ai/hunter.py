@@ -116,28 +116,58 @@ def _hunter_floor_transition_plan(session: Any, seeker: Any) -> dict | None:
                 continue
             visited.add(neighbor)
             queue.append((neighbor, [*route, edge]))
-    if not selected_route:
-        return None
+    candidates: list[dict] = []
+    if selected_route:
+        edge = selected_route[0]
+        forward = edge["first"] == start
+        authored = edge["points"] if forward else list(reversed(edge["points"]))
+        destination_floor = edge["second"] if forward else edge["first"]
+        first_y, last_y = float(authored[0][1]), float(authored[-1][1])
+        direction = (
+            "down" if first_y > last_y else "up" if first_y < last_y
+            else "out" if forward else "in"
+        )
+        candidates.append({
+            "path_id": edge["path_id"],
+            "route": edge["path"].get("route", "west"),
+            "traversal": "stairs" if edge["path"].get("kind") == "stair_path" else "door",
+            "direction": direction,
+            "duration": float(edge["path"].get("durationSeconds", 0.8)),
+            "destination_floor": destination_floor,
+            "entry": {"x": float(authored[0][0]), "y": first_y, "z": float(authored[0][2])},
+            "exit": {"x": float(authored[-1][0]), "y": last_y, "z": float(authored[-1][2])},
+        })
 
-    edge = selected_route[0]
-    forward = edge["first"] == start
-    authored = edge["points"] if forward else list(reversed(edge["points"]))
-    destination_floor = edge["second"] if forward else edge["first"]
-    first_y, last_y = float(authored[0][1]), float(authored[-1][1])
-    direction = (
-        "down" if first_y > last_y else "up" if first_y < last_y
-        else "out" if forward else "in"
-    )
-    return {
-        "path_id": edge["path_id"],
-        "route": edge["path"].get("route", "west"),
-        "traversal": "stairs" if edge["path"].get("kind") == "stair_path" else "door",
-        "direction": direction,
-        "duration": float(edge["path"].get("durationSeconds", 0.8)),
-        "destination_floor": destination_floor,
-        "entry": {"x": float(authored[0][0]), "y": first_y, "z": float(authored[0][2])},
-        "exit": {"x": float(authored[-1][0]), "y": last_y, "z": float(authored[-1][2])},
-    }
+    floor_y = VERTICAL_MAP_CONTRACT.get("floorY", {})
+    for slot in VERTICAL_MAP_CONTRACT.get("slots", {}).values():
+        if slot.get("kind") != "elevator":
+            continue
+        served = set(slot.get("servedFloors", []))
+        if start not in served or goal not in served:
+            continue
+        elevator_id = str(slot["elevatorId"])
+        x, _, z = slot["position"]
+        start_y, goal_y = float(floor_y[start]), float(floor_y[goal])
+        duration = 1.2 + abs(goal_y - start_y) / 2.2
+        candidates.append({
+            "path_id": f"ELEVATOR_{elevator_id.upper()}",
+            "route": "elevator",
+            "traversal": "elevator",
+            "elevator_id": elevator_id,
+            "direction": "down" if start_y > goal_y else "up",
+            "duration": round(duration, 3),
+            "destination_floor": goal,
+            "entry": {"x": float(x), "y": start_y, "z": float(z)},
+            "exit": {"x": float(x), "y": goal_y, "z": float(z)},
+        })
+    if not candidates:
+        return None
+    return min(candidates, key=lambda plan: (
+        math.hypot(
+            seeker.position.x - plan["entry"]["x"],
+            seeker.position.z - plan["entry"]["z"],
+        ) + plan["duration"] * float(CONTRACT["huntSpeed"])
+    ))
 
 
 def effective_seeker_threat(session: Any) -> SeekerThreat:
@@ -225,6 +255,7 @@ def record_hunter_signal(
     position: dict,
     strength: str,
     speech_mode: SpeechMode | None = None,
+    floor_override: str | None = None,
 ) -> bool:
     """소리 핑을 술래에게 전달한다. speech_mode가 주어지면 모드별 반경을 사용한다."""
     # S5: 발화 모드별 반경 결정
@@ -274,7 +305,7 @@ def record_hunter_signal(
                 "player_id": player_id,
                 "position": {"x": float(position["x"]), "z": float(position["z"])},
                 "strength": strength,
-                "floor": source.position.floor.value if source is not None else seeker.position.floor.value,
+                "floor": floor_override or (source.position.floor.value if source is not None else seeker.position.floor.value),
                 "speech_mode": speech_mode.value if speech_mode else None,
                 "timestamp": time.monotonic(),
             }
@@ -283,7 +314,7 @@ def record_hunter_signal(
                 "player_id": player_id,
                 "position": {"x": float(position["x"]), "z": float(position["z"])},
                 "strength": strength,
-                "floor": source.position.floor.value if source is not None else seeker.position.floor.value,
+                "floor": floor_override or (source.position.floor.value if source is not None else seeker.position.floor.value),
                 "timestamp": time.monotonic(),
             }
 
@@ -530,6 +561,7 @@ def advance_hunter(session: Any) -> dict:
             "path_id": transition["path_id"],
             "direction": transition["direction"],
             "duration": transition["duration"],
+            **({"elevator_id": transition["elevator_id"]} if transition.get("elevator_id") else {}),
             "position": {
                 "x": seeker.position.x, "y": seeker.position.y, "z": seeker.position.z,
                 "floor": seeker.position.floor.value, "zone": seeker.position.zone,
@@ -797,6 +829,7 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
             "route": transition["route"], "traversal": transition["traversal"],
             "path_id": transition["path_id"], "direction": transition["direction"],
             "duration": transition["duration"],
+            **({"elevator_id": transition["elevator_id"]} if transition.get("elevator_id") else {}),
             "position": {
                 "x": seeker.position.x, "y": seeker.position.y, "z": seeker.position.z,
                 "floor": seeker.position.floor.value, "zone": seeker.position.zone,

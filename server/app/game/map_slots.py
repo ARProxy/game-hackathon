@@ -26,6 +26,14 @@ def get_map_slot(slot_id: str) -> dict:
         raise KeyError(f"정의되지 않은 수직 맵 슬롯: {slot_id}") from error
 
 
+def elevator_slot(elevator_id: str) -> dict:
+    """compact 맵의 승강기 ID를 실제 승강로 슬롯으로 해석한다."""
+    for slot in VERTICAL_MAP_CONTRACT["slots"].values():
+        if slot.get("kind") == "elevator" and slot.get("elevatorId") == elevator_id:
+            return slot
+    raise KeyError(f"정의되지 않은 엘리베이터: {elevator_id}")
+
+
 def actor_spawn_slots() -> dict[str, dict]:
     """기획 4 솔로 팀의 결정적 옥상 스폰을 actor ID별로 반환한다."""
     return {

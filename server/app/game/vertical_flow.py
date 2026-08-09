@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
+import time
 from typing import Any
 
-from app.game.map_slots import get_map_slot
+from app.game.map_slots import elevator_slot, get_map_slot
 from app.ai.vertical_missions import ROOFTOP_SIGNAL_SLOT_BY_ID
 from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole, PlayerStatus
@@ -75,12 +76,6 @@ FINAL_STATION_SLOT_BY_ACTOR = {
     "partner": "FIELD_FINAL_STATION_A",
     "partner-2": "FIELD_FINAL_STATION_C",
 }
-ELEVATOR_POSITION_BY_ID = {
-    "evp": (2.35, -56.0),
-    "evc": (-50.35, -56.0),
-}
-
-
 def mission_interaction_position(phase: VerticalRoundPhase) -> tuple[float, float, float]:
     try:
         slot = get_map_slot(MISSION_SLOT_BY_PHASE[phase])
@@ -622,6 +617,85 @@ def command_basement_device(session: Any, actor_id: str, transcript: str) -> dic
 
 
 ELEVATOR_SOUND_PING_RADIUS = 25.0  # A5: 엘리베이터 도착 소리 핑 반경
+ELEVATOR_CALL_TTL_SECONDS = 30.0
+
+
+def call_elevator(session: Any, actor_id: str, elevator_id: str, target_floor: str) -> dict:
+    """빈 엘리베이터 호출을 등록해 임의 도착 핑 위조를 막는다."""
+    actor = session.state.get_player(actor_id)
+    if not session.vertical_progression_enabled or not actor or actor.status != PlayerStatus.ALIVE:
+        raise InvalidProgression("엘리베이터를 호출할 수 없는 actor다")
+    try:
+        destination = WorldFloor(target_floor)
+        slot = elevator_slot(elevator_id)
+    except (ValueError, KeyError) as error:
+        raise InvalidProgression("정의되지 않은 엘리베이터 또는 호출 층이다") from error
+    served = {WorldFloor(floor) for floor in slot["servedFloors"]}
+    if destination != actor.position.floor or destination not in served:
+        raise InvalidProgression("현재 승강장에서만 엘리베이터를 호출할 수 있다")
+    if destination not in session.vertical_round.accessible_floors:
+        raise InvalidProgression("아직 열리지 않은 층에서는 호출할 수 없다")
+    landing_x, _, landing_z = slot.get("landingPosition", slot["position"])
+    if math.hypot(actor.position.x - landing_x, actor.position.z - landing_z) > 2.6:
+        raise InvalidProgression("승강장 호출 버튼 가까이에서만 호출할 수 있다")
+    session.elevator_calls[elevator_id] = {
+        "requested_by": actor_id,
+        "target_floor": destination.value,
+        "expires_at": time.monotonic() + ELEVATOR_CALL_TTL_SECONDS,
+    }
+    return {"actor_id": actor_id, "elevator_id": elevator_id, "target_floor": destination.value}
+
+
+def request_elevator_trip(session: Any, actor_id: str, elevator_id: str, target_floor: str) -> dict:
+    """카 내부 층 선택을 승인하고 모든 클라이언트에 동일 운행을 시작시킨다."""
+    actor = session.state.get_player(actor_id)
+    if not session.vertical_progression_enabled or not actor or actor.status != PlayerStatus.ALIVE:
+        raise InvalidProgression("엘리베이터를 이용할 수 없는 actor다")
+    try:
+        destination = WorldFloor(target_floor)
+        slot = elevator_slot(elevator_id)
+    except (ValueError, KeyError) as error:
+        raise InvalidProgression("정의되지 않은 엘리베이터 또는 목적 층이다") from error
+    served = {WorldFloor(floor) for floor in slot["servedFloors"]}
+    if actor.position.floor not in served or destination not in served:
+        raise InvalidProgression("이 엘리베이터가 운행하지 않는 층이다")
+    if destination not in session.vertical_round.accessible_floors:
+        raise InvalidProgression("아직 열리지 않은 층으로는 이동할 수 없다")
+    x, _, z = slot["position"]
+    if math.hypot(actor.position.x - x, actor.position.z - z) > 2.1:
+        raise InvalidProgression("엘리베이터 카 안에서만 층을 선택할 수 있다")
+    session.elevator_calls[elevator_id] = {
+        "requested_by": actor_id,
+        "target_floor": destination.value,
+        "expires_at": time.monotonic() + ELEVATOR_CALL_TTL_SECONDS,
+        "ride": True,
+    }
+    return {"actor_id": actor_id, "elevator_id": elevator_id, "target_floor": destination.value}
+
+
+def announce_elevator_arrival(session: Any, actor_id: str, elevator_id: str, target_floor: str) -> dict:
+    """등록된 빈 카 호출의 도착 소리만 발생시키고 actor는 이동하지 않는다."""
+    call = session.elevator_calls.get(elevator_id)
+    if (
+        not call or call["requested_by"] != actor_id
+        or call["target_floor"] != target_floor or call.get("ride")
+        or call["expires_at"] < time.monotonic()
+    ):
+        raise InvalidProgression("유효한 엘리베이터 호출 기록이 없다")
+    slot = elevator_slot(elevator_id)
+    session.elevator_calls.pop(elevator_id, None)
+    x, _, z = slot["position"]
+    return {
+        "actor_id": actor_id,
+        "elevator_id": elevator_id,
+        "floor": target_floor,
+        "sound_ping": {
+            "position": {"x": float(x), "z": float(z)},
+            "radius": ELEVATOR_SOUND_PING_RADIUS,
+            "floor": target_floor,
+            "source": "empty_elevator_arrival",
+        },
+    }
 
 
 def use_elevator(session: Any, actor_id: str, elevator_id: str, target_floor: str) -> dict:
@@ -635,19 +709,34 @@ def use_elevator(session: Any, actor_id: str, elevator_id: str, target_floor: st
     # A5: 술래도 엘리베이터 사용 가능 (역할 제한 제거)
     try:
         destination = WorldFloor(target_floor)
-        elevator_x, elevator_z = ELEVATOR_POSITION_BY_ID[elevator_id]
+        slot = elevator_slot(elevator_id)
+        elevator_x, _, elevator_z = slot["position"]
     except (ValueError, KeyError) as error:
         raise InvalidProgression("정의되지 않은 엘리베이터 또는 목적 층이다") from error
+    served_floors = {WorldFloor(floor) for floor in slot["servedFloors"]}
+    if actor.position.floor not in served_floors:
+        raise InvalidProgression("이 층에는 해당 엘리베이터 승강장이 없다")
     if destination not in session.vertical_round.accessible_floors:
         raise InvalidProgression("아직 열리지 않은 층으로는 이동할 수 없다")
-    if destination not in {WorldFloor.B1, WorldFloor.F1, WorldFloor.F2, WorldFloor.F3}:
+    if destination not in served_floors:
         raise InvalidProgression("이 엘리베이터가 운행하지 않는 층이다")
     if math.hypot(actor.position.x - elevator_x, actor.position.z - elevator_z) > 2.1:
         raise InvalidProgression("엘리베이터 카 안에서만 층을 선택할 수 있다")
+    trip = session.elevator_calls.get(elevator_id)
+    if (
+        not trip or not trip.get("ride") or trip["requested_by"] != actor_id
+        or trip["target_floor"] != destination.value
+        or trip["expires_at"] < time.monotonic()
+    ):
+        raise InvalidProgression("서버가 승인한 엘리베이터 운행이 아니다")
     actor.position.x, actor.position.z = elevator_x, elevator_z
-    actor.position.y = {WorldFloor.B1: -3.6, WorldFloor.F1: 0.0, WorldFloor.F2: 3.6, WorldFloor.F3: 7.2}[destination]
+    actor.position.y = {
+        WorldFloor.B1: -3.6, WorldFloor.F1: 0.0, WorldFloor.F2: 3.6,
+        WorldFloor.F3: 7.2, WorldFloor.ROOF: 10.8,
+    }[destination]
     actor.position.floor = destination
     actor.position.zone = f"{elevator_id}_{destination.value.lower()}"
+    session.elevator_calls.pop(elevator_id, None)
     return {
         "actor_id": actor_id, "elevator_id": elevator_id,
         "position": {"x": elevator_x, "y": actor.position.y, "z": elevator_z, "floor": destination.value, "zone": actor.position.zone},
