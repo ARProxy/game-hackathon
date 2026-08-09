@@ -135,6 +135,7 @@ function RooftopSignalObjectives({ playerRef }: {
     : ROOFTOP_SIGNALS.map((signal) => signal.id)
   const sequenceKey = sequence.join('|')
   const [previewStep, setPreviewStep] = useState(-1)
+  const [previewRun, setPreviewRun] = useState(0)
   const [nearbySignalId, setNearbySignalId] = useState<RooftopSignalId | null>(null)
   const nearbyRef = useRef<RooftopSignalId | null>(null)
 
@@ -146,7 +147,7 @@ function RooftopSignalObjectives({ playerRef }: {
     }
     timers.push(window.setTimeout(() => setPreviewStep(-1), previewLength * 1400 + 700))
     return () => timers.forEach((timer) => window.clearTimeout(timer))
-  }, [sequenceKey])
+  }, [sequenceKey, previewRun])
 
   useFrame(() => {
     const player = playerRef.current
@@ -169,8 +170,15 @@ function RooftopSignalObjectives({ playerRef }: {
 
   useEffect(() => {
     const interact = (event: KeyboardEvent) => {
+      if (event.code === 'KeyR' && !event.repeat) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        setPreviewRun((run) => run + 1)
+        return
+      }
       if (event.code !== 'KeyE' || event.repeat || !nearbyRef.current || previewStep >= 0) return
       event.preventDefault()
+      event.stopImmediatePropagation()
       sendGameMessage({
         type: 'action',
         payload: { action_type: 'interact_stage_mission', signal_id: nearbyRef.current },
@@ -468,6 +476,10 @@ export default function VerticalObjectives({ playerRef }: {
   useEffect(() => {
     const interact = (event: KeyboardEvent) => {
       if (event.code !== 'KeyE' || event.repeat || !progression) return
+      // 옥상은 각 중계기의 signal_id가 반드시 필요한 전용 기억 미션이다.
+      // 공용 처리기가 같은 E를 또 보내면 signal_id 없는 요청과 정상 요청이
+      // 한 프레임에 중복되므로 옥상 입력은 자식 처리기 하나가 독점한다.
+      if (progression.phase === 'rooftop_intro') return
       const nearbyTransition = nearbyTransitionRef.current
       if (!nearbyTransition && !missionNearbyRef.current) return
       event.preventDefault()

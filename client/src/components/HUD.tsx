@@ -543,7 +543,8 @@ export default function HUD() {
                   : '완료'}
                 {rooftopSignal.nextSignalId !== null && (
                   <div style={{ marginTop: 3, color: '#BDEFFF', opacity: .8 }}>
-                    AI 동료는 동·서 중계기에서 위치를 보고하지만 입력은 대신하지 않습니다.
+                    R · 점멸 순서 다시 보기<br />
+                    AI 동료는 동·서 위치를 보고하지만 입력은 대신하지 않습니다.
                   </div>
                 )}
               </div>
