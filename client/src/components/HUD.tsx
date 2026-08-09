@@ -7,12 +7,22 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { useGameStore, type GamePhase, type PlayerStatus } from '../stores/gameStore'
+import { useGameStore, type ClueFragment, type GamePhase, type PlayerStatus } from '../stores/gameStore'
 import { sendGameMessage } from '../hooks/useWebSocket'
 import rescueContract from '../game/rescueContract.json'
 import { useSettingsStore } from '../stores/settingsStore'
 
 const FREEZE_TIMEOUT_MS = 30_000
+
+function clueKey(clue: ClueFragment, index: number): string {
+  return clue.fragment_id ?? `${clue.order ?? index}-${clue.word ?? clue.symbol ?? 'fragment'}`
+}
+
+function compactClue(clue: ClueFragment): string {
+  return clue.riddle
+    ? `${clue.symbol ?? '◆'} ${clue.relation ?? clue.riddle}`
+    : `[${clue.order ?? '?'}] ${clue.word ?? '미확인'}`
+}
 
 const HUNTER_LABELS: Record<string, string> = {
   HUNT: '술래가 주변을 수색 중',
@@ -514,7 +524,7 @@ export default function HUD() {
             )}
             {acquiredClues.length > 0 && (
               <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
-                주문 조각: {acquiredClues.map((clue) => `[${clue.order}] ${clue.word}`).join(' · ')}
+                주문 파편: {acquiredClues.map(compactClue).join(' · ')}
               </div>
             )}
           </div>
@@ -581,17 +591,23 @@ export default function HUD() {
             <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 4 }}>
               최종 주문
             </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {acquiredClues.map((clue) => (
-                <span key={`${clue.order}-${clue.word}`} style={{ padding: '5px 8px', border: '1px solid rgba(182,255,61,.35)', borderRadius: 6, color: '#B6FF3D' }}>
-                  {clue.order}/{clue.total} · {clue.word}
-                </span>
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              {acquiredClues.map((clue, index) => (
+                <div key={clueKey(clue, index)} style={{ maxWidth: 205, padding: '7px 9px', border: '1px solid rgba(182,255,61,.35)', borderRadius: 6, color: '#B6FF3D' }}>
+                  {clue.riddle ? (
+                    <>
+                      <strong style={{ fontSize: 16 }}>{clue.symbol ?? '◆'}</strong>
+                      <span style={{ marginLeft: 6, fontSize: 11 }}>{clue.riddle}</span>
+                      <div style={{ marginTop: 3, fontSize: 10, color: '#BDEFFF' }}>{clue.relation}</div>
+                    </>
+                  ) : `${clue.order ?? '?'}/${clue.total} · ${clue.word ?? '미확인'}`}
+                </div>
               ))}
             </div>
             <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6 }}>
               {gateArrived
-                ? `도착 확인 완료 — ${totalClues}개 조각을 표식 순서로 조합해 외치세요!`
-                : '노란빛 게이트로 이동하며 조각의 순서를 기억하세요.'}
+                ? `도착 확인 완료 — ${totalClues}개 수수께끼의 두 글자 답을 관계 표식 순서로 조합하세요.`
+                : '노란빛 게이트로 이동하며 파편의 수수께끼와 관계를 해석하세요.'}
             </div>
           </div>
         )}

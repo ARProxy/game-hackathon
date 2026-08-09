@@ -194,7 +194,9 @@ export default function useWebSocket() {
         })
         if (data.clue) {
           acquireClue(data.clue)
-          addSubtitle('system', `주문 조각 “${data.clue.word}”을 확보했습니다.`)
+          addSubtitle('system', data.clue.riddle
+            ? `주문 파편 ${data.clue.symbol ?? '◆'} 확보 · ${data.clue.riddle}`
+            : `주문 조각 “${data.clue.word}”을 확보했습니다.`)
         }
         addSubtitle('system', `${data.completed_phase} 완료 — 다음 구역이 열렸습니다.`)
         break
@@ -544,7 +546,7 @@ export default function useWebSocket() {
       case 'vertical_final_ready':
         setPhase('final_spell')
         setGateArrived(true)
-        addSubtitle('system', `전원 준비 완료. 모은 ${data.required_clues ?? 3}개 조각을 표식 순서로 조합해 외치세요!`)
+        addSubtitle('system', `전원 준비 완료. ${data.required_clues ?? 3}개 파편의 수수께끼를 풀고 관계 표식 순서로 외치세요!`)
         break
 
       case 'action_rejected':
@@ -590,6 +592,7 @@ export default function useWebSocket() {
         break
 
       case 'game_over':
+        useGameStore.getState().setResultAnalysis(Array.isArray(data.rage_history) ? data : null)
         if (data.forbidden_profile_history) {
           useGameStore.getState().setForbiddenProfileHistory(data.forbidden_profile_history)
         }
@@ -597,6 +600,7 @@ export default function useWebSocket() {
         break
 
       case 'game_won':
+        useGameStore.getState().setResultAnalysis(Array.isArray(data.rage_history) ? data : null)
         if (data.partner_status) useGameStore.getState().setPartnerResultStatus(data.partner_status)
         if (data.forbidden_profile_history) {
           useGameStore.getState().setForbiddenProfileHistory(data.forbidden_profile_history)

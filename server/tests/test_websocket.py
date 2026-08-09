@@ -257,7 +257,13 @@ class TestVerticalStageInteraction:
             advanced = ws.receive_json()
             assert advanced["type"] == "vertical_stage_advanced"
             assert advanced["next_phase"] == "floor_1"
-            assert advanced["clue"] == {"word": "교정", "order": 2, "total": 3}
+            assert advanced["clue"] == {
+                "fragment_id": "correction_signal",
+                "symbol": "↺",
+                "riddle": "틀린 답을 바르게 고치는 일 · 두 글자",
+                "relation": "달 표식 다음, 출구 표식 이전",
+                "total": 3,
+            }
 
     def test_intercom_failure_keeps_retry_open_and_ai_corrects_mismatch(self, client):
         from app.game.session import session_manager
@@ -429,7 +435,13 @@ class TestVerticalStageInteraction:
             assert activated["success"]
             assert advanced["type"] == "vertical_stage_advanced"
             assert advanced["next_phase"] == "field_final"
-            assert advanced["clue"] == {"word": "탈출", "order": 3, "total": 3}
+            assert advanced["clue"] == {
+                "fragment_id": "escape_signal",
+                "symbol": "⇥",
+                "riddle": "갇힌 곳을 벗어나 밖으로 나감 · 두 글자",
+                "relation": "세로선의 맨 아래에서 끝",
+                "total": 3,
+            }
             enraged = ws.receive_json()
             assert enraged["type"] == "seeker_phase_event"
             assert enraged["event"] == "enraged_field"
@@ -1063,6 +1075,18 @@ class TestEscapeFlow:
             # A7: 결과에 금기어 누적→광분 인과관계 포함
             assert "fw_rage_tier" in won
             assert "rage_history" in won
+            assert won["spell_analysis"] == {
+                "answer": ["파란", "하늘", "별"],
+                "attempt_count": 2,
+                "failed_attempts": [{
+                    "attempt": 1,
+                    "matched_count": 3,
+                    "required_count": 3,
+                    "order_valid": False,
+                    "reason": "order",
+                }],
+                "solved": True,
+            }
             assert session.state.phase.value == "result"
 
     def test_seeker_contact_wins_gate_escape_race(self, client):

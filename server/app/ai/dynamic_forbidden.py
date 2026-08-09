@@ -136,6 +136,7 @@ class DynamicForbiddenProfile:
         return {"status": status}
 
     def result_history(self) -> list[dict]:
+        result_at = time.monotonic()
         return [
             {
                 "generation": entry["generation"],
@@ -143,6 +144,10 @@ class DynamicForbiddenProfile:
                 "retired_at": entry["retired_at"],
                 "words": list(entry["words"]),
                 "reason": entry["reason"],
+                "duration_seconds": max(
+                    0.0,
+                    float(entry["retired_at"] or result_at) - float(entry["activated_at"]),
+                ),
             }
             for entry in self.history
         ]

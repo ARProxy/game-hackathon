@@ -77,6 +77,7 @@ from app.game.vertical_flow import (
     use_open_floor_transition,
     use_elevator,
     validate_current_stage_interaction,
+    VERTICAL_SPELL_WORDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -591,7 +592,7 @@ class ConnectionManager:
     ) -> None:
         """인간 또는 AI가 마지막 지하 장치를 끝내도 동일한 주문 단계로 전환한다."""
         await self._lock_dynamic_forbidden(room_id, session)
-        session.spell_words = ["달빛", "교정", "탈출"]
+        session.spell_words = list(VERTICAL_SPELL_WORDS)
         session.final_station_actor_ids.add(actor_id)
         session.state.phase = GamePhase.FINAL_SPELL
         await self.broadcast(room_id, {
@@ -706,7 +707,7 @@ class ConnectionManager:
                     return
                 await self.broadcast(room_id, {"type": "final_station_activated", **station})
                 if station["all_ready"]:
-                    session.spell_words = ["달빛", "교정", "탈출"]
+                    session.spell_words = list(VERTICAL_SPELL_WORDS)
                     session.state.phase = GamePhase.FINAL_SPELL
                     await self.broadcast(room_id, {
                         "type": "vertical_final_ready",
@@ -1863,8 +1864,10 @@ class ConnectionManager:
             return
 
         result = check_spell(spell_text, session.spell_words)
+        session.spell_attempt_count += 1
 
         if result["success"]:
+            session.successful_spell_text = result["transcript"]
             session.state.phase = GamePhase.ESCAPE
             if vertical_final:
                 session.vertical_round.mark_mission_complete()
@@ -1878,6 +1881,16 @@ class ConnectionManager:
                 "progression": session.vertical_progression_payload() if vertical_final else None,
             })
         else:
+            session.spell_failure_history.append({
+                "attempt": session.spell_attempt_count,
+                "matched_count": len(result["matched"]),
+                "required_count": result["required_count"],
+                "order_valid": result["order_valid"],
+                "reason": (
+                    "order" if len(result["matched"]) >= result["required_count"]
+                    else "incomplete"
+                ),
+            })
             # 틀린 주문도 큰 소리로 외친 행동이다. 무료 재시도가 되지 않도록
             # 술래와 팀에 현재 위치를 강한 청각 단서로 전달한다.
             failed_position = {"x": player.position.x, "z": player.position.z}

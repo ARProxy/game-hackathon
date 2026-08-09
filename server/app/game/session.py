@@ -92,6 +92,9 @@ class GameSession:
         self.dynamic_forbidden_enabled = False
         self.dynamic_forbidden = DynamicForbiddenProfile()
         self.spell_words: list[str] = []
+        self.spell_attempt_count = 0
+        self.spell_failure_history: list[dict] = []
+        self.successful_spell_text: str | None = None
         self.round_data: RoundData | None = None
         self.current_mission_index = 0
         self.inspected_prop_ids: set[str] = set()
@@ -167,6 +170,9 @@ class GameSession:
         self.final_station_actor_ids.clear()
         self.round_data = None
         self.spell_words = []
+        self.spell_attempt_count = 0
+        self.spell_failure_history.clear()
+        self.successful_spell_text = None
         self.current_mission_index = 0
         self.inspected_prop_ids.clear()
         self.active_gate_id = random.choice(tuple(GATE_POSITIONS))
@@ -411,6 +417,13 @@ class GameSession:
                 self.dynamic_forbidden.result_history()
                 if self.dynamic_forbidden_enabled else []
             ),
+            "spell_analysis": {
+                # 진행 중에는 숨기고 라운드가 끝난 결과 페이로드에서만 공개한다.
+                "answer": list(self.spell_words),
+                "attempt_count": self.spell_attempt_count,
+                "failed_attempts": list(self.spell_failure_history),
+                "solved": self.successful_spell_text is not None,
+            },
         }
 
     def is_near_active_gate(self, player_id: str, radius: float = 2.75) -> bool:

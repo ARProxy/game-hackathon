@@ -58,7 +58,16 @@ export interface MissionData {
   forbidden_word: string
 }
 
-export interface ClueFragment { word: string; order: number; total: number }
+export interface ClueFragment {
+  total: number
+  fragment_id?: string
+  symbol?: string
+  riddle?: string
+  relation?: string
+  // 레거시 프롭 라운드 호환 필드. 수직 본편은 완성 답을 보내지 않는다.
+  word?: string
+  order?: number
+}
 
 export interface VerticalProgressionState {
   enabled: boolean
@@ -104,6 +113,35 @@ export interface ForbiddenProfileHistoryEntry {
   generation: number
   words: string[]
   reason: string
+  activated_at?: number
+  retired_at?: number | null
+  duration_seconds?: number
+}
+
+export interface ResultAnalysis {
+  forbidden_word_violations: number
+  fw_rage_tier: string
+  fw_speed_multiplier: number
+  final_route?: 'field' | 'basement' | null
+  rage_history: Array<{
+    tier: string
+    triggered_at_violations: number
+    speed_multiplier: number
+    hearing_expanded: boolean
+    vision_expanded: boolean
+  }>
+  spell_analysis?: {
+    answer: string[]
+    attempt_count: number
+    failed_attempts: Array<{
+      attempt: number
+      matched_count: number
+      required_count: number
+      order_valid: boolean
+      reason: 'order' | 'incomplete'
+    }>
+    solved: boolean
+  }
 }
 
 export interface SoundEvent {
@@ -175,6 +213,7 @@ interface GameStore {
   activeTrapIds: string[]
   gateArrived: boolean
   partnerResultStatus: PlayerStatus | 'missing' | null
+  resultAnalysis: ResultAnalysis | null
 
   // 프롭 상호작용
   inspectingPropId: string | null  // AI 동료가 조사 중인 프롭
@@ -238,6 +277,7 @@ interface GameStore {
   eliminatePlayer: (playerId: string) => void
   escapePlayer: (playerId: string) => void
   setPartnerResultStatus: (status: PlayerStatus | 'missing') => void
+  setResultAnalysis: (analysis: ResultAnalysis | null) => void
   setSpeaking: (isSpeaking: boolean) => void
   setLastTranscript: (transcript: string) => void
   addSubtitle: (playerId: string, text: string) => void
@@ -275,6 +315,7 @@ const initialState = {
   activeTrapIds: [] as string[],
   gateArrived: false,
   partnerResultStatus: null as PlayerStatus | 'missing' | null,
+  resultAnalysis: null as ResultAnalysis | null,
   inspectingPropId: null as string | null,
   removedPropIds: [] as string[],
   partnerTarget: null as PartnerTarget | null,
@@ -335,7 +376,7 @@ export const useGameStore = create<GameStore>((set) => ({
   setPaused: (isPaused) => set({ isPaused }),
   setCurrentFloor: (currentFloor) => set({ currentFloor }),
 
-  startRound: () => set({ roundStartedAt: Date.now(), elapsedSeconds: null }),
+  startRound: () => set({ roundStartedAt: Date.now(), elapsedSeconds: null, resultAnalysis: null }),
 
   finishGame: (outcome, resultReason) =>
     set((state) => ({
@@ -398,7 +439,11 @@ export const useGameStore = create<GameStore>((set) => ({
 
   acquireClue: (clue) =>
     set((state) => ({
-      acquiredClues: state.acquiredClues.some((entry) => entry.order === clue.order)
+      acquiredClues: state.acquiredClues.some((entry) => (
+        clue.fragment_id
+          ? entry.fragment_id === clue.fragment_id
+          : entry.order === clue.order && entry.word === clue.word
+      ))
         ? state.acquiredClues
         : [...state.acquiredClues, clue],
       totalClues: Math.max(state.totalClues, clue.total),
@@ -500,6 +545,7 @@ export const useGameStore = create<GameStore>((set) => ({
     })),
 
   setPartnerResultStatus: (partnerResultStatus) => set({ partnerResultStatus }),
+  setResultAnalysis: (resultAnalysis) => set({ resultAnalysis }),
 
   setSpeaking: (isSpeaking) => set({ isSpeaking }),
 

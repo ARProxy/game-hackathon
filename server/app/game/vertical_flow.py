@@ -29,6 +29,7 @@ BROADCAST_MEANING_LABELS = {
     "exit": "잠긴 출입구",
     "action": "개방 행동",
 }
+VERTICAL_SPELL_WORDS = ("달빛", "교정", "탈출")
 MISSION_SLOT_BY_PHASE = {
     VerticalRoundPhase.ROOFTOP_INTRO: "ROOF_INTRO_MISSION",
     VerticalRoundPhase.FLOOR_3: "F3_BROADCAST_CONSOLE",
@@ -38,9 +39,27 @@ MISSION_SLOT_BY_PHASE = {
     VerticalRoundPhase.BASEMENT_FINAL: "BASEMENT_FINAL_DEVICE_POOL",
 }
 VERTICAL_CLUE_BY_PHASE = {
-    VerticalRoundPhase.FLOOR_3: {"word": "달빛", "order": 1, "total": 3},
-    VerticalRoundPhase.FLOOR_2: {"word": "교정", "order": 2, "total": 3},
-    VerticalRoundPhase.FLOOR_1: {"word": "탈출", "order": 3, "total": 3},
+    VerticalRoundPhase.FLOOR_3: {
+        "fragment_id": "moon_signal",
+        "symbol": "☾",
+        "riddle": "밤하늘의 달에서 퍼지는 빛 · 두 글자",
+        "relation": "세로선의 맨 위에서 시작",
+        "total": 3,
+    },
+    VerticalRoundPhase.FLOOR_2: {
+        "fragment_id": "correction_signal",
+        "symbol": "↺",
+        "riddle": "틀린 답을 바르게 고치는 일 · 두 글자",
+        "relation": "달 표식 다음, 출구 표식 이전",
+        "total": 3,
+    },
+    VerticalRoundPhase.FLOOR_1: {
+        "fragment_id": "escape_signal",
+        "symbol": "⇥",
+        "riddle": "갇힌 곳을 벗어나 밖으로 나감 · 두 글자",
+        "relation": "세로선의 맨 아래에서 끝",
+        "total": 3,
+    },
 }
 
 TRANSITION_SLOTS_BY_PHASE = {
