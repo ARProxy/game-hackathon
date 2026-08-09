@@ -365,6 +365,16 @@ export default function useWebSocket() {
             : `장치 복구 ${data.progress ?? 0}/3 — AI의 다음 대기 상태 보고를 확인하세요.`)
         break
 
+      case 'player_moved': {
+        const current = useGameStore.getState().players[data.player_id]
+        if (current) {
+          useGameStore.getState().updatePlayer(data.player_id, {
+            position: { ...current.position, ...data.position },
+          })
+        }
+        break
+      }
+
       case 'actor_floor_changed':
         if (data.route === 'elevator' || data.traversal === 'elevator') {
           window.dispatchEvent(new CustomEvent('game:elevator-arrived', { detail: {

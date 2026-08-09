@@ -10,6 +10,7 @@ import PlayerLight from './game/PlayerLight'
 import Seeker from './game/Seeker'
 import Props from './game/Props'
 import Partner from './game/Partner'
+import RemotePlayer from './game/RemotePlayer'
 import ThirdPersonCamera from './game/ThirdPersonCamera'
 import ThreatFeedback from './game/ThreatFeedback'
 import VerticalObjectives from './game/VerticalObjectives'
@@ -185,7 +186,18 @@ function Scene({
   const activeTrapIds = useGameStore((state) => state.activeTrapIds)
   const isPaused = useGameStore((state) => state.isPaused)
   const playerId = useGameStore((state) => state.playerId)
+  const players = useGameStore((state) => state.players)
+  const multiplayerRoom = useGameStore((state) => state.multiplayerRoom)
   const seekerCount = useGameStore((state) => state.verticalProgression?.seeker_count ?? 1)
+  const activePartnerIds = Object.values(players)
+    .filter((player) => player.role === 'ai_partner')
+    .map((player) => player.playerId)
+  const remoteHumans = Object.values(players).filter((player) => (
+    player.role === 'human' && player.playerId !== playerId
+  ))
+  const characterByPlayer = new Map(
+    multiplayerRoom?.players.map((player) => [player.player_id, player.character_id ?? 'R02']) ?? [],
+  )
 
   /* playerGroupRef: 카메라/라이트가 플레이어 위치를 따라가는 데 사용 */
   const playerGroupRef = {
@@ -243,19 +255,26 @@ function Scene({
           <Props />
           <VerticalObjectives playerRef={playerGroupRef} />
           <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={SPAWNS.player} characterId={playerCharacterId} />
-          <Partner
+          {remoteHumans.map((player, index) => (
+            <RemotePlayer
+              key={player.playerId}
+              playerId={player.playerId}
+              characterId={characterByPlayer.get(player.playerId) ?? runnerIds[(index + 1) % runnerIds.length]}
+            />
+          ))}
+          {activePartnerIds.includes('partner') && <Partner
             playerRef={playerGroupRef}
             playerId="partner"
             characterId={runnerIds.find((id) => id !== playerCharacterId) ?? 'R05'}
             spawn={SPAWNS.ai}
             requestsThink
-          />
-          <Partner
+          />}
+          {activePartnerIds.includes('partner-2') && <Partner
             playerRef={playerGroupRef}
             playerId="partner-2"
             characterId={runnerIds.filter((id) => id !== playerCharacterId)[1] ?? 'R06'}
             spawn={SPAWNS.ai2}
-          />
+          />}
           {seekerCount >= 1 && <Seeker playerRef={playerGroupRef} spawn={SPAWNS.seeker} />}
           {seekerCount >= 2 && (
             <Seeker

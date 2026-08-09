@@ -86,6 +86,22 @@ class TestWebSocketConnection:
                 assert game_host["state"]["phase"] == "playing"
                 assert game_guest["state"]["players"].keys() == game_host["state"]["players"].keys()
 
+                host_position = game_host["state"]["players"]["host-live"]["position"]
+                host.send_json({
+                    "type": "action",
+                    "payload": {
+                        "action_type": "move",
+                        "x": host_position["x"],
+                        "z": host_position["z"],
+                    },
+                })
+                moved = receive_type(guest, "player_moved")
+                assert moved == {
+                    "type": "player_moved",
+                    "player_id": "host-live",
+                    "position": {"x": host_position["x"], "z": host_position["z"]},
+                }
+
     def test_dynamic_start_hides_forbidden_profile(self, client):
         with client.websocket_connect("/ws/dynamic-start/player1") as ws:
             ws.send_json({
