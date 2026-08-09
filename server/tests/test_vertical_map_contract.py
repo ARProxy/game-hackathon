@@ -11,6 +11,7 @@ REQUIRED_SLOT_IDS = {
     "ROOF_RUNNER_SPAWN_A", "ROOF_RUNNER_SPAWN_B", "ROOF_RUNNER_SPAWN_C",
     "ROOF_INTRO_MISSION", "ROOF_SIGNAL_CENTER", "ROOF_SIGNAL_EAST",
     "ROOF_SIGNAL_WEST", "ROOF_TO_F3_FIRE_DOOR",
+    "ROOF_TO_F3_STAIR_BOTTOM_CROSSING", "F3_TO_ROOF_STAIR_TOP_CROSSING",
     "F3_MISSION_ROOM_POOL", "F3_SEEKER_REVEAL_ENTRY",
     "F3_TO_F2_STAIR_WEST", "F3_TO_F2_STAIR_EAST",
     "F2_MISSION_ROOM_POOL", "F2_INTERCOM_A", "F2_INTERCOM_B",
@@ -47,6 +48,8 @@ def test_position_slots_use_floor_height_and_finite_map_coordinates() -> None:
         base_y = floor_y[slot["floor"]]
         if slot["kind"] == "device":
             assert base_y < position[1] <= base_y + 3.2, slot_id
+        elif slot["kind"] == "stair_boundary":
+            assert min(abs(position[1] - height) for height in (7.2, 10.8)) < 0.001, slot_id
         else:
             assert position[1] == pytest.approx(base_y), slot_id
 
@@ -101,3 +104,12 @@ def test_rooftop_transition_uses_the_authored_fire_door() -> None:
     assert roof_lock["kind"] == "transition_lock"
     assert roof_lock["authoredDoorIds"] == ["roof_to_f3"]
     assert "실제 방화문" in roof_lock["note"]
+
+
+def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
+    bottom = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
+    top = get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")
+
+    assert bottom["kind"] == top["kind"] == "stair_boundary"
+    assert bottom["floor"] == "ROOF" and bottom["position"] == [-38.35, 7.2, -40.8]
+    assert top["floor"] == "F3" and top["position"] == [-33.65, 10.8, -40.34]

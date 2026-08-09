@@ -31,8 +31,6 @@ const ROOFTOP_SIGNALS = [
   { id: 'west', slotId: 'ROOF_SIGNAL_WEST', label: '서쪽 신호' },
 ] as const
 const TRANSITIONS: Record<string, { source: string; route: string }[]> = {
-  'ROOF>F3': [{ source: 'ROOF_TO_F3_FIRE_DOOR', route: 'west' }],
-  'F3>ROOF': [{ source: 'F3_TO_F2_STAIR_WEST', route: 'west' }],
   'F3>F2': [
     { source: 'F3_TO_F2_STAIR_WEST', route: 'west' },
     { source: 'F3_TO_F2_STAIR_EAST', route: 'east' },
@@ -247,6 +245,33 @@ function FloorTransitionBeacon({ position, targetFloor, primary }: {
   )
 }
 
+function PhysicalRoofStairGuidance({ direction }: { direction: 'down' | 'up' }) {
+  const slotId = direction === 'down'
+    ? 'ROOF_TO_F3_FIRE_DOOR'
+    : 'F3_TO_ROOF_STAIR_TOP_CROSSING'
+  const position = positionOf(slots[slotId])
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.5, 0.76, 32]} />
+        <meshBasicMaterial color="#FFD166" transparent opacity={0.7} />
+      </mesh>
+      <Html position={[0, 2.15, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
+        <div style={{
+          width: 230, padding: '8px 12px', borderRadius: 8,
+          border: '1px solid rgba(255,209,102,.72)', color: '#FFE9A9',
+          background: 'rgba(5,15,22,.94)', fontSize: 12, fontWeight: 800,
+          textAlign: 'center', lineHeight: 1.45,
+        }}>
+          {direction === 'down'
+            ? '방화문을 열고 계단을 직접 내려가세요'
+            : '계단을 끝까지 올라 옥상으로 돌아가세요'}
+        </div>
+      </Html>
+    </group>
+  )
+}
+
 export default function VerticalObjectives({ playerRef }: {
   playerRef: React.RefObject<THREE.Group | null>
 }) {
@@ -255,6 +280,7 @@ export default function VerticalObjectives({ playerRef }: {
   const phase = useGameStore((state) => state.phase)
   const missionNearbyRef = useRef(false)
   const nearbyTransitionRef = useRef<{ source: string; route: string } | null>(null)
+  const stairBoundaryRequestRef = useRef(false)
   const [missionNearby, setMissionNearby] = useState(false)
   const previousFloor = progression?.accessible_floors.find((floor) => floor !== progression.active_floor)
   const targetFloor = progression?.active_floor && playerFloor !== progression.active_floor
@@ -273,6 +299,9 @@ export default function VerticalObjectives({ playerRef }: {
     : undefined
   const missionPosition = missionSlotId ? positionOf(slots[missionSlotId]) : null
   const transitionIsPrimary = Boolean(progression?.active_floor && playerFloor !== progression.active_floor)
+  const stairDirection = transitionKey === 'ROOF>F3' ? 'down'
+    : transitionKey === 'F3>ROOF' ? 'up'
+    : null
 
   useFrame(() => {
     const player = playerRef.current
@@ -291,7 +320,30 @@ export default function VerticalObjectives({ playerRef }: {
             && Math.hypot(_playerPosition.x - position[0], _playerPosition.z - position[2]) <= 2.25
         }) ?? null
       : null
+
+    if (!player || !stairDirection || stairBoundaryRequestRef.current) return
+    const boundarySlotId = stairDirection === 'down'
+      ? 'ROOF_TO_F3_STAIR_BOTTOM_CROSSING'
+      : 'F3_TO_ROOF_STAIR_TOP_CROSSING'
+    const boundary = positionOf(slots[boundarySlotId])
+    const crossedHeight = stairDirection === 'down'
+      ? _playerPosition.y <= boundary[1] + 0.55
+      : _playerPosition.y >= boundary[1] - 0.55
+    if (
+      crossedHeight
+      && Math.hypot(_playerPosition.x - boundary[0], _playerPosition.z - boundary[2]) <= 1.25
+    ) {
+      stairBoundaryRequestRef.current = true
+      sendGameMessage({
+        type: 'action',
+        payload: { action_type: 'cross_rooftop_stair_boundary', direction: stairDirection },
+      })
+    }
   })
+
+  useEffect(() => {
+    stairBoundaryRequestRef.current = false
+  }, [playerFloor, progression?.phase])
 
   useEffect(() => {
     const interact = (event: KeyboardEvent) => {
@@ -323,18 +375,22 @@ export default function VerticalObjectives({ playerRef }: {
       primary={transitionIsPrimary}
     />
   ))
+  const stairGuidance = stairDirection
+    ? <PhysicalRoofStairGuidance direction={stairDirection} />
+    : null
   if (
     progression?.enabled
     && progression.phase === 'basement_final'
     && playerFloor === 'B1'
     && phase === 'playing'
-  ) return <><BasementDeviceObjectives playerRef={playerRef} />{transitionBeacons}</>
+  ) return <><BasementDeviceObjectives playerRef={playerRef} />{transitionBeacons}{stairGuidance}</>
   if (!progression?.enabled || !['playing', 'final_spell', 'escape'].includes(phase)) return null
-  if (!missionPosition) return <>{transitionBeacons}</>
+  if (!missionPosition) return <>{transitionBeacons}{stairGuidance}</>
   const label = MISSION_LABEL[progression.phase] ?? '현재 구역 목표를 수행한다'
   return (
     <>
     {transitionBeacons}
+    {stairGuidance}
     <group position={missionPosition}>
       {progression.phase === 'escape_open' && (
         <mesh position={[0, 18, 0]}>

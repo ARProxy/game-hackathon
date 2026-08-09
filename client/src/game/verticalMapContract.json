@@ -20,6 +20,20 @@
       "authoredDoorIds": ["roof_to_f3"],
       "note": "북서 계단 펜트하우스의 실제 방화문과 잠금 collider를 공유"
     },
+    "ROOF_TO_F3_STAIR_BOTTOM_CROSSING": {
+      "kind": "stair_boundary",
+      "floor": "ROOF",
+      "position": [-38.35, 7.2, -40.8],
+      "zone": "roof_northwest_stair_bottom",
+      "note": "플레이어는 실제 계단을 끝까지 내려온 뒤 이 경계에서만 ROOF 권위에서 F3 권위로 전환된다"
+    },
+    "F3_TO_ROOF_STAIR_TOP_CROSSING": {
+      "kind": "stair_boundary",
+      "floor": "F3",
+      "position": [-33.65, 10.8, -40.34],
+      "zone": "f3_northwest_stair_top",
+      "note": "플레이어는 실제 계단을 끝까지 올라온 뒤 이 경계에서만 F3 권위에서 ROOF 권위로 전환된다"
+    },
 
     "F3_MISSION_ROOM_POOL": {
       "kind": "room_pool",

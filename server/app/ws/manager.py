@@ -62,6 +62,7 @@ from app.game.vertical_flow import (
     activate_final_station,
     activate_simultaneous_device,
     complete_current_stage,
+    cross_rooftop_stair_boundary,
     evaluate_broadcast_phrase,
     final_escape_slot,
     refresh_closing_floor,
@@ -683,6 +684,29 @@ class ConnectionManager:
             if player and player.role == PlayerRole.HUMAN:
                 # AI에게 플레이어 층 이동 이벤트 알림 (강제 이동 아님)
                 # AI는 자신의 현재 목표에 따라 독립적으로 층 이동을 판단한다.
+                for companion_id in DEFAULT_AI_PARTNER_IDS:
+                    runtime = session.companion_states.get(companion_id)
+                    if runtime:
+                        runtime.player_floor_changed = {
+                            "floor": event["position"]["floor"],
+                            "position": event["position"],
+                            "timestamp": time.monotonic(),
+                        }
+
+        elif action_type == "cross_rooftop_stair_boundary":
+            try:
+                event = cross_rooftop_stair_boundary(
+                    session, player_id, str(payload.get("direction", "down")),
+                )
+            except InvalidProgression as error:
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": "cross_rooftop_stair_boundary",
+                    "reason": str(error),
+                })
+                return
+            await self.broadcast(room_id, {"type": "actor_floor_changed", **event})
+            if player and player.role == PlayerRole.HUMAN:
                 for companion_id in DEFAULT_AI_PARTNER_IDS:
                     runtime = session.companion_states.get(companion_id)
                     if runtime:

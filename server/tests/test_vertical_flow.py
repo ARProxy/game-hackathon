@@ -9,6 +9,7 @@ from app.game.vertical_flow import (
     activate_rooftop_signal,
     activate_final_station,
     complete_current_stage,
+    cross_rooftop_stair_boundary,
     evaluate_broadcast_phrase,
     final_escape_position,
     final_station_position,
@@ -138,7 +139,7 @@ def test_frozen_actor_cannot_complete_stage() -> None:
         complete_current_stage(session, "human")
 
 
-def test_open_transition_moves_actor_from_rooftop_to_active_third_floor() -> None:
+def test_physical_stair_boundary_changes_actor_from_rooftop_to_third_floor() -> None:
     from app.game.map_slots import get_map_slot
 
     session, human = active_session()
@@ -146,18 +147,19 @@ def test_open_transition_moves_actor_from_rooftop_to_active_third_floor() -> Non
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
     human.position.x, human.position.y, human.position.z = get_map_slot(
-        "ROOF_TO_F3_FIRE_DOOR"
+        "ROOF_TO_F3_STAIR_BOTTOM_CROSSING"
     )["position"]
     human.position.floor = WorldFloor.ROOF
 
-    event = use_open_floor_transition(session, "human", "west")
+    event = cross_rooftop_stair_boundary(session, "human", "down")
 
+    assert event["traversal"] == "stairs"
     assert event["position"]["floor"] == "F3"
     assert human.position.floor == WorldFloor.F3
     assert human.position.y == pytest.approx(7.2)
 
 
-def test_transition_rejects_wrong_floor_and_remote_use() -> None:
+def test_physical_stair_boundary_rejects_wrong_floor_and_remote_use() -> None:
     session, human = active_session()
     _mark_vertical_missions_done(session)
     place_at_current_mission(session, human)
@@ -165,11 +167,11 @@ def test_transition_rejects_wrong_floor_and_remote_use() -> None:
 
     human.position.floor = WorldFloor.F2
     with pytest.raises(InvalidProgression, match="출발 층"):
-        use_open_floor_transition(session, "human", "west")
+        cross_rooftop_stair_boundary(session, "human", "down")
 
     human.position.floor = WorldFloor.ROOF
-    with pytest.raises(InvalidProgression, match="거리가 너무 멀다"):
-        use_open_floor_transition(session, "human", "west")
+    with pytest.raises(InvalidProgression, match="경계와 거리가 너무 멀다"):
+        cross_rooftop_stair_boundary(session, "human", "down")
 
 
 def test_rooftop_closes_only_after_every_runner_descends() -> None:
@@ -179,23 +181,43 @@ def test_rooftop_closes_only_after_every_runner_descends() -> None:
     _mark_vertical_missions_done(session)
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
-    roof_door = get_map_slot("ROOF_TO_F3_FIRE_DOOR")
-    f3_stair = get_map_slot("F3_TO_F2_STAIR_WEST")
+    stair_bottom = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
+    stair_top = get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")
 
     for actor_id in ("human", "partner", "partner-2"):
         actor = session.state.get_player(actor_id)
-        actor.position.x, actor.position.y, actor.position.z = roof_door["position"]
+        actor.position.x, actor.position.y, actor.position.z = stair_bottom["position"]
         actor.position.floor = WorldFloor.ROOF
-        event = use_open_floor_transition(session, actor_id, "west")
+        event = cross_rooftop_stair_boundary(session, actor_id, "down")
 
     assert event["closed_floor"] == "ROOF"
     assert event["progression"]["accessible_floors"] == ["F3"]
     assert event["progression"]["closing_pending_floor"] is None
 
-    human.position.x, human.position.y, human.position.z = f3_stair["position"]
+    human.position.x, human.position.y, human.position.z = stair_top["position"]
     human.position.floor = WorldFloor.F3
     with pytest.raises(InvalidProgression, match="닫혔거나"):
-        use_open_floor_transition(session, "human", "west")
+        cross_rooftop_stair_boundary(session, "human", "up")
+
+
+def test_rooftop_stair_is_bidirectional_before_roof_closes() -> None:
+    from app.game.map_slots import get_map_slot
+
+    session, human = active_session()
+    _mark_vertical_missions_done(session)
+    place_at_current_mission(session, human)
+    complete_current_stage(session, "human")
+    bottom = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
+    top = get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING")
+    human.position.x, human.position.y, human.position.z = bottom["position"]
+    human.position.floor = WorldFloor.ROOF
+    cross_rooftop_stair_boundary(session, "human", "down")
+    human.position.x, human.position.y, human.position.z = top["position"]
+
+    event = cross_rooftop_stair_boundary(session, "human", "up")
+
+    assert event["position"]["floor"] == "ROOF"
+    assert event["position"]["y"] == pytest.approx(10.8)
 
 
 def test_current_and_previous_floor_transition_is_bidirectional() -> None:
@@ -239,10 +261,10 @@ def test_east_and_west_routes_open_after_third_floor_completion() -> None:
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
     human.position.x, human.position.y, human.position.z = get_map_slot(
-        "ROOF_TO_F3_FIRE_DOOR"
+        "ROOF_TO_F3_STAIR_BOTTOM_CROSSING"
     )["position"]
     human.position.floor = WorldFloor.ROOF
-    use_open_floor_transition(session, "human", "west")
+    cross_rooftop_stair_boundary(session, "human", "down")
     place_at_current_mission(session, human)
     complete_current_stage(session, "human")
 

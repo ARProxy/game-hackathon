@@ -11,6 +11,7 @@ from app.game.vertical_flow import (
     activate_rooftop_signal,
     activate_simultaneous_device,
     complete_current_stage,
+    cross_rooftop_stair_boundary,
     evaluate_broadcast_phrase,
     final_station_position,
     mission_interaction_position,
@@ -39,6 +40,12 @@ def _move_all_through(session: GameSession, source_slot_id: str, route: str) -> 
         use_open_floor_transition(session, actor_id, route)
 
 
+def _walk_all_from_roof_to_f3(session: GameSession) -> None:
+    for actor_id in RUNNER_IDS:
+        _place_actor_at_slot(session, actor_id, "ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
+        cross_rooftop_stair_boundary(session, actor_id, "down")
+
+
 def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None:
     session = GameSession("vertical-autoplay")
     session.state.add_player("human", PlayerRole.HUMAN)
@@ -53,7 +60,7 @@ def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None
         _place_actor_at_slot(session, actor_id, slot_id)
         assert activate_rooftop_signal(session, actor_id, signal_id)["success"]
     assert complete_current_stage(session, "partner-2")["next_phase"] == "floor_3"
-    _move_all_through(session, "ROOF_TO_F3_FIRE_DOOR", "west")
+    _walk_all_from_roof_to_f3(session)
     assert session.vertical_round.to_dict()["accessible_floors"] == ["F3"]
 
     human = session.state.get_player("human")

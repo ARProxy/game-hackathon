@@ -33,9 +33,6 @@ VERTICAL_CLUE_BY_PHASE = {
 }
 
 TRANSITION_SLOTS_BY_PHASE = {
-    VerticalRoundPhase.FLOOR_3: {
-        "west": ("ROOF_TO_F3_FIRE_DOOR", "F3_TO_F2_STAIR_WEST"),
-    },
     VerticalRoundPhase.FLOOR_2: {
         "west": ("F3_TO_F2_STAIR_WEST", "F2_TO_F1_STAIR_WEST"),
         "east": ("F3_TO_F2_STAIR_EAST", "F2_TO_F1_STAIR_EAST"),
@@ -368,6 +365,62 @@ def use_open_floor_transition(session: Any, actor_id: str, route: str) -> dict:
             "x": x, "y": y, "z": z,
             "floor": destination_floor.value,
             "zone": destination["zone"],
+        },
+        "closed_floor": closed_floor.value if closed_floor else None,
+        "progression": session.vertical_progression_payload(),
+    }
+
+
+def cross_rooftop_stair_boundary(
+    session: Any, actor_id: str, direction: str,
+) -> dict:
+    """옥상과 3층 사이 실제 계단 끝에서만 층 권위를 전환한다."""
+    if not session.vertical_progression_enabled:
+        raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")
+    if session.vertical_round.phase != VerticalRoundPhase.FLOOR_3:
+        raise InvalidProgression("옥상과 3층 계단을 이용할 수 있는 단계가 아니다")
+    actor = session.state.get_player(actor_id)
+    if actor is None or actor.status != PlayerStatus.ALIVE or actor.role == PlayerRole.SEEKER:
+        raise InvalidProgression("살아 있는 도망자만 계단을 이용할 수 있다")
+
+    boundary_by_direction = {
+        "down": (
+            WorldFloor.ROOF,
+            WorldFloor.F3,
+            get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING"),
+        ),
+        "up": (
+            WorldFloor.F3,
+            WorldFloor.ROOF,
+            get_map_slot("F3_TO_ROOF_STAIR_TOP_CROSSING"),
+        ),
+    }
+    try:
+        source_floor, destination_floor, boundary = boundary_by_direction[direction]
+    except KeyError as error:
+        raise InvalidProgression("정의되지 않은 계단 이동 방향이다") from error
+    if actor.position.floor != source_floor:
+        raise InvalidProgression("계단 출발 층이 일치하지 않는다")
+    accessible_floors = session.vertical_round.accessible_floors
+    if source_floor not in accessible_floors or destination_floor not in accessible_floors:
+        raise InvalidProgression("닫혔거나 아직 열리지 않은 계단이다")
+
+    x, y, z = boundary["position"]
+    if math.hypot(actor.position.x - x, actor.position.z - z) > 1.4:
+        raise InvalidProgression("계단 끝 경계와 거리가 너무 멀다")
+    actor.position.x, actor.position.y, actor.position.z = x, y, z
+    actor.position.floor = destination_floor
+    actor.position.zone = boundary["zone"]
+    closed_floor = refresh_closing_floor(session)
+    return {
+        "actor_id": actor_id,
+        "route": "roof_f3_stairs",
+        "traversal": "stairs",
+        "direction": direction,
+        "position": {
+            "x": x, "y": y, "z": z,
+            "floor": destination_floor.value,
+            "zone": boundary["zone"],
         },
         "closed_floor": closed_floor.value if closed_floor else None,
         "progression": session.vertical_progression_payload(),
