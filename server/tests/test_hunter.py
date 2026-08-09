@@ -245,6 +245,26 @@ def test_vertical_threat_grows_as_runners_descend_and_time_passes() -> None:
     assert floor_1["stage_speed_multiplier"] > floor_3["stage_speed_multiplier"]
 
 
+def test_vertical_phase_speed_never_drops_during_final_reveal_or_escape() -> None:
+    session = make_session("hunter-stage-speed")
+    started_at = session.state.started_at
+    expected = {
+        VerticalRoundPhase.FLOOR_3: 0.9,
+        VerticalRoundPhase.FLOOR_2: 1.05,
+        VerticalRoundPhase.FLOOR_1: 1.2,
+        VerticalRoundPhase.FINAL_ROUTE_REVEAL: 1.2,
+        VerticalRoundPhase.FIELD_FINAL: 1.3,
+        VerticalRoundPhase.BASEMENT_FINAL: 1.3,
+        VerticalRoundPhase.ESCAPE_OPEN: 1.3,
+    }
+
+    for phase, speed in expected.items():
+        session.vertical_round.phase = phase
+        assert vertical_threat_snapshot(session, now=started_at)[
+            "stage_speed_multiplier"
+        ] == speed
+
+
 def test_forbidden_rage_expands_hearing_and_vision() -> None:
     session = make_session("hunter-rage-senses")
     session.vertical_round.phase = VerticalRoundPhase.FLOOR_2

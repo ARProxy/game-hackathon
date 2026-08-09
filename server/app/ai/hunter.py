@@ -42,8 +42,10 @@ VERTICAL_PHASE_SPEED = {
     VerticalRoundPhase.FLOOR_3: 0.9,
     VerticalRoundPhase.FLOOR_2: 1.05,
     VerticalRoundPhase.FLOOR_1: 1.2,
+    VerticalRoundPhase.FINAL_ROUTE_REVEAL: 1.2,
     VerticalRoundPhase.FIELD_FINAL: 1.3,
     VerticalRoundPhase.BASEMENT_FINAL: 1.3,
+    VerticalRoundPhase.ESCAPE_OPEN: 1.3,
 }
 
 
