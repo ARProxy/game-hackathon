@@ -19,7 +19,7 @@ from app.ai.dynamic_forbidden import DynamicForbiddenProfile
 from app.ai.mission import Mission, RoundData
 from app.ai.speech import SpeechHistory
 from app.game.authority import MovementSample
-from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots
+from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots, runner_spawn_slots
 from app.game.progression import FinalRoute, FORBIDDEN_RAGE_POLICIES, ForbiddenRageTier, VerticalRoundState, WorldFloor
 from app.game.state import GamePhase, GameState, PlayerRole
 
@@ -214,10 +214,21 @@ class GameSession:
                 self.state.add_player(actor_id, required_role)
         now = time.monotonic()
         vertical_spawns = actor_spawn_slots() if self.vertical_progression_enabled else {}
+        runner_slots = runner_spawn_slots() if self.vertical_progression_enabled else []
+        human_runners = [
+            player for player in self.state.players.values()
+            if player.role == PlayerRole.HUMAN
+        ]
+        ai_runners = [
+            self.state.players[actor_id] for actor_id in DEFAULT_AI_PARTNER_IDS
+            if actor_id in self.state.players
+        ]
+        runner_slot_by_id = {
+            player.player_id: runner_slots[index]
+            for index, player in enumerate((human_runners + ai_runners)[:len(runner_slots)])
+        }
         for player in self.state.players.values():
-            slot = vertical_spawns.get(
-                "human" if player.role == PlayerRole.HUMAN else player.player_id
-            )
+            slot = runner_slot_by_id.get(player.player_id) or vertical_spawns.get(player.player_id)
             if slot:
                 x, y, z = slot["position"]
                 floor = WorldFloor(slot["floor"])

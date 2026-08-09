@@ -8,7 +8,7 @@ from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots, elevato
 
 
 REQUIRED_SLOT_IDS = {
-    "ROOF_RUNNER_SPAWN_A", "ROOF_RUNNER_SPAWN_B", "ROOF_RUNNER_SPAWN_C",
+    "ROOF_RUNNER_SPAWN_A", "ROOF_RUNNER_SPAWN_B", "ROOF_RUNNER_SPAWN_C", "ROOF_RUNNER_SPAWN_D",
     "ROOF_INTRO_MISSION", "ROOF_SIGNAL_CENTER", "ROOF_SIGNAL_EAST",
     "ROOF_SIGNAL_WEST", "ROOF_TO_F3_FIRE_DOOR",
     "ROOF_TO_F3_STAIR_BOTTOM_CROSSING", "F3_TO_ROOF_STAIR_TOP_CROSSING",
@@ -61,10 +61,10 @@ def test_position_slots_use_floor_height_and_finite_map_coordinates() -> None:
 
 
 def test_rooftop_spawns_are_separate_and_keep_actor_feet_on_roof() -> None:
-    spawns = [get_map_slot(f"ROOF_RUNNER_SPAWN_{suffix}") for suffix in "ABC"]
+    spawns = [get_map_slot(f"ROOF_RUNNER_SPAWN_{suffix}") for suffix in "ABCD"]
     positions = [tuple(slot["position"]) for slot in spawns]
 
-    assert len(set(positions)) == 3
+    assert len(set(positions)) == 4
     assert all(slot["floor"] == "ROOF" for slot in spawns)
     for index, first in enumerate(positions):
         for second in positions[index + 1:]:

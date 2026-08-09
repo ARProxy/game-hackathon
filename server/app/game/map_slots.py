@@ -45,6 +45,11 @@ def actor_spawn_slots() -> dict[str, dict]:
     }
 
 
+def runner_spawn_slots() -> list[dict]:
+    """인간을 먼저, 남은 자리에 AI를 배치하는 최대 4인 옥상 슬롯."""
+    return [get_map_slot(f"ROOF_RUNNER_SPAWN_{suffix}") for suffix in "ABCD"]
+
+
 def seeker_reveal_slot() -> dict:
     return get_map_slot("F3_SEEKER_REVEAL_ENTRY")
 

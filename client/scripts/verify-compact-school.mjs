@@ -293,7 +293,7 @@ for (const [suffix, objectId, candidateId] of [
   ))
   assert.equal(blocker, undefined, `${candidateId} AI 접근점이 ${blocker?.id ?? '장벽'}에 막혔다`)
 }
-for (const suffix of ['A', 'B', 'C']) {
+for (const suffix of ['A', 'B', 'C', 'D']) {
   const slot = slots[`ROOF_RUNNER_SPAWN_${suffix}`]
   assert.ok(slabAt('ROOF', slot.position[0], slot.position[2]), `${suffix} 스폰 아래에 옥상 슬래브가 없다`)
   const blocker = COMPACT_SCHOOL.boxes.find((item) => (

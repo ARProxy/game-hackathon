@@ -85,6 +85,15 @@ class TestWebSocketConnection:
                 game_guest = receive_type(guest, "game_started")
                 assert game_host["state"]["phase"] == "playing"
                 assert game_guest["state"]["players"].keys() == game_host["state"]["players"].keys()
+                runner_positions = {
+                    (
+                        player["position"]["x"],
+                        player["position"]["z"],
+                    )
+                    for player in game_host["state"]["players"].values()
+                    if player["role"] != "seeker"
+                }
+                assert len(runner_positions) == 4
 
                 host_position = game_host["state"]["players"]["host-live"]["position"]
                 host.send_json({
