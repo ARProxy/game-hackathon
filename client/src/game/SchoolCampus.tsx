@@ -1,3 +1,4 @@
+/* oxlint-disable react/only-export-components -- map contracts and their renderer intentionally share one module */
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import SchoolCampusV4 from './SchoolCampusV4'

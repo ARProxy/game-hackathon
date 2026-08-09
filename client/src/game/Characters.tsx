@@ -1,3 +1,4 @@
+/* oxlint-disable react/only-export-components -- character contracts and their renderer intentionally share one module */
 /**
  * 『얼음, 땡!』 캐릭터 세트 v4 — 원화 기반 괴물 술래 3종 + 동물 도망자 5종
  *

@@ -7,7 +7,7 @@
 
 import { create } from 'zustand'
 
-export type GamePhase = 'lobby' | 'onboarding' | 'reveal' | 'playing' | 'final_spell' | 'escape' | 'result'
+export type GamePhase = 'lobby' | 'playing' | 'final_spell' | 'escape' | 'result'
 export type PlayerStatus = 'alive' | 'frozen' | 'eliminated' | 'escaped'
 export type GameOutcome = 'win' | 'lose' | null
 export type MapFloor = 'OUT' | 'ROOF' | 'F3' | 'F2' | 'F1' | 'FIELD' | 'B1'
@@ -216,8 +216,6 @@ interface GameStore {
   forbiddenWords: string[]
   forbiddenProfile: ForbiddenProfileState | null
   forbiddenProfileHistory: ForbiddenProfileHistoryEntry[]
-  sourceAnswers: string[]
-  onboardingQuestions: string[]
   freezeCount: number
   roundStartedAt: number | null
   elapsedSeconds: number | null
@@ -273,8 +271,6 @@ interface GameStore {
   setForbiddenWords: (words: string[]) => void
   setForbiddenProfile: (profile: ForbiddenProfileState | null) => void
   setForbiddenProfileHistory: (history: ForbiddenProfileHistoryEntry[]) => void
-  setSourceAnswers: (answers: string[]) => void
-  setOnboardingQuestions: (questions: string[]) => void
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   setVerticalProgression: (progression: VerticalProgressionState) => void
   setRooftopSignal: (signal: RooftopSignalState) => void
@@ -325,8 +321,6 @@ const initialState = {
   forbiddenWords: [],
   forbiddenProfile: null as ForbiddenProfileState | null,
   forbiddenProfileHistory: [] as ForbiddenProfileHistoryEntry[],
-  sourceAnswers: [] as string[],
-  onboardingQuestions: [] as string[],
   freezeCount: 0,
   roundStartedAt: null as number | null,
   elapsedSeconds: null as number | null,
@@ -422,10 +416,6 @@ export const useGameStore = create<GameStore>((set) => ({
   setForbiddenProfile: (forbiddenProfile) => set({ forbiddenProfile }),
 
   setForbiddenProfileHistory: (forbiddenProfileHistory) => set({ forbiddenProfileHistory }),
-
-  setSourceAnswers: (sourceAnswers) => set({ sourceAnswers }),
-
-  setOnboardingQuestions: (onboardingQuestions) => set({ onboardingQuestions }),
 
   setRoundData: (props, missions, totalClues) =>
     set({

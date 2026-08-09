@@ -210,17 +210,17 @@ export function buildElevatorRig(T, o) {
   for (const f of order) {
     const y = FY[f]
     const fg = new T.Group(); root.add(fg)
-    onFloor && onFloor(f, fg)
+    onFloor?.(f, fg)
 
     // 삼방틀 — 좌·우 선틀 + 상틀
     for (const sd of [-1, 1]) box(fg, 0.18, DOOR_H + 0.18, 0.22, ecx + sd * (DOOR_W / 2 + 0.09), y + (DOOR_H + 0.18) / 2, LAND_Z + 0.11, frameMat)
     box(fg, DOOR_W + 0.36, 0.18, 0.22, ecx, y + DOOR_H + 0.09, LAND_Z + 0.11, frameMat)
     // 개구부 상부·양옆 벽 마감 — 승강로가 들여다보이지 않게
     const headH = 3.0 - DOOR_H - 0.18
-    if (headH > 0.02) onSolid && onSolid(box(fg, DOOR_W + 0.36, headH, 0.16, ecx, y + DOOR_H + 0.18 + headH / 2, LAND_Z + 0.08, mat.plastic))
+    if (headH > 0.02) onSolid?.(box(fg, DOOR_W + 0.36, headH, 0.16, ecx, y + DOOR_H + 0.18 + headH / 2, LAND_Z + 0.08, mat.plastic))
     const flank = SH_W / 2 - (DOOR_W / 2 + 0.18)
     if (flank > 0.02) for (const sd of [-1, 1]) {
-      onSolid && onSolid(box(fg, flank, 3.0, 0.16, ecx + sd * (DOOR_W / 2 + 0.18 + flank / 2), y + 1.5, LAND_Z + 0.08, mat.plastic))
+      onSolid?.(box(fg, flank, 3.0, 0.16, ecx + sd * (DOOR_W / 2 + 0.18 + flank / 2), y + 1.5, LAND_Z + 0.08, mat.plastic))
     }
 
     // 실 — 2줄 홈
@@ -234,8 +234,8 @@ export function buildElevatorRig(T, o) {
       p.userData.sd = sd
       p.userData.act = { kind: 'evcall', floor: f }
       box(p, PANEL_W - 0.02, 0.16, 0.008, 0, -DOOR_H / 2 + 0.09, 0.028, mat.hairDark, { noShadow: true })
-      onSolid && onSolid(p)
-      picks && picks.push(p)
+      onSolid?.(p)
+      picks?.push(p)
       return p
     })
 
@@ -269,7 +269,7 @@ export function buildElevatorRig(T, o) {
         new T.MeshStandardMaterial({ color: '#39424a', emissive: '#ffbe72', emissiveIntensity: 0, roughness: 0.4 }), 20)
       b.rotation.x = Math.PI / 2
       b.userData.act = { kind: 'evcall', floor: f }
-      picks && picks.push(b)
+      picks?.push(b)
       hb[k] = b
     }
     hallBtns[f] = hb
@@ -385,7 +385,7 @@ export function buildElevatorRig(T, o) {
     b.rotation.z = Math.PI / 2
     b.userData.act = { kind: 'evcall', floor: fk }
     copBtns[fk] = b
-    picks && picks.push(b)
+    picks?.push(b)
   })
   // 열림 · 닫힘 · 인터폰
   for (const [dy, c] of [[0.98, '#8fb7d8'], [0.86, '#8fb7d8'], [0.72, '#d8a08f']]) {
@@ -411,7 +411,7 @@ export function buildElevatorRig(T, o) {
     m.userData.sd = sd
     m.userData.act = { kind: 'evtoggle' }
     box(m, PANEL_W - 0.02, 0.16, 0.008, 0, -DOOR_H / 2 + 0.09, -0.028, mat.hairDark, { noShadow: true })
-    picks && picks.push(m)
+    picks?.push(m)
     return { m, sd, home: ecx + sd * PANEL_W / 2 }
   })
   // 도어 실 + 세이프티 슈
@@ -431,4 +431,3 @@ export function buildElevatorRig(T, o) {
     PANEL_W, DOOR_W, DOOR_H, CAR_H, shaft,
   }
 }
-
