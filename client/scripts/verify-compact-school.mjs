@@ -14,7 +14,8 @@ import verticalMapContract from '../src/game/verticalMapContract.json' with { ty
 const EPSILON = 0.001
 const CAPSULE_RADIUS = 0.36
 const SERVER_BARRIER_ROLES = new Set([
-  'wall', 'window', 'rail', 'parapet', 'equipmentCollider', 'hvac', 'missionConsole', 'entryPost',
+  'wall', 'window', 'rail', 'parapet', 'equipmentCollider', 'hvac', 'furniture',
+  'roofEquipment', 'missionConsole', 'entryPost',
   'fieldFence',
 ])
 const isServerBarrier = (item) => {
@@ -35,7 +36,19 @@ assert.ok(COMPACT_SCHOOL.boxes.every((item) => typeof item.collider === 'boolean
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'rail').every((item) => item.collider && !item.visible), '계단·보이드 난간의 연속 충돌 장벽이 사라졌다')
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'railVisual').every((item) => !item.collider && item.visible), '난간 장식과 충돌 프록시가 섞였다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').length, 12, '두 코어 × 세 층 × 두 경사로가 필요하다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairRamp').every((item) => item.s[0] >= 3), '계단 유효 폭은 3m 이상이어야 한다')
+assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairMass').length, 96, '모든 계단 디딤판 아래가 실제 덩어리로 채워져야 한다')
+assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairStringer').length, 24, '모든 계단 경사로 양쪽에 구조 거더가 필요하다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'parapet').length, 8, '옥상 외곽과 중정에 연속 파라펫이 필요하다')
+assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roomFinish').length, 24, '모든 의미 공간은 용도별 바닥 마감이 필요하다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'furniture').length >= 100, '축소 맵에서 실내 구조 밀도가 다시 빠졌다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roofEquipment').length >= 11, '옥상이 비어 보이지 않도록 설비 구조가 필요하다')
+for (const room of COMPACT_SCHOOL.rooms) {
+  assert.ok(
+    COMPACT_SCHOOL.boxes.some((item) => item.f === room.floor && item.role === 'furniture' && item.id.startsWith(`${room.id}_`)),
+    `${room.name}에 용도를 읽을 수 있는 가구가 없다`,
+  )
+}
 for (const floor of ['F1', 'F2', 'F3']) {
   for (const core of ['nw', 'se']) {
     for (const suffix of [

@@ -320,6 +320,195 @@ function addFloorShell(floor) {
   }
 }
 
+function roomAxes(room) {
+  if (room.z0 === B.z0) return {
+    point: (lateral, depth) => [room.cx + lateral, room.z1 - depth],
+    size: (lateral, height, depth) => [lateral, height, depth],
+    yaw: 0,
+  }
+  if (room.z1 === B.z1) return {
+    point: (lateral, depth) => [room.cx + lateral, room.z0 + depth],
+    size: (lateral, height, depth) => [lateral, height, depth],
+    yaw: Math.PI,
+  }
+  if (room.x0 === B.x0) return {
+    point: (lateral, depth) => [room.x1 - depth, room.cz + lateral],
+    size: (lateral, height, depth) => [lateral, height, depth],
+    yaw: Math.PI / 2,
+  }
+  return {
+    point: (lateral, depth) => [room.x0 + depth, room.cz + lateral],
+    size: (lateral, height, depth) => [lateral, height, depth],
+    yaw: -Math.PI / 2,
+  }
+}
+
+function roomKind(name) {
+  if (/도서/.test(name)) return 'library'
+  if (/과학|컴퓨터|지구/.test(name)) return 'lab'
+  if (/방송|시청각/.test(name)) return 'control'
+  if (/급식|조리/.test(name)) return 'food'
+  if (/보건/.test(name)) return 'health'
+  if (/경비|방재|행정|교무|상담|인쇄/.test(name)) return 'office'
+  if (/음악|무용|미술|서예|동아리/.test(name)) return 'studio'
+  return 'classroom'
+}
+
+const ROOM_FLOOR_MATERIAL = {
+  classroom: 'classFloor', library: 'wood', lab: 'labFloor', control: 'storeFloor',
+  food: 'foodFloor', health: 'healthFloor', office: 'adminFloor', studio: 'wood',
+}
+
+function addDesk(room, axes, index, lateral, depth, material = 'desk') {
+  const floor = room.floor
+  const y = FY[floor]
+  const [x, z] = axes.point(lateral, depth)
+  addBox({
+    id: `${room.id}_desk_${index}`, floor, p: [x, y + 0.72, z],
+    s: axes.size(1.24, 0.1, 0.68), rot: [0, axes.yaw, 0],
+    material, role: 'furniture', collider: true,
+  })
+  for (const [legIndex, dl, dd] of [[1, -0.5, -0.23], [2, 0.5, -0.23], [3, -0.5, 0.23], [4, 0.5, 0.23]]) {
+    const [legX, legZ] = axes.point(lateral + dl, depth + dd)
+    addBox({
+      id: `${room.id}_desk_${index}_leg_${legIndex}`, floor, p: [legX, y + 0.35, legZ],
+      s: [0.055, 0.7, 0.055], material: 'deskLeg', role: 'furnitureDetail', collider: false,
+    })
+  }
+  const [chairX, chairZ] = axes.point(lateral, depth - 0.72)
+  addBox({
+    id: `${room.id}_chair_${index}`, floor, p: [chairX, y + 0.42, chairZ],
+    s: axes.size(0.48, 0.84, 0.48), rot: [0, axes.yaw, 0],
+    material: 'chair', role: 'furnitureDetail', collider: false,
+  })
+}
+
+function addShelf(room, axes, index, lateral, depth, width = 1.45) {
+  const floor = room.floor
+  const y = FY[floor]
+  const [x, z] = axes.point(lateral, depth)
+  addBox({
+    id: `${room.id}_shelf_${index}`, floor, p: [x, y + 1.05, z],
+    s: axes.size(width, 2.1, 0.48), rot: [0, axes.yaw, 0],
+    material: 'locker', role: 'furniture', collider: true,
+  })
+  for (let shelf = 1; shelf <= 3; shelf++) addBox({
+    id: `${room.id}_shelf_${index}_line_${shelf}`, floor,
+    p: [x, y + shelf * 0.52, z], s: axes.size(width + 0.04, 0.045, 0.53), rot: [0, axes.yaw, 0],
+    material: 'paper', role: 'furnitureDetail', collider: false,
+  })
+}
+
+function addRoomDensity(room) {
+  const floor = room.floor
+  const y = FY[floor]
+  const axes = roomAxes(room)
+  const kind = roomKind(room.name)
+  addBox({
+    id: `${room.id}_finish`, floor,
+    p: [room.cx, y + 0.018, room.cz],
+    s: [room.x1 - room.x0 - 0.38, 0.025, room.z1 - room.z0 - 0.38],
+    material: ROOM_FLOOR_MATERIAL[kind], role: 'roomFinish', collider: false,
+  })
+
+  if (kind === 'library') {
+    for (const [index, lateral] of [-2.15, 0, 2.15].entries()) addShelf(room, axes, index + 1, lateral, 5.8, 1.55)
+    addDesk(room, axes, 1, -1.25, 3.15, 'wood')
+    addDesk(room, axes, 2, 1.25, 3.15, 'wood')
+  } else if (kind === 'lab' || kind === 'control') {
+    for (const [index, depth] of [3.0, 5.2].entries()) {
+      const [x, z] = axes.point(0, depth)
+      addBox({
+        id: `${room.id}_workbench_${index + 1}`, floor, p: [x, y + 0.78, z],
+        s: axes.size(4.7, 0.92, 0.86), rot: [0, axes.yaw, 0],
+        material: kind === 'control' ? 'extSteelDark' : 'desk', role: 'furniture', collider: true,
+      })
+      for (const lateral of [-1.65, 0, 1.65]) {
+        const [screenX, screenZ] = axes.point(lateral, depth - 0.18)
+        addBox({
+          id: `${room.id}_screen_${index + 1}_${lateral}`, floor, p: [screenX, y + 1.18, screenZ],
+          s: axes.size(0.72, 0.42, 0.055), rot: [0, axes.yaw, 0],
+          material: index % 2 ? 'safetyGreen' : 'signBlue', role: 'emissive', collider: false,
+        })
+        boxes[boxes.length - 1].emissive = true
+      }
+    }
+  } else if (kind === 'food') {
+    for (const [index, lateral] of [-1.65, 0, 1.65].entries()) addDesk(room, axes, index + 1, lateral, 3.5, 'wood')
+    const [counterX, counterZ] = axes.point(0, 6.25)
+    addBox({
+      id: `${room.id}_counter`, floor, p: [counterX, y + 0.52, counterZ],
+      s: axes.size(5.5, 1.04, 0.72), rot: [0, axes.yaw, 0],
+      material: 'kitchenBase', role: 'furniture', collider: true,
+    })
+  } else if (kind === 'health') {
+    for (const [index, lateral] of [-1.65, 1.65].entries()) {
+      const [bedX, bedZ] = axes.point(lateral, 4.55)
+      addBox({
+        id: `${room.id}_bed_${index + 1}`, floor, p: [bedX, y + 0.48, bedZ],
+        s: axes.size(1.15, 0.54, 2.25), rot: [0, axes.yaw, 0],
+        material: 'white', role: 'furniture', collider: true,
+      })
+      const [headX, headZ] = axes.point(lateral, 5.55)
+      addBox({
+        id: `${room.id}_bed_head_${index + 1}`, floor, p: [headX, y + 0.82, headZ],
+        s: axes.size(1.18, 0.72, 0.08), rot: [0, axes.yaw, 0],
+        material: 'healthBase', role: 'furnitureDetail', collider: false,
+      })
+    }
+    addShelf(room, axes, 1, 2.9, 6.1, 0.9)
+  } else if (kind === 'office') {
+    addDesk(room, axes, 1, -1.55, 3.25)
+    addDesk(room, axes, 2, 1.55, 4.6)
+    addShelf(room, axes, 1, -2.35, 6.25, 1.2)
+    addShelf(room, axes, 2, 0, 6.25, 1.2)
+    addShelf(room, axes, 3, 2.35, 6.25, 1.2)
+  } else if (kind === 'studio') {
+    const [platformX, platformZ] = axes.point(0, 6.05)
+    addBox({
+      id: `${room.id}_studio_platform`, floor, p: [platformX, y + 0.16, platformZ],
+      s: axes.size(5.6, 0.32, 1.6), rot: [0, axes.yaw, 0],
+      material: 'wood', role: 'furniture', collider: true,
+    })
+    for (const lateral of [-2.4, -0.8, 0.8, 2.4]) {
+      const [panelX, panelZ] = axes.point(lateral, 6.88)
+      addBox({
+        id: `${room.id}_studio_panel_${lateral}`, floor, p: [panelX, y + 1.45, panelZ],
+        s: axes.size(1.35, 1.85, 0.055), rot: [0, axes.yaw, 0],
+        material: 'darkGlass', role: 'furnitureDetail', collider: false,
+      })
+    }
+  } else {
+    let deskIndex = 1
+    for (const depth of [3.15, 4.75]) for (const lateral of [-1.7, 0, 1.7]) {
+      addDesk(room, axes, deskIndex++, lateral, depth)
+    }
+    const [boardX, boardZ] = axes.point(0, 6.92)
+    addBox({
+      id: `${room.id}_board`, floor, p: [boardX, y + 1.55, boardZ],
+      s: axes.size(5.0, 1.1, 0.09), rot: [0, axes.yaw, 0],
+      material: 'chalk', role: 'furnitureDetail', collider: false,
+    })
+  }
+}
+
+function addInteriorDensity() {
+  for (const room of rooms) addRoomDensity(room)
+  for (const floor of ['F1', 'F2', 'F3']) {
+    const y = FY[floor]
+    for (const [side, z] of [['north', -39.56], ['south', -16.44]]) {
+      for (const x of [-32, -24, -16]) addBox({
+        id: `${floor}_${side}_locker_${x}`, floor, p: [x, y + 0.95, z], s: [2.25, 1.9, 0.44],
+        material: 'locker', role: 'furniture', collider: true,
+      })
+    }
+    for (const [side, x] of [['west', -39.56], ['east', -8.44]]) addBox({
+      id: `${floor}_${side}_corridor_bench`, floor, p: [x, y + 0.4, -28], s: [0.48, 0.8, 2.05],
+      material: 'wood', role: 'furniture', collider: true,
+    })
+  }
+}
+
 function addRailBarrier(floor, p, s, rot, id) {
   addBox({ id, floor, p, s, rot, material: 'rail', role: 'rail', collider: true, visible: false })
 }
@@ -330,9 +519,9 @@ function addVisualRail(floor, p, s, rot, id) {
 
 function addSwitchbackStair(floor, core, dir, coreId) {
   const y = FY[floor]
-  const laneWidth = 2.65
+  const laneWidth = 3.0
   const coreWidth = core.x1 - core.x0
-  const landingWidth = coreWidth - 0.55
+  const landingWidth = coreWidth - 0.3
   const landingX = (core.x0 + core.x1) / 2
   const leftX = core.x0 + 1.65
   const rightX = core.x1 - 1.65
@@ -349,11 +538,23 @@ function addSwitchbackStair(floor, core, dir, coreId) {
   for (let i = 0; i < steps; i++) {
     const z1 = entryZ + dir * (0.8 + (i + 0.5) * tread)
     const top1 = y + (i + 1) * riser
+    const massHeight1 = top1 - y
+    addBox({
+      id: `stair_${coreId}_${floor}_lower_mass_${i + 1}`,
+      floor, p: [leftX, y + massHeight1 / 2, z1], s: [laneWidth, massHeight1, tread + 0.02],
+      material: 'stairRiser', role: 'stairMass', collider: false,
+    })
     addBox({ floor, p: [leftX, top1 - 0.055, z1], s: [laneWidth, 0.11, tread + 0.02], material: 'stairTread', role: 'stairTread', collider: false })
     addBox({ floor, p: [leftX, top1 - riser / 2, z1 - dir * tread / 2], s: [laneWidth, riser, 0.07], material: 'stairRiser', role: 'stairRiser', collider: false })
 
     const z2 = farZ - dir * ((i + 0.5) * tread)
     const top2 = y + rise + (i + 1) * riser
+    const massHeight2 = top2 - (y + rise)
+    addBox({
+      id: `stair_${coreId}_${floor}_upper_mass_${i + 1}`,
+      floor, p: [rightX, y + rise + massHeight2 / 2, z2], s: [laneWidth, massHeight2, tread + 0.02],
+      material: 'stairRiser', role: 'stairMass', collider: false,
+    })
     addBox({ floor, p: [rightX, top2 - 0.055, z2], s: [laneWidth, 0.11, tread + 0.02], material: 'stairTread', role: 'stairTread', collider: false })
     addBox({ floor, p: [rightX, top2 - riser / 2, z2 + dir * tread / 2], s: [laneWidth, riser, 0.07], material: 'stairRiser', role: 'stairRiser', collider: false })
   }
@@ -362,9 +563,20 @@ function addSwitchbackStair(floor, core, dir, coreId) {
   const center2 = farZ - dir * run / 2
   addBox({ id: `stair_${coreId}_${floor}_lower_ramp`, floor, p: [leftX, y + rise / 2 - 0.08, center1], s: [laneWidth, 0.18, length + 0.08], rot: [-dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
   addBox({ id: `stair_${coreId}_${floor}_upper_ramp`, floor, p: [rightX, y + rise + rise / 2 - 0.08, center2], s: [laneWidth, 0.18, length + 0.08], rot: [dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
+  for (const [id, x, center, rampY, rotation] of [
+    ['lower', leftX, center1, y + rise / 2 - 0.22, [-dir * angle, 0, 0]],
+    ['upper', rightX, center2, y + rise + rise / 2 - 0.22, [dir * angle, 0, 0]],
+  ]) {
+    for (const side of [-1, 1]) addBox({
+      id: `stair_${coreId}_${floor}_${id}_stringer_${side < 0 ? 'left' : 'right'}`,
+      floor, p: [x + side * (laneWidth / 2 - 0.11), rampY, center],
+      s: [0.22, 0.36, length + 0.12], rot: rotation,
+      material: 'extConcrete', role: 'stairStringer', collider: false,
+    })
+  }
 
   const farLandingZ = farZ + dir * 0.55
-  addBox({ id: `stair_${coreId}_${floor}_mid_landing`, floor, p: [landingX, y + rise - 0.09, farLandingZ], s: [landingWidth, 0.18, 1.25], material: 'stairTread', role: 'landing' })
+  addBox({ id: `stair_${coreId}_${floor}_mid_landing`, floor, p: [landingX, y + rise - 0.14, farLandingZ], s: [landingWidth, 0.28, 1.25], material: 'stairTread', role: 'landing' })
 
   // 층 출입문은 두 레인의 중앙에 있다. 한쪽 레인만 덮으면 문을 정면으로
   // 통과한 캡슐이 수직 보이드로 떨어지므로, 상부 층계참은 문 폭부터 두
@@ -375,8 +587,8 @@ function addSwitchbackStair(floor, core, dir, coreId) {
   addBox({
     id: `stair_${coreId}_${floor}_level_landing`,
     floor,
-    p: [landingX, y + FLOOR_HEIGHT - 0.09, upperLandingZ],
-    s: [landingWidth, 0.18, upperLandingDepth],
+    p: [landingX, y + FLOOR_HEIGHT - 0.14, upperLandingZ],
+    s: [landingWidth, 0.28, upperLandingDepth],
     material: 'stairTread', role: 'landing',
   })
 
@@ -443,6 +655,10 @@ function addWellRails(floor, well, openSide) {
 
 function addStairs() {
   for (const floor of ['F1', 'F2', 'F3']) {
+    // 두 코어의 빠져 있던 측벽을 복구해 계단이 방 안에 노출된 발판이 아니라
+    // 방화문·내화벽으로 닫힌 실제 계단실로 읽히게 한다.
+    addFullWallSegment(floor, 'z', -40, -48, -40, { lower: 'corrBase', upper: 'corrWall' })
+    addFullWallSegment(floor, 'z', -8, -16, -8, { lower: 'corrBase', upper: 'corrWall' })
     addSwitchbackStair(floor, { x0: -40, x1: -32, z0: -48, z1: -40 }, -1, 'nw')
     addSwitchbackStair(floor, { x0: -16, x1: -8, z0: -16, z1: -8 }, 1, 'se')
   }
@@ -516,6 +732,76 @@ function addRoof() {
   for (let i = 0; i < 4; i++) addCylinder({ floor: 'ROOF', p: [-4.8, y + 2.2 + i * 0.7, -28], r: 0.42, h: 0.045, material: 'rail', role: 'antennaRing', rot: [Math.PI / 2, 0, 0] })
   addBox({ floor: 'ROOF', p: [-4.8, y + 7.08, -28], s: [0.18, 0.18, 0.18], material: 'safetyRed', role: 'warningLight', collider: false })
   boxes[boxes.length - 1].emissive = true
+
+  // 축소된 옥상도 실제 학교 설비층의 밀도를 유지한다. 중앙 미션 동선과
+  // 스폰은 비우고 남·북 설비대와 서측 서비스 구역에만 큰 장비를 묶는다.
+  for (const [index, x] of [-42, -34, -26, -20].entries()) {
+    addBox({
+      id: `roof_air_handler_${index + 1}`, floor: 'ROOF', p: [x, y + 0.72, -11.6],
+      s: [2.5, 1.44, 1.55], material: 'extSteel', role: 'roofEquipment', collider: true,
+    })
+    addBox({
+      id: `roof_air_handler_${index + 1}_grille`, floor: 'ROOF', p: [x, y + 0.78, -12.39],
+      s: [1.65, 0.7, 0.055], material: 'extSteelDark', role: 'roofEquipmentDetail', collider: false,
+    })
+    for (const dx of [-0.72, 0, 0.72]) addBox({
+      id: `roof_air_handler_${index + 1}_grille_bar_${dx}`, floor: 'ROOF', p: [x + dx, y + 0.78, -12.43],
+      s: [0.035, 0.62, 0.035], material: 'mullion', role: 'roofEquipmentDetail', collider: false,
+    })
+  }
+
+  for (const [index, x] of [-18, -14, -10].entries()) {
+    addCylinder({
+      id: `roof_exhaust_${index + 1}`, floor: 'ROOF', p: [x, y + 0.62, -44],
+      r: 0.48, h: 1.24, material: 'extSteelDark', role: 'roofEquipmentDetail', collider: false,
+    })
+    addCylinder({
+      id: `roof_exhaust_${index + 1}_cap`, floor: 'ROOF', p: [x, y + 1.31, -44],
+      r: 0.67, h: 0.14, material: 'extSteel', role: 'roofEquipmentDetail', collider: false,
+    })
+    addBox({
+      id: `roof_exhaust_${index + 1}_collider`, floor: 'ROOF', p: [x, y + 0.62, -44],
+      s: [1.0, 1.24, 1.0], material: 'extSteelDark', role: 'roofEquipment', collider: true, visible: false,
+    })
+  }
+
+  for (const [index, z] of [-44.2, -41.4].entries()) {
+    addBox({
+      id: `roof_west_chiller_${index + 1}`, floor: 'ROOF', p: [-44.2, y + 0.88, z],
+      s: [2.6, 1.76, 1.55], material: 'extFrame', role: 'roofEquipment', collider: true,
+    })
+    addBox({
+      id: `roof_west_chiller_${index + 1}_panel`, floor: 'ROOF', p: [-42.87, y + 0.9, z],
+      s: [0.05, 1.12, 0.9], material: 'extSteelDark', role: 'roofEquipmentDetail', collider: false,
+    })
+  }
+
+  // 배관·케이블 트레이는 장비 군을 시각적으로 하나의 설비 시스템으로 묶는다.
+  for (const [index, z] of [-13.35, -13.7].entries()) addCylinder({
+    id: `roof_south_pipe_${index + 1}`, floor: 'ROOF', p: [-31, y + 0.48 + index * 0.18, z],
+    r: 0.085, h: 24, material: index ? 'safetyRed' : 'extSteel', role: 'roofPipe', collider: false,
+    rot: [0, 0, Math.PI / 2],
+  })
+  for (const [index, x] of [-38, -30, -22].entries()) addBox({
+    id: `roof_cable_tray_${index + 1}`, floor: 'ROOF', p: [x, y + 0.16, -42.1],
+    s: [5.4, 0.16, 0.52], material: 'extSteelDark', role: 'roofEquipmentDetail', collider: false,
+  })
+  for (const [index, x] of [-30.6, -17.2].entries()) addBox({
+    id: `roof_electrical_cabinet_${index + 1}`, floor: 'ROOF', p: [x, y + 0.92, -46.6],
+    s: [1.2, 1.84, 0.64], material: 'extSteelDark', role: 'roofEquipment', collider: true,
+  })
+
+  // 장비 점검 발판과 황색 가장자리는 빈 회색 면을 작업 공간으로 분절한다.
+  for (const [index, x] of [-42, -34, -26, -20].entries()) {
+    addBox({
+      id: `roof_service_pad_${index + 1}`, floor: 'ROOF', p: [x, y + 0.035, -11.6],
+      s: [3.15, 0.035, 2.15], material: 'extConcrete', role: 'servicePad', collider: false,
+    })
+    addBox({
+      id: `roof_service_pad_${index + 1}_mark`, floor: 'ROOF', p: [x, y + 0.06, -10.48],
+      s: [3.18, 0.025, 0.08], material: 'safetyYellow', role: 'safetyMarking', collider: false,
+    })
+  }
 
   // 삼점 신호 미션의 물리적 장치. 현재는 골조/랜드마크이며 로직은 다음 패스에서 연결한다.
   const consoles = [
@@ -735,6 +1021,7 @@ function addNavigation() {
 
 addGrounds()
 for (const floor of ['F1', 'F2', 'F3']) addFloorShell(floor)
+addInteriorDensity()
 addStairs()
 addRoof()
 addBasementShell()

@@ -12,6 +12,8 @@ const SERVER_BARRIER_ROLES = new Set([
   'parapet',
   'equipmentCollider',
   'hvac',
+  'furniture',
+  'roofEquipment',
   'missionConsole',
   'entryPost',
   'fieldFence',

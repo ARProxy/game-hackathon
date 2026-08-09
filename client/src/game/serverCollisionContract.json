@@ -8545,7 +8545,1603 @@
     {
       "floor": "F1",
       "center": [
-        -39.675000000000004,
+        -29.55,
+        -43.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_1_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -26.45,
+        -44.6
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_1_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -30.35,
+        -46.25
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_1_shelf_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -28,
+        -46.25
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_1_shelf_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -25.65,
+        -46.25
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_1_shelf_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -21.55,
+        -43.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_2_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -18.45,
+        -44.6
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_2_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -22.35,
+        -46.25
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_2_shelf_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -20,
+        -46.25
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_2_shelf_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -17.65,
+        -46.25
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_2_shelf_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -13.65,
+        -44.55
+      ],
+      "size": [
+        1.15,
+        2.25
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_3_bed_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -10.35,
+        -44.55
+      ],
+      "size": [
+        1.15,
+        2.25
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_3_bed_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -9.1,
+        -46.1
+      ],
+      "size": [
+        0.9,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f1_room_3_shelf_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -37.55,
+        -12.75
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_4_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -34.45,
+        -11.4
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_4_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -38.35,
+        -9.75
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_4_shelf_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -36,
+        -9.75
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_4_shelf_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -33.65,
+        -9.75
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_4_shelf_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -29.65,
+        -12.5
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_5_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -28,
+        -12.5
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_5_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -26.35,
+        -12.5
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_5_desk_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -28,
+        -9.75
+      ],
+      "size": [
+        5.5,
+        0.72
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_5_counter",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -21.65,
+        -12.5
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_6_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -20,
+        -12.5
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_6_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -18.35,
+        -12.5
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_6_desk_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -20,
+        -9.75
+      ],
+      "size": [
+        5.5,
+        0.72
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f1_room_6_counter",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -43.25,
+        -33.55
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f1_room_7_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -44.6,
+        -30.45
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f1_room_7_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -46.25,
+        -34.35
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f1_room_7_shelf_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -46.25,
+        -32
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f1_room_7_shelf_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -46.25,
+        -29.65
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f1_room_7_shelf_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -4.75,
+        -33.55
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f1_room_8_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -3.4000000000000004,
+        -30.45
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f1_room_8_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -1.75,
+        -34.35
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f1_room_8_shelf_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -1.75,
+        -32
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f1_room_8_shelf_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -1.75,
+        -29.65
+      ],
+      "size": [
+        1.2,
+        0.48
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f1_room_8_shelf_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -30.15,
+        -45.8
+      ],
+      "size": [
+        1.55,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_1_shelf_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -28,
+        -45.8
+      ],
+      "size": [
+        1.55,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_1_shelf_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -25.85,
+        -45.8
+      ],
+      "size": [
+        1.55,
+        0.48
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_1_shelf_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -29.25,
+        -43.15
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_1_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -26.75,
+        -43.15
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_1_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -20,
+        -46.05
+      ],
+      "size": [
+        5.6,
+        1.6
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_2_studio_platform",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -12,
+        -43
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_3_workbench_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -12,
+        -45.2
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 0,
+      "sourceId": "f2_room_3_workbench_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -36,
+        -13
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_4_workbench_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -36,
+        -10.8
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_4_workbench_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -29.7,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_5_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -28,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_5_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -26.3,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_5_desk_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -29.7,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_5_desk_4",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -28,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_5_desk_5",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -26.3,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_5_desk_6",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -21.7,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_6_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -20,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_6_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -18.3,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_6_desk_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -21.7,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_6_desk_4",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -20,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_6_desk_5",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -18.3,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f2_room_6_desk_6",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -43.15,
+        -33.7
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f2_room_7_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -43.15,
+        -32
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f2_room_7_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -43.15,
+        -30.3
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f2_room_7_desk_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -44.75,
+        -33.7
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f2_room_7_desk_4",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -44.75,
+        -32
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f2_room_7_desk_5",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -44.75,
+        -30.3
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f2_room_7_desk_6",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -5,
+        -32
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f2_room_8_workbench_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -2.8,
+        -32
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f2_room_8_workbench_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -28,
+        -43
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 0,
+      "sourceId": "f3_room_1_workbench_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -28,
+        -45.2
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 0,
+      "sourceId": "f3_room_1_workbench_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -20,
+        -46.05
+      ],
+      "size": [
+        5.6,
+        1.6
+      ],
+      "rotationY": 0,
+      "sourceId": "f3_room_2_studio_platform",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -12,
+        -46.05
+      ],
+      "size": [
+        5.6,
+        1.6
+      ],
+      "rotationY": 0,
+      "sourceId": "f3_room_3_studio_platform",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -36,
+        -9.95
+      ],
+      "size": [
+        5.6,
+        1.6
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_4_studio_platform",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -29.7,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_5_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -28,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_5_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -26.3,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_5_desk_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -29.7,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_5_desk_4",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -28,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_5_desk_5",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -26.3,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_5_desk_6",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -21.7,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_6_desk_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -20,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_6_desk_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -18.3,
+        -12.85
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_6_desk_3",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -21.7,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_6_desk_4",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -20,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_6_desk_5",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -18.3,
+        -11.25
+      ],
+      "size": [
+        1.24,
+        0.68
+      ],
+      "rotationY": 3.141592653589793,
+      "sourceId": "f3_room_6_desk_6",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -43,
+        -32
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f3_room_7_workbench_1",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -45.2,
+        -32
+      ],
+      "size": [
+        4.7,
+        0.86
+      ],
+      "rotationY": 1.5707963267948966,
+      "sourceId": "f3_room_7_workbench_2",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -1.9500000000000002,
+        -32
+      ],
+      "size": [
+        5.6,
+        1.6
+      ],
+      "rotationY": -1.5707963267948966,
+      "sourceId": "f3_room_8_studio_platform",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -32,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_north_locker_-32",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -24,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_north_locker_-24",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -16,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_north_locker_-16",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -32,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_south_locker_-32",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -24,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_south_locker_-24",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -16,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_south_locker_-16",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -39.56,
+        -28
+      ],
+      "size": [
+        0.48,
+        2.05
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_west_corridor_bench",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -8.44,
+        -28
+      ],
+      "size": [
+        0.48,
+        2.05
+      ],
+      "rotationY": 0,
+      "sourceId": "F1_east_corridor_bench",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -32,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_north_locker_-32",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -24,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_north_locker_-24",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -16,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_north_locker_-16",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -32,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_south_locker_-32",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -24,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_south_locker_-24",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -16,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_south_locker_-16",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -39.56,
+        -28
+      ],
+      "size": [
+        0.48,
+        2.05
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_west_corridor_bench",
+      "role": "furniture"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -8.44,
+        -28
+      ],
+      "size": [
+        0.48,
+        2.05
+      ],
+      "rotationY": 0,
+      "sourceId": "F2_east_corridor_bench",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -32,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_north_locker_-32",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -24,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_north_locker_-24",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -16,
+        -39.56
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_north_locker_-16",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -32,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_south_locker_-32",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -24,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_south_locker_-24",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -16,
+        -16.44
+      ],
+      "size": [
+        2.25,
+        0.44
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_south_locker_-16",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -39.56,
+        -28
+      ],
+      "size": [
+        0.48,
+        2.05
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_west_corridor_bench",
+      "role": "furniture"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -8.44,
+        -28
+      ],
+      "size": [
+        0.48,
+        2.05
+      ],
+      "rotationY": 0,
+      "sourceId": "F3_east_corridor_bench",
+      "role": "furniture"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -40,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1265",
+      "role": "wall"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -40,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1266",
+      "role": "wall"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -8,
+        -12
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1267",
+      "role": "wall"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -8,
+        -12
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1268",
+      "role": "wall"
+    },
+    {
+      "floor": "F1",
+      "center": [
+        -39.85,
         -42.6
       ],
       "size": [
@@ -8559,7 +10155,7 @@
     {
       "floor": "F1",
       "center": [
-        -37.025,
+        -36.85,
         -42.6
       ],
       "size": [
@@ -8577,7 +10173,7 @@
         -45.574999999999996
       ],
       "size": [
-        7.45,
+        7.7,
         0.12
       ],
       "rotationY": 0,
@@ -8587,7 +10183,7 @@
     {
       "floor": "F1",
       "center": [
-        -15.674999999999999,
+        -15.85,
         -13.4
       ],
       "size": [
@@ -8601,7 +10197,7 @@
     {
       "floor": "F1",
       "center": [
-        -13.025,
+        -12.85,
         -13.4
       ],
       "size": [
@@ -8619,7 +10215,7 @@
         -10.424999999999999
       ],
       "size": [
-        7.45,
+        7.7,
         0.12
       ],
       "rotationY": 0,
@@ -8629,7 +10225,63 @@
     {
       "floor": "F2",
       "center": [
-        -39.675000000000004,
+        -40,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1405",
+      "role": "wall"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -40,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1406",
+      "role": "wall"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -8,
+        -12
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1407",
+      "role": "wall"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -8,
+        -12
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1408",
+      "role": "wall"
+    },
+    {
+      "floor": "F2",
+      "center": [
+        -39.85,
         -42.6
       ],
       "size": [
@@ -8643,7 +10295,7 @@
     {
       "floor": "F2",
       "center": [
-        -37.025,
+        -36.85,
         -42.6
       ],
       "size": [
@@ -8657,7 +10309,7 @@
     {
       "floor": "F2",
       "center": [
-        -15.674999999999999,
+        -15.85,
         -13.4
       ],
       "size": [
@@ -8671,7 +10323,7 @@
     {
       "floor": "F2",
       "center": [
-        -13.025,
+        -12.85,
         -13.4
       ],
       "size": [
@@ -8685,7 +10337,63 @@
     {
       "floor": "F3",
       "center": [
-        -39.675000000000004,
+        -40,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1545",
+      "role": "wall"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -40,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1546",
+      "role": "wall"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -8,
+        -12
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1547",
+      "role": "wall"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -8,
+        -12
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1548",
+      "role": "wall"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -39.85,
         -42.6
       ],
       "size": [
@@ -8699,7 +10407,7 @@
     {
       "floor": "F3",
       "center": [
-        -37.025,
+        -36.85,
         -42.6
       ],
       "size": [
@@ -8717,7 +10425,7 @@
         -45.574999999999996
       ],
       "size": [
-        7.45,
+        7.7,
         0.12
       ],
       "rotationY": 0,
@@ -8727,7 +10435,7 @@
     {
       "floor": "F3",
       "center": [
-        -15.674999999999999,
+        -15.85,
         -13.4
       ],
       "size": [
@@ -8741,7 +10449,7 @@
     {
       "floor": "F3",
       "center": [
-        -13.025,
+        -12.85,
         -13.4
       ],
       "size": [
@@ -8759,7 +10467,7 @@
         -10.424999999999999
       ],
       "size": [
-        7.45,
+        7.7,
         0.12
       ],
       "rotationY": 0,
@@ -8777,7 +10485,7 @@
         0.12
       ],
       "rotationY": 0,
-      "sourceId": "box_1673",
+      "sourceId": "box_1685",
       "role": "rail"
     },
     {
@@ -8791,7 +10499,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1681",
+      "sourceId": "box_1693",
       "role": "rail"
     },
     {
@@ -8805,7 +10513,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1690",
+      "sourceId": "box_1702",
       "role": "rail"
     },
     {
@@ -8819,7 +10527,7 @@
         0.12
       ],
       "rotationY": 0,
-      "sourceId": "box_1699",
+      "sourceId": "box_1711",
       "role": "rail"
     },
     {
@@ -8833,7 +10541,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1707",
+      "sourceId": "box_1719",
       "role": "rail"
     },
     {
@@ -8847,7 +10555,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1716",
+      "sourceId": "box_1728",
       "role": "rail"
     },
     {
@@ -8861,7 +10569,7 @@
         0.12
       ],
       "rotationY": 0,
-      "sourceId": "box_1725",
+      "sourceId": "box_1737",
       "role": "rail"
     },
     {
@@ -8875,7 +10583,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1733",
+      "sourceId": "box_1745",
       "role": "rail"
     },
     {
@@ -8889,7 +10597,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1742",
+      "sourceId": "box_1754",
       "role": "rail"
     },
     {
@@ -8903,7 +10611,7 @@
         0.12
       ],
       "rotationY": 0,
-      "sourceId": "box_1751",
+      "sourceId": "box_1763",
       "role": "rail"
     },
     {
@@ -8917,7 +10625,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1759",
+      "sourceId": "box_1771",
       "role": "rail"
     },
     {
@@ -8931,7 +10639,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1768",
+      "sourceId": "box_1780",
       "role": "rail"
     },
     {
@@ -8945,7 +10653,7 @@
         0.12
       ],
       "rotationY": 0,
-      "sourceId": "box_1777",
+      "sourceId": "box_1789",
       "role": "rail"
     },
     {
@@ -8959,7 +10667,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1785",
+      "sourceId": "box_1797",
       "role": "rail"
     },
     {
@@ -8973,7 +10681,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1794",
+      "sourceId": "box_1806",
       "role": "rail"
     },
     {
@@ -8987,7 +10695,7 @@
         0.12
       ],
       "rotationY": 0,
-      "sourceId": "box_1803",
+      "sourceId": "box_1815",
       "role": "rail"
     },
     {
@@ -9001,7 +10709,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1811",
+      "sourceId": "box_1823",
       "role": "rail"
     },
     {
@@ -9015,7 +10723,7 @@
         7.25
       ],
       "rotationY": 0,
-      "sourceId": "box_1820",
+      "sourceId": "box_1832",
       "role": "rail"
     },
     {
@@ -9029,7 +10737,7 @@
         0.32
       ],
       "rotationY": 0,
-      "sourceId": "box_1839",
+      "sourceId": "box_1851",
       "role": "parapet"
     },
     {
@@ -9043,7 +10751,7 @@
         0.32
       ],
       "rotationY": 0,
-      "sourceId": "box_1841",
+      "sourceId": "box_1853",
       "role": "parapet"
     },
     {
@@ -9057,7 +10765,7 @@
         40
       ],
       "rotationY": 0,
-      "sourceId": "box_1843",
+      "sourceId": "box_1855",
       "role": "parapet"
     },
     {
@@ -9071,7 +10779,7 @@
         40
       ],
       "rotationY": 0,
-      "sourceId": "box_1845",
+      "sourceId": "box_1857",
       "role": "parapet"
     },
     {
@@ -9085,7 +10793,7 @@
         0.32
       ],
       "rotationY": 0,
-      "sourceId": "box_1847",
+      "sourceId": "box_1859",
       "role": "parapet"
     },
     {
@@ -9099,7 +10807,7 @@
         0.32
       ],
       "rotationY": 0,
-      "sourceId": "box_1849",
+      "sourceId": "box_1861",
       "role": "parapet"
     },
     {
@@ -9113,7 +10821,7 @@
         15.599999999999998
       ],
       "rotationY": 0,
-      "sourceId": "box_1851",
+      "sourceId": "box_1863",
       "role": "parapet"
     },
     {
@@ -9127,7 +10835,7 @@
         15.599999999999998
       ],
       "rotationY": 0,
-      "sourceId": "box_1853",
+      "sourceId": "box_1865",
       "role": "parapet"
     },
     {
@@ -9141,7 +10849,7 @@
         0.22
       ],
       "rotationY": 0,
-      "sourceId": "box_1855",
+      "sourceId": "box_1867",
       "role": "wall"
     },
     {
@@ -9155,7 +10863,7 @@
         0.22
       ],
       "rotationY": 0,
-      "sourceId": "box_1856",
+      "sourceId": "box_1868",
       "role": "wall"
     },
     {
@@ -9163,118 +10871,6 @@
       "center": [
         -38.4875,
         -39.62
-      ],
-      "size": [
-        3.7250000000000014,
-        0.22
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1857",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -38.4875,
-        -39.62
-      ],
-      "size": [
-        3.7250000000000014,
-        0.22
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1858",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -33.5125,
-        -39.62
-      ],
-      "size": [
-        3.7250000000000014,
-        0.22
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1861",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -33.5125,
-        -39.62
-      ],
-      "size": [
-        3.7250000000000014,
-        0.22
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1862",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -40.35,
-        -43.885
-      ],
-      "size": [
-        0.22,
-        8.530000000000001
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1863",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -40.35,
-        -43.885
-      ],
-      "size": [
-        0.22,
-        8.530000000000001
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1864",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -31.65,
-        -43.885
-      ],
-      "size": [
-        0.22,
-        8.530000000000001
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1865",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -31.65,
-        -43.885
-      ],
-      "size": [
-        0.22,
-        8.530000000000001
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1866",
-      "role": "wall"
-    },
-    {
-      "floor": "ROOF",
-      "center": [
-        -14.4875,
-        -16.38
       ],
       "size": [
         3.7250000000000014,
@@ -9287,8 +10883,8 @@
     {
       "floor": "ROOF",
       "center": [
-        -14.4875,
-        -16.38
+        -38.4875,
+        -39.62
       ],
       "size": [
         3.7250000000000014,
@@ -9301,11 +10897,11 @@
     {
       "floor": "ROOF",
       "center": [
-        -9.5125,
-        -16.38
+        -33.5125,
+        -39.62
       ],
       "size": [
-        3.7249999999999996,
+        3.7250000000000014,
         0.22
       ],
       "rotationY": 0,
@@ -9315,11 +10911,11 @@
     {
       "floor": "ROOF",
       "center": [
-        -9.5125,
-        -16.38
+        -33.5125,
+        -39.62
       ],
       "size": [
-        3.7249999999999996,
+        3.7250000000000014,
         0.22
       ],
       "rotationY": 0,
@@ -9329,12 +10925,12 @@
     {
       "floor": "ROOF",
       "center": [
-        -12,
-        -7.85
+        -40.35,
+        -43.885
       ],
       "size": [
-        8.700000000000001,
-        0.22
+        0.22,
+        8.530000000000001
       ],
       "rotationY": 0,
       "sourceId": "box_1875",
@@ -9343,12 +10939,12 @@
     {
       "floor": "ROOF",
       "center": [
-        -12,
-        -7.85
+        -40.35,
+        -43.885
       ],
       "size": [
-        8.700000000000001,
-        0.22
+        0.22,
+        8.530000000000001
       ],
       "rotationY": 0,
       "sourceId": "box_1876",
@@ -9357,12 +10953,12 @@
     {
       "floor": "ROOF",
       "center": [
-        -16.35,
-        -12.114999999999998
+        -31.65,
+        -43.885
       ],
       "size": [
         0.22,
-        8.53
+        8.530000000000001
       ],
       "rotationY": 0,
       "sourceId": "box_1877",
@@ -9371,12 +10967,12 @@
     {
       "floor": "ROOF",
       "center": [
-        -16.35,
-        -12.114999999999998
+        -31.65,
+        -43.885
       ],
       "size": [
         0.22,
-        8.53
+        8.530000000000001
       ],
       "rotationY": 0,
       "sourceId": "box_1878",
@@ -9385,7 +10981,91 @@
     {
       "floor": "ROOF",
       "center": [
-        -7.65,
+        -14.4875,
+        -16.38
+      ],
+      "size": [
+        3.7250000000000014,
+        0.22
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1881",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -14.4875,
+        -16.38
+      ],
+      "size": [
+        3.7250000000000014,
+        0.22
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1882",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -9.5125,
+        -16.38
+      ],
+      "size": [
+        3.7249999999999996,
+        0.22
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1885",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -9.5125,
+        -16.38
+      ],
+      "size": [
+        3.7249999999999996,
+        0.22
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1886",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -12,
+        -7.85
+      ],
+      "size": [
+        8.700000000000001,
+        0.22
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1887",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -12,
+        -7.85
+      ],
+      "size": [
+        8.700000000000001,
+        0.22
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1888",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -16.35,
         -12.114999999999998
       ],
       "size": [
@@ -9393,7 +11073,21 @@
         8.53
       ],
       "rotationY": 0,
-      "sourceId": "box_1879",
+      "sourceId": "box_1889",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -16.35,
+        -12.114999999999998
+      ],
+      "size": [
+        0.22,
+        8.53
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1890",
       "role": "wall"
     },
     {
@@ -9407,7 +11101,21 @@
         8.53
       ],
       "rotationY": 0,
-      "sourceId": "box_1880",
+      "sourceId": "box_1891",
+      "role": "wall"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -7.65,
+        -12.114999999999998
+      ],
+      "size": [
+        0.22,
+        8.53
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1892",
       "role": "wall"
     },
     {
@@ -9421,7 +11129,7 @@
         2.9
       ],
       "rotationY": 0,
-      "sourceId": "box_1884",
+      "sourceId": "box_1896",
       "role": "equipmentCollider"
     },
     {
@@ -9435,7 +11143,7 @@
         2.9
       ],
       "rotationY": 0,
-      "sourceId": "box_1890",
+      "sourceId": "box_1902",
       "role": "equipmentCollider"
     },
     {
@@ -9449,7 +11157,7 @@
         1.9
       ],
       "rotationY": 0,
-      "sourceId": "box_1895",
+      "sourceId": "box_1907",
       "role": "hvac"
     },
     {
@@ -9463,7 +11171,7 @@
         1.9
       ],
       "rotationY": 0,
-      "sourceId": "box_1897",
+      "sourceId": "box_1909",
       "role": "hvac"
     },
     {
@@ -9477,7 +11185,7 @@
         1.9
       ],
       "rotationY": 0,
-      "sourceId": "box_1899",
+      "sourceId": "box_1911",
       "role": "hvac"
     },
     {
@@ -9491,8 +11199,162 @@
         1.9
       ],
       "rotationY": 0,
-      "sourceId": "box_1901",
+      "sourceId": "box_1913",
       "role": "hvac"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -42,
+        -11.6
+      ],
+      "size": [
+        2.5,
+        1.55
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_air_handler_1",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -34,
+        -11.6
+      ],
+      "size": [
+        2.5,
+        1.55
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_air_handler_2",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -26,
+        -11.6
+      ],
+      "size": [
+        2.5,
+        1.55
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_air_handler_3",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -20,
+        -11.6
+      ],
+      "size": [
+        2.5,
+        1.55
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_air_handler_4",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -18,
+        -44
+      ],
+      "size": [
+        1,
+        1
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_exhaust_1_collider",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -14,
+        -44
+      ],
+      "size": [
+        1,
+        1
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_exhaust_2_collider",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -10,
+        -44
+      ],
+      "size": [
+        1,
+        1
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_exhaust_3_collider",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -44.2,
+        -44.2
+      ],
+      "size": [
+        2.6,
+        1.55
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_west_chiller_1",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -44.2,
+        -41.4
+      ],
+      "size": [
+        2.6,
+        1.55
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_west_chiller_2",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -30.6,
+        -46.6
+      ],
+      "size": [
+        1.2,
+        0.64
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_electrical_cabinet_1",
+      "role": "roofEquipment"
+    },
+    {
+      "floor": "ROOF",
+      "center": [
+        -17.2,
+        -46.6
+      ],
+      "size": [
+        1.2,
+        0.64
+      ],
+      "rotationY": 0,
+      "sourceId": "roof_electrical_cabinet_2",
+      "role": "roofEquipment"
     },
     {
       "floor": "ROOF",
@@ -9547,7 +11409,7 @@
         0.22
       ],
       "rotationY": 0,
-      "sourceId": "box_1946",
+      "sourceId": "box_1958",
       "role": "wall"
     },
     {
@@ -9561,146 +11423,6 @@
         0.22
       ],
       "rotationY": 0,
-      "sourceId": "box_1947",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -24,
-        -40
-      ],
-      "size": [
-        32,
-        0.22
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1948",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -24,
-        -40
-      ],
-      "size": [
-        32,
-        0.22
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1949",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -40,
-        -44
-      ],
-      "size": [
-        0.22,
-        8
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1950",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -40,
-        -44
-      ],
-      "size": [
-        0.22,
-        8
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1951",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -8,
-        -44
-      ],
-      "size": [
-        0.22,
-        8
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1952",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -8,
-        -44
-      ],
-      "size": [
-        0.22,
-        8
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1953",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -32,
-        -45.8625
-      ],
-      "size": [
-        0.22,
-        4.274999999999999
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1954",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -32,
-        -45.8625
-      ],
-      "size": [
-        0.22,
-        4.274999999999999
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1955",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -32,
-        -41.1375
-      ],
-      "size": [
-        0.22,
-        2.2749999999999986
-      ],
-      "rotationY": 0,
-      "sourceId": "box_1958",
-      "role": "wall"
-    },
-    {
-      "floor": "B1",
-      "center": [
-        -32,
-        -41.1375
-      ],
-      "size": [
-        0.22,
-        2.2749999999999986
-      ],
-      "rotationY": 0,
       "sourceId": "box_1959",
       "role": "wall"
     },
@@ -9708,11 +11430,11 @@
       "floor": "B1",
       "center": [
         -24,
-        -45.8625
+        -40
       ],
       "size": [
-        0.22,
-        4.274999999999999
+        32,
+        0.22
       ],
       "rotationY": 0,
       "sourceId": "box_1960",
@@ -9722,11 +11444,11 @@
       "floor": "B1",
       "center": [
         -24,
-        -45.8625
+        -40
       ],
       "size": [
-        0.22,
-        4.274999999999999
+        32,
+        0.22
       ],
       "rotationY": 0,
       "sourceId": "box_1961",
@@ -9735,12 +11457,40 @@
     {
       "floor": "B1",
       "center": [
-        -24,
-        -41.1375
+        -40,
+        -44
       ],
       "size": [
         0.22,
-        2.2749999999999986
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1962",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -40,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1963",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -8,
+        -44
+      ],
+      "size": [
+        0.22,
+        8
       ],
       "rotationY": 0,
       "sourceId": "box_1964",
@@ -9749,12 +11499,12 @@
     {
       "floor": "B1",
       "center": [
-        -24,
-        -41.1375
+        -8,
+        -44
       ],
       "size": [
         0.22,
-        2.2749999999999986
+        8
       ],
       "rotationY": 0,
       "sourceId": "box_1965",
@@ -9763,7 +11513,7 @@
     {
       "floor": "B1",
       "center": [
-        -16,
+        -32,
         -45.8625
       ],
       "size": [
@@ -9777,7 +11527,7 @@
     {
       "floor": "B1",
       "center": [
-        -16,
+        -32,
         -45.8625
       ],
       "size": [
@@ -9791,7 +11541,7 @@
     {
       "floor": "B1",
       "center": [
-        -16,
+        -32,
         -41.1375
       ],
       "size": [
@@ -9805,7 +11555,7 @@
     {
       "floor": "B1",
       "center": [
-        -16,
+        -32,
         -41.1375
       ],
       "size": [
@@ -9814,6 +11564,118 @@
       ],
       "rotationY": 0,
       "sourceId": "box_1971",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1972",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1973",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1976",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -24,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1977",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1978",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -45.8625
+      ],
+      "size": [
+        0.22,
+        4.274999999999999
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1979",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1982",
+      "role": "wall"
+    },
+    {
+      "floor": "B1",
+      "center": [
+        -16,
+        -41.1375
+      ],
+      "size": [
+        0.22,
+        2.2749999999999986
+      ],
+      "rotationY": 0,
+      "sourceId": "box_1983",
       "role": "wall"
     },
     {
