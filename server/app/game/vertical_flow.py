@@ -13,14 +13,20 @@ from app.game.state import PlayerRole, PlayerStatus
 
 MISSION_INTERACTION_RADIUS = 2.25
 BROADCAST_MISSION_PROMPT = (
-    "방송 문구의 뜻을 금기어 없이 말하세요: 작은 금속 도구로 잠긴 출입구를 개방한다."
+    "긴급 방송 원문: ‘열쇠로 잠긴 문을 열어라.’ 그대로 읽으면 비공개 금기어에 "
+    "걸릴 수 있습니다. Q로 도구·잠긴 출입구·개방 행동의 뜻을 모두 다른 말로 전달하세요."
 )
-BROADCAST_TOOL_CUES = ("금속", "도구", "쇠", "작은 물건")
-BROADCAST_EXIT_CUES = ("문", "출입구", "입구", "잠금")
-BROADCAST_ACTION_CUES = ("열", "개방", "통과")
+BROADCAST_TOOL_CUES = ("열쇠", "키", "금속", "도구", "쇠", "작은 물건")
+BROADCAST_EXIT_CUES = ("문", "출입구", "입구", "통로", "잠긴 곳", "잠금")
+BROADCAST_ACTION_CUES = ("열어", "여는", "열다", "열게", "열 수", "개방", "통과", "풀", "해제")
+BROADCAST_MEANING_LABELS = {
+    "tool": "문을 여는 도구",
+    "exit": "잠긴 출입구",
+    "action": "개방 행동",
+}
 MISSION_SLOT_BY_PHASE = {
     VerticalRoundPhase.ROOFTOP_INTRO: "ROOF_INTRO_MISSION",
-    VerticalRoundPhase.FLOOR_3: "F3_MISSION_ROOM_POOL",
+    VerticalRoundPhase.FLOOR_3: "F3_BROADCAST_CONSOLE",
     VerticalRoundPhase.FLOOR_2: "F2_INTERCOM_B",
     VerticalRoundPhase.FLOOR_1: "F1_DEVICE_A",
     VerticalRoundPhase.FIELD_FINAL: "FIELD_FINAL_STATION_B",
@@ -68,7 +74,7 @@ def mission_interaction_position(phase: VerticalRoundPhase) -> tuple[float, floa
         slot = get_map_slot(MISSION_SLOT_BY_PHASE[phase])
     except KeyError as error:
         raise InvalidProgression(f"{phase.value}에는 활성 미션 상호작용이 없다") from error
-    position = slot.get("position") or slot.get("interactionPosition")
+    position = slot.get("interactionPosition") or slot.get("position")
     if not position:
         raise InvalidProgression(f"{phase.value} 미션에 상호작용 좌표가 없다")
     return tuple(float(value) for value in position)
@@ -124,6 +130,10 @@ def evaluate_broadcast_phrase(transcript: str) -> dict:
         "success": all(matched.values()),
         "matched": matched,
         "missing": [name for name, present in matched.items() if not present],
+        "missing_labels": [
+            BROADCAST_MEANING_LABELS[name]
+            for name, present in matched.items() if not present
+        ],
     }
 
 

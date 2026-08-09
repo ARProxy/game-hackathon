@@ -125,6 +125,17 @@ for (const [slotId, consoleId] of [
     )
   }
 }
+const broadcastConsole = COMPACT_SCHOOL.boxes.find((item) => item.id === 'f3_broadcast_console')
+assert.ok(broadcastConsole, '3층 방송실 물리 콘솔이 없다')
+assert.equal(broadcastConsole.role, 'missionConsole', '방송 콘솔이 서버 장벽 계약에서 빠졌다')
+assert.deepEqual(
+  [broadcastConsole.p[0], broadcastConsole.p[2]],
+  [slots.F3_BROADCAST_CONSOLE.position[0], slots.F3_BROADCAST_CONSOLE.position[2]],
+  '3층 방송 미션 좌표와 물리 콘솔이 어긋났다',
+)
+assert.ok(COMPACT_SCHOOL.boxes.some((item) => item.id === 'f3_broadcast_on_air' && item.emissive), '방송실 ON AIR 표지가 없다')
+assert.ok(COMPACT_SCHOOL.cylinders.some((item) => item.id === 'f3_broadcast_microphone'), '방송실 마이크가 없다')
+assert.equal(slots.F3_BROADCAST_CONSOLE.interactionPosition[1], 7.2, '방송 콘솔 상호작용 지점이 3층 바닥에서 떴다')
 for (const suffix of ['A', 'B', 'C']) {
   const slot = slots[`ROOF_RUNNER_SPAWN_${suffix}`]
   assert.ok(slabAt('ROOF', slot.position[0], slot.position[2]), `${suffix} 스폰 아래에 옥상 슬래브가 없다`)

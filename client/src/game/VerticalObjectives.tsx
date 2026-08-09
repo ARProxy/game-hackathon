@@ -11,7 +11,7 @@ const slots = contract.slots as unknown as Record<string, Slot>
 const _playerPosition = new THREE.Vector3()
 const MISSION_SLOT: Record<string, string> = {
   rooftop_intro: 'ROOF_INTRO_MISSION',
-  floor_3: 'F3_MISSION_ROOM_POOL',
+  floor_3: 'F3_BROADCAST_CONSOLE',
   floor_2: 'F2_INTERCOM_B',
   floor_1: 'F1_DEVICE_A',
   field_final: 'FIELD_FINAL_STATION_B',
@@ -245,6 +245,83 @@ function FloorTransitionBeacon({ position, targetFloor, primary }: {
   )
 }
 
+const BROADCAST_MEANINGS = [
+  { label: '문을 여는 도구', color: '#52E5FF' },
+  { label: '잠긴 출입구', color: '#FFD166' },
+  { label: '개방 행동', color: '#FF5C78' },
+]
+
+function BroadcastMissionObjective({
+  position,
+  nearby,
+  active,
+}: {
+  position: [number, number, number]
+  nearby: boolean
+  active: boolean
+}) {
+  const waveformRef = useRef<THREE.Group>(null)
+  useFrame(({ clock }) => {
+    if (!waveformRef.current) return
+    waveformRef.current.children.forEach((bar, index) => {
+      const strength = active
+        ? 0.45 + Math.abs(Math.sin(clock.elapsedTime * 5.5 + index * 0.9)) * 1.15
+        : 0.28
+      bar.scale.y = strength
+    })
+  })
+  const accent = active ? '#FF375F' : nearby ? '#FFD166' : '#617989'
+  return (
+    <group position={position}>
+      <group ref={waveformRef} position={[0, 1.4, -0.35]}>
+        {Array.from({ length: 9 }, (_, index) => (
+          <mesh key={index} position={[(index - 4) * 0.16, 0, 0]}>
+            <boxGeometry args={[0.09, 0.5, 0.08]} />
+            <meshBasicMaterial color={accent} transparent opacity={active ? 0.95 : 0.48} />
+          </mesh>
+        ))}
+      </group>
+      {BROADCAST_MEANINGS.map((meaning, index) => (
+        <group key={meaning.label} position={[(index - 1) * 1.05, 0.05, 0.55]}>
+          <mesh>
+            <boxGeometry args={[0.86, 0.06, 0.34]} />
+            <meshBasicMaterial color={meaning.color} transparent opacity={active ? 0.82 : 0.28} />
+          </mesh>
+        </group>
+      ))}
+      <pointLight
+        position={[0, 1.65, -0.8]}
+        color={active ? '#FF294D' : '#FFD166'}
+        intensity={active ? 14 : nearby ? 6 : 2}
+        distance={active ? 7 : 3.5}
+      />
+      <Html position={[0, 2.35, 0]} center distanceFactor={9} style={{ pointerEvents: 'none' }}>
+        <div style={{
+          width: 310, padding: '10px 12px', borderRadius: 8,
+          border: `1px solid ${active ? 'rgba(255,55,95,.86)' : 'rgba(255,209,102,.58)'}`,
+          color: active ? '#FFD7DF' : '#FFF0B8', background: 'rgba(12,8,14,.95)',
+          fontSize: 12, fontWeight: 800, textAlign: 'center', lineHeight: 1.5,
+          boxShadow: active ? '0 0 20px rgba(255,41,77,.28)' : 'none',
+        }}>
+          <div style={{ color: active ? '#FF5C78' : '#FFD166', fontSize: 11, letterSpacing: 2 }}>
+            {active ? '● ON AIR · 제한 추격 시작' : '3F EMERGENCY BROADCAST'}
+          </div>
+          <div style={{ marginTop: 4 }}>
+            {active
+              ? 'Q · 원문 대신 세 가지 뜻을 다른 말로 방송'
+              : nearby ? 'E · 방송 송신기 연결' : '방송실 안 송신 콘솔을 찾으세요'}
+          </div>
+          {active && (
+            <div style={{ marginTop: 5, color: '#C6DCE5', fontSize: 10 }}>
+              {BROADCAST_MEANINGS.map((meaning) => meaning.label).join('  /  ')}
+            </div>
+          )}
+        </div>
+      </Html>
+    </group>
+  )
+}
+
 function PhysicalRoofStairGuidance({ direction }: { direction: 'down' | 'up' }) {
   const slotId = direction === 'down'
     ? 'ROOF_TO_F3_FIRE_DOOR'
@@ -276,6 +353,7 @@ export default function VerticalObjectives({ playerRef }: {
   playerRef: React.RefObject<THREE.Group | null>
 }) {
   const progression = useGameStore((state) => state.verticalProgression)
+  const activeMissionPrompt = useGameStore((state) => state.activeMissionPrompt)
   const playerFloor = useGameStore((state) => state.players[state.playerId]?.position.floor)
   const phase = useGameStore((state) => state.phase)
   const missionNearbyRef = useRef(false)
@@ -386,6 +464,17 @@ export default function VerticalObjectives({ playerRef }: {
   ) return <><BasementDeviceObjectives playerRef={playerRef} />{transitionBeacons}{stairGuidance}</>
   if (!progression?.enabled || !['playing', 'final_spell', 'escape'].includes(phase)) return null
   if (!missionPosition) return <>{transitionBeacons}{stairGuidance}</>
+  if (progression.phase === 'floor_3') return (
+    <>
+      {transitionBeacons}
+      {stairGuidance}
+      <BroadcastMissionObjective
+        position={missionPosition}
+        nearby={missionNearby}
+        active={activeMissionPrompt !== null}
+      />
+    </>
+  )
   const label = MISSION_LABEL[progression.phase] ?? '현재 구역 목표를 수행한다'
   return (
     <>

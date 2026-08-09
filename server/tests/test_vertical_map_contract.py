@@ -12,7 +12,7 @@ REQUIRED_SLOT_IDS = {
     "ROOF_INTRO_MISSION", "ROOF_SIGNAL_CENTER", "ROOF_SIGNAL_EAST",
     "ROOF_SIGNAL_WEST", "ROOF_TO_F3_FIRE_DOOR",
     "ROOF_TO_F3_STAIR_BOTTOM_CROSSING", "F3_TO_ROOF_STAIR_TOP_CROSSING",
-    "F3_MISSION_ROOM_POOL", "F3_SEEKER_REVEAL_ENTRY",
+    "F3_MISSION_ROOM_POOL", "F3_BROADCAST_CONSOLE", "F3_SEEKER_REVEAL_ENTRY",
     "F3_TO_F2_STAIR_WEST", "F3_TO_F2_STAIR_EAST",
     "F2_MISSION_ROOM_POOL", "F2_INTERCOM_A", "F2_INTERCOM_B",
     "F2_TO_F1_STAIR_WEST", "F2_TO_F1_STAIR_EAST",
@@ -113,3 +113,12 @@ def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
     assert bottom["kind"] == top["kind"] == "stair_boundary"
     assert bottom["floor"] == "ROOF" and bottom["position"] == [-38.35, 7.2, -40.8]
     assert top["floor"] == "F3" and top["position"] == [-33.65, 10.8, -40.34]
+
+
+def test_third_floor_uses_dedicated_broadcast_console_inside_the_room() -> None:
+    console = get_map_slot("F3_BROADCAST_CONSOLE")
+
+    assert console["kind"] == "device"
+    assert console["anchorRoom"] == "f3_room_1"
+    assert console["interactionPosition"] == [-28, 7.2, -44.8]
+    assert "ON AIR" in console["note"]

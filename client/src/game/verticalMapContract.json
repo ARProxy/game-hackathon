@@ -42,6 +42,16 @@
       "roomIds": ["f3_broadcast", "f3_av", "f3_dance", "f3_c33"],
       "deviceIds": ["ip_f3_broadcast", "ip_f3_av", "ip_f3_dance", "ip_f3_c33"]
     },
+    "F3_BROADCAST_CONSOLE": {
+      "kind": "device",
+      "floor": "F3",
+      "position": [-28, 8.32, -46.35],
+      "interactionPosition": [-28, 7.2, -44.8],
+      "zone": "f3_broadcast",
+      "deviceId": "f3_broadcast_console",
+      "anchorRoom": "f3_room_1",
+      "note": "옥상 신호와 다른 3층 전용 ON AIR 의미 우회 방송 콘솔"
+    },
     "F3_SEEKER_REVEAL_ENTRY": { "kind": "spawn", "floor": "F3", "position": [-36, 7.2, -38.2], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
     "F3_TO_F2_STAIR_WEST": { "kind": "stair", "floor": "F3", "position": [-36, 7.2, -39.7], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
     "F3_TO_F2_STAIR_EAST": { "kind": "stair", "floor": "F3", "position": [-12, 7.2, -16.3], "zone": "f3_core_se", "anchorRoom": "f3_core_se" },

@@ -56,6 +56,7 @@ from app.game.map_slots import get_map_slot, secondary_seeker_slot, seeker_revea
 from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import (
+    BROADCAST_MEANING_LABELS,
     BROADCAST_MISSION_PROMPT,
     activate_rooftop_signal,
     activate_basement_device,
@@ -304,6 +305,7 @@ class ConnectionManager:
                         "type": "vertical_mission_feedback",
                         "success": False,
                         "missing": verdict["missing"],
+                        "missing_labels": verdict["missing_labels"],
                         "prompt": BROADCAST_MISSION_PROMPT,
                     })
                     return
@@ -632,6 +634,9 @@ class ConnectionManager:
                     "type": "vertical_mission_started",
                     "mission": "floor_3_broadcast",
                     "prompt": BROADCAST_MISSION_PROMPT,
+                    "required_meanings": list(BROADCAST_MEANING_LABELS.values()),
+                    "voice_key": "Q",
+                    "starts_limited_hunt": True,
                 })
                 return
             if session.vertical_round.phase == VerticalRoundPhase.FLOOR_2:

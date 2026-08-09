@@ -9717,6 +9717,20 @@
       "rotationY": 0,
       "sourceId": "b1_device_generator",
       "role": "equipmentCollider"
+    },
+    {
+      "floor": "F3",
+      "center": [
+        -28,
+        -46.35
+      ],
+      "size": [
+        4.6,
+        1
+      ],
+      "rotationY": 0,
+      "sourceId": "f3_broadcast_console",
+      "role": "missionConsole"
     }
   ],
   "navigationNodes": [

@@ -233,11 +233,16 @@ export default function useWebSocket() {
         break
 
       case 'vertical_mission_feedback':
+        {
+          const missing = Array.isArray(data.missing_labels)
+            ? data.missing_labels.join(' · ')
+            : '도구 · 잠긴 출입구 · 개방 행동'
         useGameStore.getState().setActiveMissionPrompt(
-          `다시 전달하세요. ${data.prompt ?? '도구·출입구·개방 행동을 모두 표현해야 합니다.'}`,
+          `전달되지 않은 의미: ${missing}. Q로 표현을 바꿔 다시 방송하세요.`,
         )
-        addSubtitle('system', '의미가 부족합니다. 도구·출입구·개방 행동을 모두 표현하세요.')
+        addSubtitle('system', `방송 해석 실패 — 빠진 의미: ${missing}`)
         break
+        }
 
       case 'intercom_result':
         addSubtitle('system', data.success

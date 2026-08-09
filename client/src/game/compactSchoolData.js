@@ -541,6 +541,36 @@ function addBasementShell() {
   }
 }
 
+function addBroadcastRoom() {
+  const floor = 'F3', y = FY.F3
+
+  // 3층 대표 미션은 복도 표식이 아니라 실제 방송실 안의 물리 콘솔에서 진행한다.
+  addBox({ id: 'f3_broadcast_console', floor, p: [-28, y + 0.78, -46.35], s: [4.6, 1.56, 1.0], material: 'extSteelDark', role: 'missionConsole' })
+  for (const [index, x, material] of [
+    [1, -29.35, 'signBlue'],
+    [2, -28, 'safetyRed'],
+    [3, -26.65, 'safetyYellow'],
+  ]) {
+    addBox({ id: `f3_broadcast_screen_${index}`, floor, p: [x, y + 1.12, -45.83], s: [1.02, 0.48, 0.045], material, role: 'emissive', collider: false })
+    boxes[boxes.length - 1].emissive = true
+  }
+  addBox({ id: 'f3_broadcast_on_air', floor, p: [-28, y + 2.42, -47.84], s: [1.7, 0.48, 0.045], material: 'safetyRed', role: 'emissive', collider: false })
+  boxes[boxes.length - 1].emissive = true
+
+  // 마이크, 스피커, 장비 랙과 흡음 패널로 문을 들어서는 순간 방송실로 읽히게 한다.
+  addCylinder({ id: 'f3_broadcast_mic_stand', floor, p: [-28, y + 0.63, -44.95], r: 0.035, h: 1.26, material: 'extSteel', role: 'microphoneStand' })
+  addCylinder({ id: 'f3_broadcast_microphone', floor, p: [-28, y + 1.25, -44.92], r: 0.11, h: 0.34, material: 'extSteelDark', role: 'microphone', rot: [Math.PI / 2, 0, 0] })
+  for (const x of [-30.3, -25.7]) {
+    addBox({ floor, p: [x, y + 1.62, -47.65], s: [0.72, 1.15, 0.5], material: 'extFrame', role: 'speaker', collider: false })
+    addCylinder({ floor, p: [x, y + 1.72, -47.37], r: 0.19, h: 0.06, material: 'extSteelDark', role: 'speakerCone', rot: [Math.PI / 2, 0, 0] })
+  }
+  addBox({ id: 'f3_broadcast_rack', floor, p: [-31.15, y + 1.1, -45.95], s: [0.7, 2.2, 1.25], material: 'extFrame', role: 'equipmentRack', collider: false })
+  for (const x of [-31.55, -30.85, -25.15, -24.45]) {
+    addBox({ floor, p: [x, y + 1.65, -43.8], s: [0.06, 1.45, 1.1], material: 'signBlue', role: 'acousticPanel', collider: false })
+  }
+  addFixture(floor, [-28, y + 2.65, -44.8], 'dim')
+}
+
 function addFieldFence(id, axis, fixed, start, end) {
   const floor = 'FIELD'
   const length = end - start
@@ -669,6 +699,7 @@ for (const floor of ['F1', 'F2', 'F3']) addFloorShell(floor)
 addStairs()
 addRoof()
 addBasementShell()
+addBroadcastRoom()
 addNavigation()
 
 export const COMPACT_SCHOOL = Object.freeze({

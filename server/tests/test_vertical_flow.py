@@ -24,6 +24,19 @@ def test_broadcast_phrase_requires_tool_exit_and_action_meaning() -> None:
     result = evaluate_broadcast_phrase("출입구 근처에 금속 도구가 있다")
     assert not result["success"]
     assert result["missing"] == ["action"]
+    assert result["missing_labels"] == ["개방 행동"]
+    key_only = evaluate_broadcast_phrase("열쇠가 잠긴 문 근처에 있다")
+    assert not key_only["success"]
+    assert key_only["missing"] == ["action"]
+
+
+@pytest.mark.parametrize("phrase", [
+    "쇠로 된 작은 물건으로 잠긴 입구를 통과할 수 있게 해",
+    "키를 사용해 잠금장치를 풀어",
+    "문을 여는 도구로 닫힌 통로를 개방해",
+])
+def test_broadcast_phrase_accepts_distinct_semantic_paraphrases(phrase: str) -> None:
+    assert evaluate_broadcast_phrase(phrase)["success"]
 
 
 def active_session() -> tuple[GameSession, object]:

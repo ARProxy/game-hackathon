@@ -262,6 +262,12 @@ class TestVerticalStageInteraction:
             assert changed["seeker_threat"] == "limited_hunt"
             assert changed["progression"]["seeker_threat"] == "limited_hunt"
             assert started["type"] == "vertical_mission_started"
+            assert started["mission"] == "floor_3_broadcast"
+            assert started["required_meanings"] == [
+                "문을 여는 도구", "잠긴 출입구", "개방 행동",
+            ]
+            assert started["voice_key"] == "Q"
+            assert started["starts_limited_hunt"] is True
 
     def test_rooftop_contact_cannot_be_submitted_as_seeker_capture(self, client):
         from app.game.session import session_manager

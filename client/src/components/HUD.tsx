@@ -60,7 +60,7 @@ function companionSummary(
 
 const VERTICAL_INSTRUCTIONS: Record<string, string> = {
   rooftop_intro: '중앙 신호는 직접 맡고, 동쪽·서쪽 신호는 AI 동료가 순서대로 동기화합니다.',
-  floor_3: '방송 장치에 E로 접속한 뒤 Q를 눌러 문구의 뜻을 우회해 전달하세요.',
+  floor_3: '방송실 안 ON AIR 콘솔에 E로 접속하세요. 그 순간 첫 추격이 시작되며, Q로 원문의 세 의미를 우회 전달해야 합니다.',
   floor_2: '인터폰에서 E를 누른 뒤 AI가 읽은 색과 도형을 Q로 순서대로 전달하세요.',
   floor_1: 'AI가 반대편 장치에 준비되면 A 장치 앞에서 E를 눌러 동시에 작동하세요.',
   field_final: '각자 맡은 운동장 장치에 도착해 E로 활성화하세요.',
