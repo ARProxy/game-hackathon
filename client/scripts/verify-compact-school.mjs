@@ -41,6 +41,17 @@ assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairMass').le
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'stairStringer').length, 24, '모든 계단 경사로 양쪽에 구조 거더가 필요하다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'parapet').length, 8, '옥상 외곽과 중정에 연속 파라펫이 필요하다')
 assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roomFinish').length, 24, '모든 의미 공간은 용도별 바닥 마감이 필요하다')
+assert.ok(
+  COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roomFinish').every((item) => (
+    item.p[1] - item.s[1] / 2 - FLOOR_Y[item.f] >= 0.025
+  )),
+  '방 바닥 마감은 슬래브와 깊이 충돌하지 않도록 2.5cm 이상 분리해야 한다',
+)
+for (const door of COMPACT_SCHOOL.doors) {
+  const frameParts = COMPACT_SCHOOL.boxes.filter((item) => item.id.startsWith(`${door.id}_frame_`))
+  assert.equal(frameParts.length, 3, `${door.id} 문틀은 좌우 문선과 상부 인방 세 조각이어야 한다`)
+  assert.ok(frameParts.every((item) => item.role === 'doorFrame' && !item.collider), `${door.id} 문틀의 렌더 계약이 잘못됐다`)
+}
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'furniture').length >= 100, '축소 맵에서 실내 구조 밀도가 다시 빠졌다')
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roofEquipment').length >= 11, '옥상이 비어 보이지 않도록 설비 구조가 필요하다')
 for (const room of COMPACT_SCHOOL.rooms) {

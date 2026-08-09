@@ -41,11 +41,12 @@ function familyFor(material: string): string {
   return FAMILY_OF_PAL[material] ?? 'paint'
 }
 
-function PBRBoxBatch({ items, family, emissive = false, glass = false }: {
+function PBRBoxBatch({ items, family, emissive = false, glass = false, surfaceOffset = false }: {
   items: CompactBox[]
   family: BakedFamily
   emissive?: boolean
   glass?: boolean
+  surfaceOffset?: boolean
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const mat = useMemo(() => {
@@ -61,10 +62,13 @@ function PBRBoxBatch({ items, family, emissive = false, glass = false }: {
       opacity: glass ? 0.32 : 1,
       emissive: emissive ? '#ffffff' : '#000000',
       emissiveIntensity: emissive ? 1.15 : 0,
+      polygonOffset: surfaceOffset,
+      polygonOffsetFactor: surfaceOffset ? -1 : 0,
+      polygonOffsetUnits: surfaceOffset ? -1 : 0,
     })
     worldUV(material, family.uvScale)
     return material
-  }, [family, emissive, glass])
+  }, [family, emissive, glass, surfaceOffset])
 
   useEffect(() => {
     const mesh = ref.current
@@ -119,16 +123,22 @@ function PBRCylinderBatch({ items, family }: { items: CompactCylinder[]; family:
   return <instancedMesh ref={ref} args={[UNIT_CYLINDER, mat, items.length]} castShadow receiveShadow />
 }
 
+const SURFACE_OFFSET_ROLES = new Set([
+  'roomFinish', 'floorMarking', 'roofJoint', 'servicePad', 'safetyMarking',
+  'fieldLine', 'fieldInlay', 'courtyardMarking',
+])
+
 function groupBoxes(items: CompactBox[]) {
-  const groups = new Map<string, { family: string; emissive: boolean; glass: boolean; items: CompactBox[] }>()
+  const groups = new Map<string, { family: string; emissive: boolean; glass: boolean; surfaceOffset: boolean; items: CompactBox[] }>()
   for (const item of items) {
     const family = familyFor(item.material)
     const glass = item.role === 'window'
     const emissive = Boolean(item.emissive)
-    const key = `${family}|${glass ? 'glass' : emissive ? 'emissive' : 'surface'}`
+    const surfaceOffset = SURFACE_OFFSET_ROLES.has(item.role)
+    const key = `${family}|${glass ? 'glass' : emissive ? 'emissive' : surfaceOffset ? 'offset' : 'surface'}`
     const group = groups.get(key)
     if (group) group.items.push(item)
-    else groups.set(key, { family, glass, emissive, items: [item] })
+    else groups.set(key, { family, glass, emissive, surfaceOffset, items: [item] })
   }
   return groups
 }
@@ -232,6 +242,7 @@ function SchoolCampusV4({ visibleFloors, playerRef }: {
           items={group.items}
           emissive={group.emissive}
           glass={group.glass}
+          surfaceOffset={group.surfaceOffset}
         />
       ))}
       {[...cylinderGroups].map(([key, group]) => (

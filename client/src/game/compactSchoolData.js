@@ -141,10 +141,28 @@ function addDoor({ id = nextId('door'), floor, axis, fixed, center, width = 1.05
     material,
     c: COMPACT_PALETTE[material] || material,
   })
-  const frame = axis === 'x'
-    ? { p: [center, FY[floor] + height / 2, fixed], s: [width + 0.22, height + 0.16, 0.08] }
-    : { p: [fixed, FY[floor] + height / 2, center], s: [0.08, height + 0.16, width + 0.22] }
-  addBox({ floor, ...frame, material: 'doorFrame', role: 'doorFrame', collider: false })
+  // 문틀은 출입구 전체를 덮는 회색 판이 아니라 좌우 문선과 상부 인방으로
+  // 구성한다. 하나의 큰 박스는 문짝과 같은 평면을 점유해 깜빡임을 만들고
+  // 열린 문 너머도 회색 면으로 가리는 잘못된 구조였다.
+  const frameDepth = kind === 'fire' ? 0.16 : 0.12
+  const jambWidth = 0.1
+  const jambOffset = width / 2 + jambWidth / 2
+  const jambY = FY[floor] + height / 2
+  const headerY = FY[floor] + height + 0.07
+  for (const [suffix, offset] of [['left', -jambOffset], ['right', jambOffset]]) {
+    addBox({
+      id: `${id}_frame_${suffix}`, floor,
+      p: axis === 'x' ? [center + offset, jambY, fixed] : [fixed, jambY, center + offset],
+      s: axis === 'x' ? [jambWidth, height + 0.14, frameDepth] : [frameDepth, height + 0.14, jambWidth],
+      material: 'doorFrame', role: 'doorFrame', collider: false,
+    })
+  }
+  addBox({
+    id: `${id}_frame_header`, floor,
+    p: axis === 'x' ? [center, headerY, fixed] : [fixed, headerY, center],
+    s: axis === 'x' ? [width + jambWidth * 2, 0.14, frameDepth] : [frameDepth, 0.14, width + jambWidth * 2],
+    material: 'doorFrame', role: 'doorFrame', collider: false,
+  })
 }
 
 function subtractRect(rect, holes) {
@@ -406,8 +424,8 @@ function addRoomDensity(room) {
   const kind = roomKind(room.name)
   addBox({
     id: `${room.id}_finish`, floor,
-    p: [room.cx, y + 0.018, room.cz],
-    s: [room.x1 - room.x0 - 0.38, 0.025, room.z1 - room.z0 - 0.38],
+    p: [room.cx, y + 0.038, room.cz],
+    s: [room.x1 - room.x0 - 0.38, 0.02, room.z1 - room.z0 - 0.38],
     material: ROOM_FLOOR_MATERIAL[kind], role: 'roomFinish', collider: false,
   })
 
