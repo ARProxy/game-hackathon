@@ -213,7 +213,10 @@ class TestVerticalStageInteraction:
             assert reveal["type"] == "seeker_phase_event"
             assert reveal["event"] == "first_reveal"
             assert reveal["seeker_threat"] == "omen"
-            assert ws.receive_json()["route"] == "seeker_reveal"
+            # 술래는 이미 3층 계단실에 생성되어 있으며 단계 전환으로
+            # 재텔레포트하지 않는다.
+            seeker = session.state.get_player("seeker")
+            assert seeker.position.floor == WorldFloor.F3
 
     def test_intercom_speech_advances_floor_two_with_ordered_clue(self, client):
         from app.game.progression import WorldFloor

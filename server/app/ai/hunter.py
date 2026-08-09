@@ -22,7 +22,8 @@ from app.game.authority import (
     segment_intersects_rect,
 )
 from app.game.state import GamePhase, PlayerRole, PlayerStatus
-from app.game.progression import SeekerThreat, VerticalRoundPhase
+from app.game.progression import SeekerThreat, VerticalRoundPhase, WorldFloor
+from app.game.map_slots import VERTICAL_MAP_CONTRACT
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +50,96 @@ VERTICAL_PHASE_SPEED = {
 }
 
 
+def _hunter_floor_transition_plan(session: Any, seeker: Any) -> dict | None:
+    """현재 층에서 목표 층까지의 첫 실제 계단·출입문 경로를 고른다."""
+    desired_floor = session.vertical_round.policy.active_floor
+    signal = session.hunter_signal if seeker.player_id == "seeker" else getattr(
+        session, "secondary_hunter_signal", None,
+    )
+    if (
+        signal and signal.get("floor")
+        and time.monotonic() - signal.get("timestamp", 0) <= CONTRACT["memorySeconds"]
+    ):
+        try:
+            signaled_floor = WorldFloor(signal["floor"])
+        except ValueError:
+            signaled_floor = None
+        if signaled_floor in session.vertical_round.accessible_floors:
+            desired_floor = signaled_floor
+    if desired_floor is None or desired_floor == seeker.position.floor:
+        return None
+
+    edges: list[dict] = []
+    for path_id, path in VERTICAL_MAP_CONTRACT.get("paths", {}).items():
+        if path.get("kind") == "stair_path" and path.get("upperFloor") and path.get("lowerFloor"):
+            first_floor, second_floor = path["upperFloor"], path["lowerFloor"]
+            points = path.get("down", [])
+        elif path.get("kind") == "door_path" and path.get("insideFloor") and path.get("outsideFloor"):
+            first_floor, second_floor = path["insideFloor"], path["outsideFloor"]
+            points = path.get("out", [])
+        else:
+            continue
+        if len(points) < 2:
+            continue
+        edges.append({
+            "path_id": path_id, "path": path,
+            "first": first_floor, "second": second_floor, "points": points,
+        })
+
+    start, goal = seeker.position.floor.value, desired_floor.value
+    # 같은 두 층을 잇는 서·동 계단이 있으면 현재 위치에서 가까운 입구를
+    # 먼저 탐색한다. JSON 선언 순서 때문에 먼 계단으로 횡단하지 않게 한다.
+    edges.sort(key=lambda edge: (
+        math.hypot(
+            seeker.position.x - float(
+                edge["points"][0][0] if edge["first"] == start else edge["points"][-1][0]
+            ),
+            seeker.position.z - float(
+                edge["points"][0][2] if edge["first"] == start else edge["points"][-1][2]
+            ),
+        )
+        if start in {edge["first"], edge["second"]} else float("inf")
+    ))
+    queue: list[tuple[str, list[dict]]] = [(start, [])]
+    visited = {start}
+    selected_route: list[dict] | None = None
+    while queue:
+        floor, route = queue.pop(0)
+        if floor == goal:
+            selected_route = route
+            break
+        for edge in edges:
+            neighbor = edge["second"] if edge["first"] == floor else (
+                edge["first"] if edge["second"] == floor else None
+            )
+            if neighbor is None or neighbor in visited:
+                continue
+            visited.add(neighbor)
+            queue.append((neighbor, [*route, edge]))
+    if not selected_route:
+        return None
+
+    edge = selected_route[0]
+    forward = edge["first"] == start
+    authored = edge["points"] if forward else list(reversed(edge["points"]))
+    destination_floor = edge["second"] if forward else edge["first"]
+    first_y, last_y = float(authored[0][1]), float(authored[-1][1])
+    direction = (
+        "down" if first_y > last_y else "up" if first_y < last_y
+        else "out" if forward else "in"
+    )
+    return {
+        "path_id": edge["path_id"],
+        "route": edge["path"].get("route", "west"),
+        "traversal": "stairs" if edge["path"].get("kind") == "stair_path" else "door",
+        "direction": direction,
+        "duration": float(edge["path"].get("durationSeconds", 0.8)),
+        "destination_floor": destination_floor,
+        "entry": {"x": float(authored[0][0]), "y": first_y, "z": float(authored[0][2])},
+        "exit": {"x": float(authored[-1][0]), "y": last_y, "z": float(authored[-1][2])},
+    }
+
+
 def effective_seeker_threat(session: Any) -> SeekerThreat:
     """진행 단계와 명확한 미션 사건을 합쳐 현재 실제 위협을 반환한다."""
     if not session.vertical_progression_enabled:
@@ -64,6 +155,9 @@ def effective_seeker_threat(session: Any) -> SeekerThreat:
 
 def seeker_can_capture(session: Any, seeker_id: str) -> bool:
     """활성 수와 위협 단계가 실제 포획을 허용하는지 서버에서 판정한다."""
+    transit_until = getattr(session, "hunter_transit_until", {}).get(seeker_id, 0.0)
+    if transit_until > time.monotonic():
+        return False
     threat = effective_seeker_threat(session)
     if threat not in {
         SeekerThreat.LIMITED_HUNT,
@@ -180,6 +274,7 @@ def record_hunter_signal(
                 "player_id": player_id,
                 "position": {"x": float(position["x"]), "z": float(position["z"])},
                 "strength": strength,
+                "floor": source.position.floor.value if source is not None else seeker.position.floor.value,
                 "speech_mode": speech_mode.value if speech_mode else None,
                 "timestamp": time.monotonic(),
             }
@@ -188,6 +283,7 @@ def record_hunter_signal(
                 "player_id": player_id,
                 "position": {"x": float(position["x"]), "z": float(position["z"])},
                 "strength": strength,
+                "floor": source.position.floor.value if source is not None else seeker.position.floor.value,
                 "timestamp": time.monotonic(),
             }
 
@@ -210,6 +306,25 @@ def decide_hunter_intent(session: Any) -> dict:
             "target_id": None,
             "target": {"x": seeker.position.x, "z": seeker.position.z},
             "reason": "inactive",
+        }
+    transit_until = session.hunter_transit_until.get(seeker.player_id, 0.0)
+    if transit_until > now:
+        return {
+            "state": "TRANSIT",
+            "target_id": None,
+            "target": {"x": seeker.position.x, "z": seeker.position.z},
+            "reason": "physical_traversal_in_progress",
+            "transit_remaining": round(transit_until - now, 3),
+        }
+    session.hunter_transit_until.pop(seeker.player_id, None)
+    transition = _hunter_floor_transition_plan(session, seeker)
+    if transition is not None:
+        return {
+            "state": "TRANSIT",
+            "target_id": None,
+            "target": transition["entry"],
+            "reason": f"physical_{transition['traversal']}_to_{transition['destination_floor']}",
+            "floor_transition": transition,
         }
     if threat == SeekerThreat.OMEN:
         return {
@@ -375,7 +490,7 @@ def advance_hunter(session: Any) -> dict:
     speed_key = {
         "HUNT": "huntSpeed", "INVESTIGATE": "investigateSpeed",
         "DETECTED": None, "CHASE": "chaseSpeed", "SEARCH": "huntSpeed",
-        "RUSH_GATE": "rushSpeed",
+        "RUSH_GATE": "rushSpeed", "TRANSIT": "huntSpeed",
     }[intent["state"]]
     if distance > 0.01:
         session.hunter_forward = {"x": dx / distance, "z": dz / distance}
@@ -392,9 +507,42 @@ def advance_hunter(session: Any) -> dict:
             )
             seeker.position.x, seeker.position.z = next_x, next_z
             session.position_samples[seeker.player_id] = MovementSample(seeker.position.x, seeker.position.z, now)
+    floor_transition = None
+    transition = intent.get("floor_transition")
+    if transition and math.hypot(
+        seeker.position.x - transition["entry"]["x"],
+        seeker.position.z - transition["entry"]["z"],
+    ) <= 0.62:
+        exit_position = transition["exit"]
+        seeker.position.x = exit_position["x"]
+        seeker.position.y = exit_position["y"]
+        seeker.position.z = exit_position["z"]
+        seeker.position.floor = WorldFloor(transition["destination_floor"])
+        seeker.position.zone = f"hunter_{transition['path_id'].lower()}_exit"
+        session.hunter_transit_until[seeker.player_id] = now + transition["duration"]
+        session.position_samples[seeker.player_id] = MovementSample(
+            seeker.position.x, seeker.position.z, now,
+        )
+        floor_transition = {
+            "actor_id": seeker.player_id,
+            "route": transition["route"],
+            "traversal": transition["traversal"],
+            "path_id": transition["path_id"],
+            "direction": transition["direction"],
+            "duration": transition["duration"],
+            "position": {
+                "x": seeker.position.x, "y": seeker.position.y, "z": seeker.position.z,
+                "floor": seeker.position.floor.value, "zone": seeker.position.zone,
+            },
+        }
     session.hunter_last_tick = now
-    session.hunter_last_intent = intent
-    return {**intent, "role": SeekerRole.CHASER.value, "seeker_position": {"x": seeker.position.x, "z": seeker.position.z}}
+    session.hunter_last_intent = None if floor_transition else intent
+    return {
+        **intent,
+        "role": SeekerRole.CHASER.value,
+        "seeker_position": {"x": seeker.position.x, "z": seeker.position.z},
+        **({"actor_floor_changed": floor_transition} if floor_transition else {}),
+    }
 
 
 def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
@@ -410,6 +558,25 @@ def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
         return {"state": "HUNT", "target_id": None, "target": {"x": 0, "z": 0}, "reason": "no_blocker"}
 
     now = time.monotonic()
+    transit_until = session.hunter_transit_until.get(seeker.player_id, 0.0)
+    if transit_until > now:
+        return {
+            "state": "TRANSIT", "target_id": None,
+            "target": {"x": seeker.position.x, "z": seeker.position.z},
+            "reason": "physical_traversal_in_progress",
+            "role": SeekerRole.BLOCKER.value,
+            "transit_remaining": round(transit_until - now, 3),
+        }
+    session.hunter_transit_until.pop(seeker.player_id, None)
+    transition = _hunter_floor_transition_plan(session, seeker)
+    if transition is not None:
+        return {
+            "state": "TRANSIT", "target_id": None,
+            "target": transition["entry"],
+            "reason": f"physical_{transition['traversal']}_to_{transition['destination_floor']}",
+            "role": SeekerRole.BLOCKER.value,
+            "floor_transition": transition,
+        }
     threat = vertical_threat_snapshot(session)
     vision_distance = CONTRACT["visionDistance"] * threat["vision_multiplier"] * 1.15  # 차단자 시야 보너스
     blocker_vision_angle = 140  # 추격자(100도)보다 넓은 시야
@@ -609,6 +776,33 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
             seeker.position.x, seeker.position.z, now,
         )
 
+    floor_transition = None
+    transition = intent.get("floor_transition")
+    if transition and math.hypot(
+        seeker.position.x - transition["entry"]["x"],
+        seeker.position.z - transition["entry"]["z"],
+    ) <= 0.62:
+        exit_position = transition["exit"]
+        seeker.position.x = exit_position["x"]
+        seeker.position.y = exit_position["y"]
+        seeker.position.z = exit_position["z"]
+        seeker.position.floor = WorldFloor(transition["destination_floor"])
+        seeker.position.zone = f"hunter_{transition['path_id'].lower()}_exit"
+        session.hunter_transit_until[seeker.player_id] = now + transition["duration"]
+        session.position_samples[seeker.player_id] = MovementSample(
+            seeker.position.x, seeker.position.z, now,
+        )
+        floor_transition = {
+            "actor_id": seeker.player_id,
+            "route": transition["route"], "traversal": transition["traversal"],
+            "path_id": transition["path_id"], "direction": transition["direction"],
+            "duration": transition["duration"],
+            "position": {
+                "x": seeker.position.x, "y": seeker.position.y, "z": seeker.position.z,
+                "floor": seeker.position.floor.value, "zone": seeker.position.zone,
+            },
+        }
+
     # S3: 차단자가 구역 정보를 공유했으면 추격자 신호에 반영
     zone_share = getattr(session, "blocker_zone_share", None)
     if zone_share and now - zone_share.get("shared_at", 0) < 5.0:
@@ -628,6 +822,7 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
         "seeker_position": {"x": seeker.position.x, "z": seeker.position.z},
         "speed_multiplier": speed_mult,
         "stage_speed_multiplier": stage_mult,
+        **({"actor_floor_changed": floor_transition} if floor_transition else {}),
     }
 
 

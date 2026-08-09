@@ -554,61 +554,8 @@ class ConnectionManager:
                 **phase_event,
             })
 
-        if event["completed_phase"] == VerticalRoundPhase.ROOFTOP_INTRO.value:
-            seeker = session.state.get_player("seeker")
-            slot = seeker_reveal_slot()
-            if seeker:
-                await self._move_actor_to_slot(
-                    room_id, seeker, slot, route="seeker_reveal",
-                )
-            return
-
-        if event["next_phase"] not in {
-            "floor_2", "floor_1", "field_final", "basement_final",
-        }:
-            return
-        seeker = session.state.get_player("seeker")
-        slot_id = {
-            "floor_2": "F2_TO_F1_STAIR_EAST",
-            "floor_1": "F1_STAIR_ARRIVAL_EAST",
-            "field_final": "FIELD_FINAL_ENTRY",
-            "basement_final": "BASEMENT_FINAL_ENTRY",
-        }[event["next_phase"]]
-        if seeker:
-            await self._move_actor_to_slot(
-                room_id, seeker, get_map_slot(slot_id), route="seeker_descend",
-            )
-        secondary = session.state.get_player("seeker-2")
-        if event["next_phase"] == "floor_1":
-            if secondary:
-                await self._move_actor_to_slot(
-                    room_id,
-                    secondary,
-                    secondary_seeker_slot(),
-                    route="seeker_pincer_reveal",
-                )
-        elif event["next_phase"] in {"field_final", "basement_final"}:
-            blocker_slot_id = (
-                "FIELD_ESCAPE_GATE"
-                if event["next_phase"] == "field_final"
-                else "BASEMENT_ESCAPE_GATE"
-            )
-            if secondary:
-                authored_slot = get_map_slot(blocker_slot_id)
-                blocker_slot = {
-                    **authored_slot,
-                    "position": [
-                        authored_slot["position"][0],
-                        authored_slot["position"][1],
-                        authored_slot["position"][2] - 3.0,
-                    ],
-                }
-                await self._move_actor_to_slot(
-                    room_id,
-                    secondary,
-                    blocker_slot,
-                    route="seeker_final_blockade",
-                )
+        # 술래를 다음 층에 재배치하지 않는다. hunter director가 작성된
+        # 계단·출입문 경로 입구까지 이동한 뒤 actor_floor_changed를 낸다.
 
     async def _begin_basement_final_spell(
         self, room_id: str, session: Any, actor_id: str,
@@ -1029,6 +976,11 @@ class ConnectionManager:
                 return
             intent = hunter_snapshot(session)
             secondary = advance_secondary_hunter(session, intent)
+            if secondary and secondary.get("actor_floor_changed"):
+                await self.broadcast(room_id, {
+                    "type": "actor_floor_changed",
+                    **secondary["actor_floor_changed"],
+                })
             await self.send_to(room_id, player_id, {
                 "type": "seeker_intent", **intent, "secondary": secondary,
             })
@@ -1995,7 +1947,12 @@ class ConnectionManager:
                 if session.state.phase == GamePhase.RESULT:
                     return
                 if not session.is_paused and session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
-                    advance_hunter(session)
+                    intent = advance_hunter(session)
+                    if intent.get("actor_floor_changed"):
+                        await self.broadcast(room_id, {
+                            "type": "actor_floor_changed",
+                            **intent["actor_floor_changed"],
+                        })
                 await asyncio.sleep(interval)
         except asyncio.CancelledError:
             raise

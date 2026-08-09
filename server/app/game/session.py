@@ -103,6 +103,7 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = 0.0
         self.hunter_last_intent: dict | None = None
+        self.hunter_transit_until: dict[str, float] = {}
         self.secondary_hunter_signal: dict | None = None
         self.blocker_forward = {"x": 0.0, "z": -1.0}
         self.blocker_zone_share: dict | None = None
@@ -136,6 +137,8 @@ class GameSession:
         for player in self.state.players.values():
             if player.frozen_at is not None:
                 player.frozen_at += paused_for
+        for seeker_id in tuple(self.hunter_transit_until):
+            self.hunter_transit_until[seeker_id] += paused_for
         self.paused_at = None
         now = time.monotonic()
         self.hunter_last_tick = now
@@ -172,6 +175,7 @@ class GameSession:
         self.hunter_forward = {"x": 0.0, "z": 1.0}
         self.hunter_last_tick = time.monotonic()
         self.hunter_last_intent = None
+        self.hunter_transit_until.clear()
         self.secondary_hunter_signal = None
         self.blocker_forward = {"x": 0.0, "z": -1.0}
         self.blocker_zone_share = None

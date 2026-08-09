@@ -10,6 +10,7 @@ import { floorHeight } from './spawnContract'
 import { useCollisionAwarePlanarMotion } from './useCollisionAwarePlanarMotion'
 import { projectAuthorityPosition } from './aiNavigation'
 import hunter from './hunterContract.json'
+import verticalMapContract from './verticalMapContract.json'
 
 const CATCH_RETRY_SECONDS = 0.35
 const PROXIMITY_SOUND_RANGE = 18
@@ -34,6 +35,41 @@ const SPEEDS: Record<HunterState, number> = {
   BLOCK: hunter.chaseSpeed * 0.85,
   GUARD: hunter.chaseSpeed * 0.85,
   PATROL: hunter.huntSpeed * 0.85,
+  TRANSIT: hunter.huntSpeed,
+}
+
+type AuthoredTraversalPath = {
+  kind: 'stair_path' | 'door_path'
+  route?: string
+  upperFloor?: string
+  lowerFloor?: string
+  insideFloor?: string
+  outsideFloor?: string
+  durationSeconds: number
+  down?: number[][]
+  out?: number[][]
+}
+type HunterTraversal = {
+  startedAt: number
+  duration: number
+  points: THREE.Vector3[]
+  lengths: number[]
+  total: number
+}
+const TRAVERSAL_PATHS = verticalMapContract.paths as Record<string, AuthoredTraversalPath>
+const _traversalPoint = new THREE.Vector3()
+const _traversalHeading = new THREE.Vector3()
+
+function sampleTraversal(path: HunterTraversal, progress: number, output: THREE.Vector3) {
+  let remaining = THREE.MathUtils.clamp(progress, 0, 1) * path.total
+  for (let index = 0; index < path.lengths.length; index += 1) {
+    const length = path.lengths[index]
+    if (remaining <= length || index === path.lengths.length - 1) {
+      return output.lerpVectors(path.points[index], path.points[index + 1], length > 0 ? remaining / length : 1)
+    }
+    remaining -= length
+  }
+  return output.copy(path.points.at(-1)!)
 }
 
 export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requestsThink = true }: SeekerProps) {
@@ -56,6 +92,8 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
   const lastSirenSound = useRef(-Infinity)
   const lastPos = useRef(new THREE.Vector3(...spawn))
   const movementRef = useRef(0)
+  const previousFloorRef = useRef<string | null>(null)
+  const traversalRef = useRef<HunterTraversal | null>(null)
 
   useFrame(({ clock }, delta) => {
     const group = groupRef.current
@@ -64,6 +102,52 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     if (store.isPaused) return
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
     const seekerState = store.players[seekerId]
+    const currentFloor = seekerState?.position.floor ?? null
+    const previousFloor = previousFloorRef.current
+    if (!previousFloor) previousFloorRef.current = currentFloor
+    else if (currentFloor && currentFloor !== previousFloor) {
+      const zone = seekerState?.position.zone
+      const route = zone?.includes('east') ? 'east'
+        : zone?.includes('field') || zone === 'f1_main_lobby' ? 'field'
+        : 'west'
+      const selected = Object.values(TRAVERSAL_PATHS).find((path) => {
+        const matches = (
+          (path.upperFloor === previousFloor && path.lowerFloor === currentFloor)
+          || (path.upperFloor === currentFloor && path.lowerFloor === previousFloor)
+          || (path.insideFloor === previousFloor && path.outsideFloor === currentFloor)
+          || (path.insideFloor === currentFloor && path.outsideFloor === previousFloor)
+        )
+        return matches && (path.route === route || path.route === 'basement')
+      })
+      if (selected) {
+        const forward = selected.upperFloor === previousFloor || selected.insideFloor === previousFloor
+        const base = selected.down ?? selected.out ?? []
+        const authored = forward ? base : [...base].reverse()
+        const laneOffset = seekerId === 'seeker-2' ? 0.42 : 0
+        const points = authored.map(([x, y, z]) => new THREE.Vector3(x + laneOffset, y, z))
+        points[0].copy(group.position)
+        const lengths = points.slice(1).map((point, index) => point.distanceTo(points[index]))
+        traversalRef.current = {
+          startedAt: clock.elapsedTime, duration: selected.durationSeconds,
+          points, lengths, total: lengths.reduce((sum, length) => sum + length, 0),
+        }
+      }
+      previousFloorRef.current = currentFloor
+    }
+
+    const traversal = traversalRef.current
+    if (traversal) {
+      const progress = (clock.elapsedTime - traversal.startedAt) / traversal.duration
+      sampleTraversal(traversal, progress, _traversalPoint)
+      sampleTraversal(traversal, Math.min(1, progress + 0.015), _traversalHeading)
+      group.position.copy(_traversalPoint)
+      const dx = _traversalHeading.x - _traversalPoint.x
+      const dz = _traversalHeading.z - _traversalPoint.z
+      if (Math.hypot(dx, dz) > 0.001) group.rotation.y = Math.atan2(dx, dz)
+      movementRef.current = 1
+      if (progress >= 1) traversalRef.current = null
+      return
+    }
     const actorBaseY = seekerState?.position.floor
       ? seekerState.position.y ?? floorHeight(seekerState.position.floor)
       : spawn[1]

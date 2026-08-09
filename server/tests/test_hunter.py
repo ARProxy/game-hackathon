@@ -19,6 +19,7 @@ from app.game.session import GameSession
 from app.game.progression import SeekerThreat, VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole
 from app.game.authority import WALL_RECTS_BY_FLOOR, segment_intersects_rect
+from app.game.map_slots import get_map_slot
 
 
 def make_session(room_id: str = "hunter") -> GameSession:
@@ -26,9 +27,9 @@ def make_session(room_id: str = "hunter") -> GameSession:
     human = session.state.add_player("human", role=PlayerRole.HUMAN)
     session.setup_game(["열쇠"])
     human.position.x, human.position.z = 20.0, 20.0
-    human.position.floor = WorldFloor.F1
-    session.state.get_player("partner").position.floor = WorldFloor.F1
-    session.state.get_player("seeker").position.floor = WorldFloor.F1
+    human.position.floor = WorldFloor.F2
+    session.state.get_player("partner").position.floor = WorldFloor.F2
+    session.state.get_player("seeker").position.floor = WorldFloor.F2
     session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
     return session
 
@@ -140,6 +141,7 @@ def test_normal_speech_and_vision_do_not_cross_floors() -> None:
     partner.position.x, partner.position.z = 30.0, 30.0
     human.position.floor = WorldFloor.F2
     seeker.position.floor = WorldFloor.F1
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_1
 
     assert not record_hunter_signal(
         session, "human", {"x": 1.0, "z": 0.0}, "speech",
@@ -159,7 +161,48 @@ def test_freeze_ping_can_lure_a_seeker_from_another_floor() -> None:
     assert record_hunter_signal(
         session, "human", {"x": 4.0, "z": 9.0}, "freeze",
     )
-    assert decide_hunter_intent(session)["state"] == "INVESTIGATE"
+    intent = decide_hunter_intent(session)
+    assert intent["state"] == "TRANSIT"
+    assert intent["floor_transition"]["destination_floor"] == "F3"
+    assert intent["floor_transition"]["traversal"] == "stairs"
+
+
+def test_primary_hunter_reaches_stair_entry_before_server_floor_changes() -> None:
+    session = make_session("hunter-physical-floor-transition")
+    seeker = session.state.get_player("seeker")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+    seeker.position.floor = WorldFloor.F3
+    entry = get_map_slot("F3_F2_STAIR_WEST_TOP_CROSSING")
+    seeker.position.x, seeker.position.y, seeker.position.z = entry["position"]
+    session.hunter_last_tick = time.monotonic() - 0.5
+
+    intent = advance_hunter(session)
+
+    assert seeker.position.floor == WorldFloor.F2
+    assert intent["actor_floor_changed"] == {
+        "actor_id": "seeker", "route": "west", "traversal": "stairs",
+        "path_id": "F3_F2_STAIRS_WEST", "direction": "down", "duration": 3.6,
+        "position": {
+            "x": -38.35, "y": 3.6, "z": -40.8, "floor": "F2",
+            "zone": "hunter_f3_f2_stairs_west_exit",
+        },
+    }
+    assert not seeker_can_capture(session, "seeker")
+    session.hunter_transit_until["seeker"] = time.monotonic() - 0.01
+    assert seeker_can_capture(session, "seeker")
+
+
+def test_hunter_chooses_nearest_parallel_stair() -> None:
+    session = make_session("hunter-nearest-stair")
+    seeker = session.state.get_player("seeker")
+    east = get_map_slot("F3_F2_STAIR_EAST_TOP_CROSSING")
+    seeker.position.floor = WorldFloor.F3
+    seeker.position.x, seeker.position.y, seeker.position.z = east["position"]
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_2
+
+    intent = decide_hunter_intent(session)
+
+    assert intent["floor_transition"]["path_id"] == "F3_F2_STAIRS_EAST"
 
 
 def test_server_step_does_not_cross_a_wall_segment() -> None:

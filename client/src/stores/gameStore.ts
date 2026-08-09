@@ -112,7 +112,7 @@ export interface SoundEvent {
   timestamp: number
 }
 
-export type HunterState = 'HUNT' | 'INVESTIGATE' | 'DETECTED' | 'CHASE' | 'SEARCH' | 'RUSH_GATE'
+export type HunterState = 'HUNT' | 'INVESTIGATE' | 'DETECTED' | 'CHASE' | 'SEARCH' | 'RUSH_GATE' | 'TRANSIT'
   | 'BLOCK' | 'GUARD' | 'PATROL'
 export interface HunterIntent {
   state: HunterState
