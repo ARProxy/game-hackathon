@@ -9,6 +9,7 @@
  */
 import { useMemo, useRef, type Ref, type RefObject } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
 
@@ -67,19 +68,25 @@ export const CAMO = { color: '#1A2530', opacity: 0.26 }
 
 export const CHARACTERS: Character[] = [
   {
-    id: 'R00', tag: 'S1', name: '굽은 등', role: 'seeker',
-    c: '#6E443C', glow: '#B85C4B', accessory: '등이 머리보다 높은 장신', shoes: '맨발',
+    id: 'R00', tag: 'S1', name: '우는 껍질', role: 'seeker',
+    c: '#191417', glow: '#9E1827', accessory: '시선을 놓지 않는 가면과 비정상적으로 긴 팔', shoes: '맨발',
     note: '청각 특화 추격자',
     parts: [
-      { t: 'cap', p: [-0.16, 0.48, 0], r: 0.1, h: 0.75, c: '#56342F', part: 'leg' },
-      { t: 'cap', p: [0.16, 0.48, 0], r: 0.1, h: 0.75, c: '#56342F', part: 'leg' },
-      { t: 'cap', p: [0, 1.35, 0], r: 0.27, h: 0.55, s: [1.15, 1, 0.72], c: '#70443C', part: 'body' },
-      { t: 'sph', p: [-0.28, 1.76, -0.03], r: 0.29, s: [1.2, 0.95, 0.9], c: '#815047', part: 'body' },
-      { t: 'sph', p: [-0.48, 1.67, 0.06], r: 0.18, s: [0.8, 1.05, 0.8], c: '#4A2B29', part: 'head' },
-      { t: 'cap', p: [-0.45, 0.92, 0], r: 0.065, h: 1.25, c: '#684039', rot: [0, 0, -0.08], part: 'arm' },
-      { t: 'cap', p: [0.4, 0.95, 0], r: 0.065, h: 1.2, c: '#684039', rot: [0, 0, 0.08], part: 'arm' },
-      { t: 'sph', p: [-0.16, 0.04, 0.08], r: 0.14, s: [1.4, 0.35, 1.5], c: '#3D2523', part: 'shoe' },
-      { t: 'sph', p: [0.16, 0.04, 0.08], r: 0.14, s: [1.4, 0.35, 1.5], c: '#3D2523', part: 'shoe' },
+      { t: 'ring', p: [0, 0.015, 0], ri: 0.18, ro: 0.72, c: '#020204', op: 0.72, seg: 28, part: 'shadow' },
+      { t: 'cap', p: [-0.13, 0.62, 0], r: 0.075, h: 1.08, c: '#181316', rot: [0.03, 0, -0.02], part: 'leg' },
+      { t: 'cap', p: [0.13, 0.62, -0.02], r: 0.07, h: 1.12, c: '#21171A', rot: [-0.04, 0, 0.025], part: 'leg' },
+      { t: 'sph', p: [-0.13, 0.055, 0.13], r: 0.14, s: [0.9, 0.26, 1.85], c: '#0E0B0D', part: 'shoe' },
+      { t: 'sph', p: [0.13, 0.055, 0.13], r: 0.14, s: [0.9, 0.26, 1.85], c: '#100C0E', part: 'shoe' },
+      { t: 'cap', p: [0, 1.58, 0], r: 0.2, h: 0.92, s: [0.82, 1, 0.48], c: '#24191D', rot: [0, 0, -0.07], part: 'body' },
+      { t: 'sph', p: [-0.2, 2.12, -0.02], r: 0.36, s: [1.35, 0.62, 0.72], c: '#2D1E22', part: 'body' },
+      { t: 'cap', p: [-0.45, 1.24, 0.02], r: 0.048, h: 2.16, c: '#1B1215', rot: [0, 0, -0.055], part: 'arm' },
+      { t: 'cap', p: [0.38, 1.22, -0.03], r: 0.044, h: 2.22, c: '#25171B', rot: [0.03, 0, 0.075], part: 'arm' },
+      { t: 'sph', p: [-0.5, 0.12, 0.08], r: 0.095, s: [0.62, 1.45, 0.55], c: '#342026', part: 'hand' },
+      { t: 'sph', p: [0.46, 0.08, 0.04], r: 0.09, s: [0.6, 1.55, 0.5], c: '#2A191E', part: 'hand' },
+      { t: 'sph', p: [-0.17, 2.48, -0.02], r: 0.29, s: [0.78, 1.2, 0.62], c: '#151013', part: 'head' },
+      { t: 'tor', p: [0, 1.76, 0.17], r: 0.18, tb: 0.014, s: [1.2, 0.55, 1], c: '#6F2730', rot: [0, 0, 0.05], part: 'rib' },
+      { t: 'tor', p: [-0.01, 1.57, 0.17], r: 0.17, tb: 0.012, s: [1.1, 0.5, 1], c: '#59212A', rot: [0, 0, -0.03], part: 'rib' },
+      { t: 'sph', p: [0, 1.3, 0.15], r: 0.055, s: [0.7, 1.45, 0.45], c: '#A41325', em: 0.55, part: 'woundLight' },
     ],
   },
   {
@@ -403,6 +410,22 @@ function PartMesh({ part, opacity, tint, tagMap }: {
   )
 }
 
+function HorrorFaceDecal() {
+  const texture = useTexture('/assets/seeker-face-v1.png')
+  texture.colorSpace = THREE.SRGBColorSpace
+  return (
+    <sprite position={[-0.17, 2.5, 0.2]} scale={[0.74, 1.08, 1]} renderOrder={7}>
+      <spriteMaterial
+        map={texture}
+        transparent
+        alphaTest={0.08}
+        depthWrite={false}
+        toneMapped
+      />
+    </sprite>
+  )
+}
+
 /**
  * 캐릭터 메시 (물리 없음) — 다른 리그에 붙이거나 UI 프리뷰에 쓸 때
  */
@@ -426,7 +449,7 @@ export function CharacterModel({ id, frozen = false, camo = false, glowPulse = 1
   // 훅은 반드시 얼리 리턴보다 먼저 — id가 유효하지 않은 프레임에서도 훅 수가 변하지 않는다
   const tagMap = useNameTagTexture(ch)
 
-  useFrame((_, delta) => {
+  useFrame(({ clock }, delta) => {
     const targetMotion = frozen ? 0 : THREE.MathUtils.clamp(movementRef?.current ?? 0, 0, 1)
     motion.current = THREE.MathUtils.damp(motion.current, targetMotion, targetMotion > 0 ? 12 : 18, delta)
     stridePhase.current += delta * THREE.MathUtils.lerp(5.5, 10.5, motion.current)
@@ -443,8 +466,16 @@ export function CharacterModel({ id, frozen = false, camo = false, glowPulse = 1
       rightFootRef.current.rotation.x = -stride * 0.16
     }
     if (bodyRef.current) {
-      bodyRef.current.position.y = Math.abs(Math.sin(stridePhase.current * 2)) * 0.025 * motion.current
-      bodyRef.current.rotation.z = stride * 0.025
+      if (ch?.role === 'seeker') {
+        const snap = Math.sin(clock.elapsedTime * 13.7) > 0.93 ? 0.055 : 0
+        bodyRef.current.position.y = Math.abs(Math.sin(stridePhase.current * 2)) * 0.045 * motion.current + snap
+        bodyRef.current.rotation.z = -0.075 + stride * 0.06 + Math.sin(clock.elapsedTime * 1.7) * 0.018
+        bodyRef.current.rotation.y = Math.sin(clock.elapsedTime * 8.2) * snap
+      } else {
+        bodyRef.current.position.y = Math.abs(Math.sin(stridePhase.current * 2)) * 0.025 * motion.current
+        bodyRef.current.rotation.z = stride * 0.025
+        bodyRef.current.rotation.y = 0
+      }
     }
   })
 
@@ -469,6 +500,7 @@ export function CharacterModel({ id, frozen = false, camo = false, glowPulse = 1
     <group>
       <group ref={bodyRef}>
         {ch.parts.map((p, i) => !isFootPart(p) && renderPart(p, i))}
+        {ch.id === 'R00' && <HorrorFaceDecal />}
       </group>
       <group ref={leftFootRef}>
         {ch.parts.map((p, i) => isFootPart(p) && p.p[0] < 0 && renderPart(p, i))}

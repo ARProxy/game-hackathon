@@ -55,6 +55,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
   const lastFootstepSound = useRef(-Infinity)
   const lastSirenSound = useRef(-Infinity)
   const lastPos = useRef(new THREE.Vector3(...spawn))
+  const movementRef = useRef(0)
 
   useFrame(({ clock }, delta) => {
     const group = groupRef.current
@@ -155,6 +156,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     }
 
     const moved = Math.hypot(pos.x - lastPos.current.x, pos.z - lastPos.current.z) > 0.01
+    movementRef.current = THREE.MathUtils.damp(movementRef.current, moved ? 1 : 0, moved ? 9 : 14, delta)
     lastPos.current.set(pos.x, actorBaseY, pos.z)
     const running = intent?.state === 'CHASE' || intent?.state === 'RUSH_GATE'
     if (moved && playerPos) {
@@ -184,7 +186,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
 
   return (
     <group ref={groupRef} position={spawn}>
-      <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} />
+      <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} movementRef={movementRef} />
       {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />
       )}
