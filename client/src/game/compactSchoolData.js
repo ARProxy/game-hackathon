@@ -604,12 +604,15 @@ function addSwitchbackStair(floor, core, dir, coreId) {
   const steps = 8
   const run = tread * steps
   const rise = riser * steps
-  const farZ = entryZ + dir * (0.8 + run)
+  // 방화문을 통과한 뒤 문짝을 피하고 방향을 잡을 수 있는 평탄 구간.
+  // 기존 0.8m는 문 회전 반경과 첫 단차가 겹쳐 체감상 바로 막혔다.
+  const entrySetback = 1.55
+  const farZ = entryZ + dir * (entrySetback + run)
   const angle = Math.atan2(rise, run)
   const length = Math.hypot(run, rise)
 
   for (let i = 0; i < steps; i++) {
-    const z1 = entryZ + dir * (0.8 + (i + 0.5) * tread)
+    const z1 = entryZ + dir * (entrySetback + (i + 0.5) * tread)
     const top1 = y + (i + 1) * riser
     const massHeight1 = top1 - y
     addBox({
@@ -632,7 +635,7 @@ function addSwitchbackStair(floor, core, dir, coreId) {
     addBox({ floor, p: [rightX, top2 - riser / 2, z2 + dir * tread / 2], s: [laneWidth, riser, 0.07], material: 'stairRiser', role: 'stairRiser', collider: false })
   }
 
-  const center1 = entryZ + dir * (0.8 + run / 2)
+  const center1 = entryZ + dir * (entrySetback + run / 2)
   const center2 = farZ - dir * run / 2
   addBox({ id: `stair_${coreId}_${floor}_lower_ramp`, floor, p: [leftX, y + rise / 2 - 0.08, center1], s: [laneWidth, 0.18, length + 0.08], rot: [-dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
   addBox({ id: `stair_${coreId}_${floor}_upper_ramp`, floor, p: [rightX, y + rise + rise / 2 - 0.08, center2], s: [laneWidth, 0.18, length + 0.08], rot: [dir * angle, 0, 0], material: 'stairTread', role: 'stairRamp', collider: true, visible: false })
@@ -655,8 +658,9 @@ function addSwitchbackStair(floor, core, dir, coreId) {
   // 통과한 캡슐이 수직 보이드로 떨어지므로, 상부 층계참은 문 폭부터 두
   // 레인의 첫 디딤판까지 하나의 연속된 구조체로 잇는다. 이 층계참은 바로
   // 위 계단의 하부 출발참도 겸해 각 층에서 실제 U자 동선을 만든다.
-  const upperLandingDepth = 1.4
-  const upperLandingZ = entryZ + dir * 0.4
+  // 상부 층계참은 문 바깥 0.3m부터 첫 단차까지 연속 지지한다.
+  const upperLandingDepth = entrySetback + tread / 2 + 0.065
+  const upperLandingZ = entryZ + dir * (upperLandingDepth / 2 - 0.3)
   addBox({
     id: `stair_${coreId}_${floor}_level_landing`,
     floor,

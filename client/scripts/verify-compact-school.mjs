@@ -164,6 +164,7 @@ const assertContinuouslySupported = (path, label) => {
 const roofLevelLanding = COMPACT_SCHOOL.boxes.find((item) => item.id === 'stair_nw_F3_level_landing')
 assert.ok(roofLevelLanding, '옥상 방화문과 북서 계단을 잇는 층계참이 없다')
 assert.ok(roofLevelLanding.s[2] >= verticalMapContract.paths.ROOF_F3_STAIRS.minimumLandingDepth, '옥상 방화문 앞 층계참이 너무 얕다')
+assert.ok(roofLevelLanding.s[2] >= 1.8, '방화문과 첫 계단 사이 평탄 대기 공간은 1.8m 이상이어야 한다')
 assert.ok(pointInsideBoxXZ(-36, -40.4, roofLevelLanding), '옥상 층계참이 방화문 정면을 받치지 않는다')
 assert.ok(pointInsideBoxXZ(-33.65, -40.4, roofLevelLanding), '옥상 층계참이 하강 레인까지 이어지지 않는다')
 assert.equal(roofLevelLanding.p[1] + roofLevelLanding.s[1] / 2, FLOOR_Y.ROOF, '옥상 층계참 높이가 옥상 바닥과 어긋났다')

@@ -140,6 +140,7 @@ def test_rooftop_stair_authority_changes_only_at_physical_endpoints() -> None:
     assert path["durationSeconds"] >= 3.0
     assert path["minimumFireDoorClearWidth"] >= 1.7
     assert path["minimumLandingDepth"] >= 1.3
+    assert max(point[2] for point in path["down"]) - min(point[2] for point in path["down"]) >= 5.0
     door_to_door = path["doorToDoorDown"]
     assert door_to_door[0] == get_map_slot("ROOF_TO_F3_FIRE_DOOR")["position"]
     assert door_to_door[-1] == get_map_slot("F3_TO_F2_STAIR_WEST")["position"]
