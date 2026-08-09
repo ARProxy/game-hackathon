@@ -107,6 +107,36 @@
       "anchorRoom": "f3_room_1",
       "note": "옥상 신호와 다른 3층 전용 ON AIR 의미 우회 방송 콘솔"
     },
+    "F3_INFERENCE_CANDIDATE_A": {
+      "kind": "mission_candidate",
+      "floor": "F3",
+      "position": [-28, 8.51, -43],
+      "aiApproachPosition": [-28, 7.2, -41.65],
+      "zone": "f3_broadcast",
+      "candidateId": "vertical_f3_candidate_a",
+      "anchorRoom": "f3_room_1",
+      "note": "서버만 정답 여부를 아는 방송실 은빛 증거대"
+    },
+    "F3_INFERENCE_CANDIDATE_B": {
+      "kind": "mission_candidate",
+      "floor": "F3",
+      "position": [-45.2, 8.51, -32],
+      "aiApproachPosition": [-46.4, 7.2, -32],
+      "zone": "f3_av",
+      "candidateId": "vertical_f3_candidate_b",
+      "anchorRoom": "f3_room_8",
+      "note": "서쪽 편집실의 검은 원통형 오답 증거대"
+    },
+    "F3_INFERENCE_CANDIDATE_C": {
+      "kind": "mission_candidate",
+      "floor": "F3",
+      "position": [-1.95, 7.62, -32],
+      "aiApproachPosition": [-3.35, 7.2, -32],
+      "zone": "f3_calligraphy",
+      "candidateId": "vertical_f3_candidate_c",
+      "anchorRoom": "f3_room_8",
+      "note": "동쪽 서예실 전시대의 검은 버튼형 오답 증거"
+    },
     "F3_SEEKER_REVEAL_ENTRY": { "kind": "spawn", "floor": "F3", "position": [-36, 7.2, -38.2], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
     "F3_TO_F2_STAIR_WEST": { "kind": "stair", "floor": "F3", "position": [-36, 7.2, -39.7], "zone": "f3_core_nw", "anchorRoom": "f3_core_nw" },
     "F3_TO_F2_STAIR_EAST": { "kind": "stair", "floor": "F3", "position": [-12, 7.2, -16.3], "zone": "f3_core_se", "anchorRoom": "f3_core_se" },

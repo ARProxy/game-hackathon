@@ -983,6 +983,27 @@ function addBroadcastRoom() {
   for (const x of [-31.55, -30.85, -25.15, -24.45]) {
     addBox({ floor, p: [x, y + 1.65, -43.8], s: [0.06, 1.45, 1.1], material: 'signBlue', role: 'acousticPanel', collider: false })
   }
+
+  // 방송 기록과 대조할 세 후보는 UI 아이콘이 아니라 서로 다른 방에 놓인
+  // 물리 증거대다. AI는 각 증거대 앞 접근점까지 실제 이동한 뒤에만 판정한다.
+  const candidateStands = [
+    { id: 'f3_inference_candidate_a', p: [-28, y + 1.31, -43], material: 'signBlue' },
+    { id: 'f3_inference_candidate_b', p: [-45.2, y + 1.31, -32], material: 'safetyYellow' },
+    { id: 'f3_inference_candidate_c', p: [-1.95, y + 0.42, -32], material: 'safetyRed' },
+  ]
+  for (const stand of candidateStands) {
+    addBox({ id: stand.id, floor, p: stand.p, s: [0.82, 0.14, 0.58], material: 'extSteelDark', role: 'candidateStand', collider: false })
+    addBox({ id: `${stand.id}_screen`, floor, p: [stand.p[0], stand.p[1] + 0.11, stand.p[2] + 0.305], s: [0.58, 0.18, 0.045], material: stand.material, role: 'emissive', collider: false })
+    boxes[boxes.length - 1].emissive = true
+  }
+  // 정답/오답 이름은 HUD에 노출하지 않고 실루엣 차이만 읽히게 만든다.
+  addBox({ id: 'f3_candidate_a_shape', floor, p: [-28, y + 1.5, -43], s: [0.62, 0.09, 0.12], material: 'extSteel', role: 'candidateProp', collider: false })
+  addCylinder({ id: 'f3_candidate_a_ring', floor, p: [-28.31, y + 1.5, -43], r: 0.18, h: 0.08, material: 'extSteel', role: 'candidateProp', rot: [Math.PI / 2, 0, 0] })
+  addCylinder({ id: 'f3_candidate_b_shape', floor, p: [-45.2, y + 1.5, -32], r: 0.16, h: 0.7, material: 'extSteelDark', role: 'candidateProp', rot: [0, 0, Math.PI / 2] })
+  addBox({ id: 'f3_candidate_c_shape', floor, p: [-1.95, y + 0.62, -32], s: [0.42, 0.12, 0.68], material: 'extSteelDark', role: 'candidateProp', collider: false })
+  for (const [index, dx] of [-0.12, 0, 0.12].entries()) {
+    addCylinder({ id: `f3_candidate_c_button_${index + 1}`, floor, p: [-1.95 + dx, y + 0.695, -32], r: 0.035, h: 0.035, material: 'safetyRed', role: 'candidateProp' })
+  }
   addFixture(floor, [-28, y + 2.65, -44.8], 'dim')
 }
 

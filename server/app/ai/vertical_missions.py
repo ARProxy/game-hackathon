@@ -2,7 +2,7 @@
 
 각 층은 다른 게임플레이를 요구한다:
 - 옥상: 점멸 순서를 기억하고 직접 옥상을 횡단하는 신호 복원
-- 3층: 방송 미션 (음성으로 의미 전달) -- 이미 vertical_flow.py에 구현됨
+- 3층: 세 물리 후보를 AI가 비교·확인하고 플레이어 교정으로 재평가하는 방송 추론
 - 2층: 인터폰 협동 (AI가 기호를 읽고 플레이어가 입력)
 - 1층: CCTV 음성 관제 (인간 방향 안내 → AI 실제 이동 → 원격 동시 해제)
 - 파이널: 3명 스테이션 도달 + 주문 -- 이미 구현됨
@@ -15,7 +15,10 @@ import random
 import time
 from dataclasses import dataclass, field
 
+from app.ai.mission import PropPlacement
+from app.ai.partner import PartnerDecision, compare_partner_candidates
 from app.ai.speech import avoid_forbidden_words
+from app.game.map_slots import get_map_slot
 
 
 # ---------------------------------------------------------------------------
@@ -66,6 +69,147 @@ class RooftopSignalMission:
             "progress": len(self.activated_signal_ids),
             "total": len(self.sequence),
             "completed": self.completed,
+        }
+
+
+# ---------------------------------------------------------------------------
+# 3층 방송 추론 미션
+# ---------------------------------------------------------------------------
+
+F3_INFERENCE_CANDIDATE_SLOTS = (
+    "F3_INFERENCE_CANDIDATE_A",
+    "F3_INFERENCE_CANDIDATE_B",
+    "F3_INFERENCE_CANDIDATE_C",
+)
+
+
+def _f3_candidate(
+    *,
+    slot_id: str,
+    prop_id: str,
+    name: str,
+    color: str,
+    mesh: str,
+    is_real: bool,
+    zone: str,
+    tags: list[str],
+    descriptions: list[str],
+) -> PropPlacement:
+    slot = get_map_slot(slot_id)
+    x, _, z = slot.get("aiApproachPosition", slot["position"])
+    return PropPlacement(
+        prop_id=prop_id,
+        name=name,
+        color=color,
+        mesh=mesh,
+        scale=0.35,
+        position={"x": float(x), "z": float(z)},
+        is_real=is_real,
+        zone=zone,
+        forbidden_word="열쇠",
+        tags=tags,
+        descriptions=descriptions,
+    )
+
+
+def create_broadcast_inference_mission() -> "BroadcastInferenceMission":
+    """맵의 세 물리 증거대와 1:1로 연결된 서버 비공개 후보를 만든다."""
+    candidates = [
+        _f3_candidate(
+            slot_id="F3_INFERENCE_CANDIDATE_A",
+            prop_id="vertical_f3_candidate_a",
+            name="비상 해제 열쇠",
+            color="#C8D2DC",
+            mesh="key",
+            is_real=True,
+            zone="방송실",
+            tags=["shiny", "small", "metal", "long", "door-related"],
+            descriptions=[
+                "은빛 금속", "작고 길쭉한 물건", "잠긴 출입구를 여는 도구",
+                "자물쇠에 넣어 돌리는 물건",
+            ],
+        ),
+        _f3_candidate(
+            slot_id="F3_INFERENCE_CANDIDATE_B",
+            prop_id="vertical_f3_candidate_b",
+            name="손전등",
+            color="#20242A",
+            mesh="cylinder",
+            is_real=False,
+            zone="서쪽 편집실",
+            tags=["black", "long", "light", "tool"],
+            descriptions=[
+                "검은 원통", "길쭉한 손잡이", "어두운 곳에 빛을 비추는 도구",
+            ],
+        ),
+        _f3_candidate(
+            slot_id="F3_INFERENCE_CANDIDATE_C",
+            prop_id="vertical_f3_candidate_c",
+            name="방송 리모컨",
+            color="#30343A",
+            mesh="box",
+            is_real=False,
+            zone="동쪽 서예실",
+            tags=["black", "rectangular", "electronic"],
+            descriptions=[
+                "검은 네모", "작은 버튼이 많은 장치", "기계를 멀리서 조작하는 도구",
+            ],
+        ),
+    ]
+    return BroadcastInferenceMission(candidates=candidates)
+
+
+@dataclass
+class BroadcastInferenceMission:
+    """설명·오해·물리 확인·교정이 모두 필요한 3층 협동 추론."""
+
+    candidates: list[PropPlacement] = field(default_factory=list)
+    correct_candidate_id: str = "vertical_f3_candidate_a"
+    attempted_candidate_ids: list[str] = field(default_factory=list)
+    pending_candidate_id: str | None = None
+    utterance_history: list[str] = field(default_factory=list)
+    completed: bool = False
+
+    @property
+    def prompt(self) -> str:
+        return (
+            "방송 기록의 목표 물건은 ‘은빛 금속’, ‘작고 길쭉함’, "
+            "‘잠긴 출입구를 여는 쓰임’입니다. 이름을 직접 말하지 말고 Q로 설명하세요. "
+            "AI가 3층의 세 증거대를 비교해 실제 후보를 확인합니다."
+        )
+
+    def decide(self, transcript: str) -> PartnerDecision:
+        self.utterance_history.append(transcript.strip())
+        decision = compare_partner_candidates(transcript, self.candidates)
+        self.pending_candidate_id = (
+            decision.target.prop_id if decision.target is not None else None
+        )
+        return decision
+
+    def inspect(self, candidate_id: str) -> dict:
+        candidate = next(
+            (item for item in self.candidates if item.prop_id == candidate_id),
+            None,
+        )
+        if candidate is None:
+            return {"success": False, "reason": "unknown_candidate"}
+        if candidate_id not in self.attempted_candidate_ids:
+            self.attempted_candidate_ids.append(candidate_id)
+        correct = candidate_id == self.correct_candidate_id
+        self.pending_candidate_id = None
+        if correct:
+            self.completed = True
+        return {
+            "success": correct,
+            "completed": self.completed,
+            "candidate_id": candidate_id,
+            "zone": candidate.zone,
+            "attempts": len(self.attempted_candidate_ids),
+            "feedback": (
+                "방송 기록의 재질·형태·쓰임이 모두 일치해. 이 후보가 맞아."
+                if correct
+                else "직접 확인해 보니 방송 기록의 재질이나 쓰임과 달라. 차이를 교정해 줘."
+            ),
         }
 
 
@@ -441,6 +585,7 @@ class VerticalMissions:
     """층별 미션을 묶는 컨테이너."""
 
     rooftop: RooftopSignalMission = field(default_factory=RooftopSignalMission)
+    broadcast: BroadcastInferenceMission = field(default_factory=create_broadcast_inference_mission)
     intercom: IntercomMission = field(default_factory=IntercomMission)
     simultaneous: SimultaneousMission = field(default_factory=SimultaneousMission)
     basement: BasementFinalMission = field(default_factory=BasementFinalMission)
@@ -463,6 +608,7 @@ def create_vertical_missions(
     basement = create_basement_mission(seed=effective_seed)
     return VerticalMissions(
         rooftop=RooftopSignalMission(sequence=rooftop_sequence),
+        broadcast=create_broadcast_inference_mission(),
         intercom=intercom,
         simultaneous=simultaneous,
         basement=basement,

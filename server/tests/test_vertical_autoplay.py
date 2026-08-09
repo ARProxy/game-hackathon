@@ -81,7 +81,11 @@ def test_rooftop_to_field_escape_open_has_no_mission_or_actor_deadlock() -> None
     human.position.x, human.position.y, human.position.z = x, y, z
     human.position.floor = WorldFloor.F3
     session.broadcast_mission_actor_id = "human"
-    assert evaluate_broadcast_phrase("작은 금속 도구로 잠긴 출입구를 개방한다")["success"]
+    decision = session.vertical_missions.broadcast.decide(
+        "은빛 작은 금속이고 잠긴 출입구를 여는 도구",
+    )
+    assert decision.target is not None
+    assert session.vertical_missions.broadcast.inspect(decision.target.prop_id)["success"]
     session.broadcast_mission_actor_id = None
     assert complete_current_stage(session, "human")["next_phase"] == "floor_2"
     _move_all_through(session, "F3_TO_F2_STAIR_EAST", "east")

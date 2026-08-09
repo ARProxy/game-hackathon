@@ -124,6 +124,36 @@ def test_player_description_interrupts_exploration_for_inspection() -> None:
     assert intent["target_id"] == prop.prop_id
 
 
+def test_vertical_description_commands_physical_candidate_inspection() -> None:
+    session = GameSession("vertical-companion-command")
+    session.state.add_player("human", PlayerRole.HUMAN)
+    session.setup_game(["열쇠"])
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    partner = session.state.get_player("partner")
+    seeker = session.state.get_player("seeker")
+    candidate = session.vertical_missions.broadcast.candidates[0]
+    partner.position.floor = WorldFloor.F3
+    partner.position.x = candidate.position["x"]
+    partner.position.z = candidate.position["z"]
+    seeker.position.floor = WorldFloor.F3
+    seeker.position.x, seeker.position.z = -5.0, -5.0
+
+    command_companion(
+        session, candidate.prop_id, candidate.position,
+        "은빛 작은 금속이고 잠긴 출입구를 여는 도구",
+    )
+
+    intent = decide_companion_intent(session)
+    assert intent["state"] == "INSPECT_CANDIDATE"
+    assert intent["target_id"] == candidate.prop_id
+    assert intent["reason"] == "player_description"
+    _, first_action = advance_companion(session)
+    assert first_action is None
+    session.companion_states["partner"].goal_started = time.monotonic() - 4.0
+    _, completed_action = advance_companion(session)
+    assert completed_action == {"type": "inspect", "prop_id": candidate.prop_id}
+
+
 def test_two_companions_keep_independent_memory_and_may_choose_same_target() -> None:
     session = make_session("companion-independent")
     first = decide_companion_intent(session, "partner")

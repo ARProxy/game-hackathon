@@ -160,6 +160,7 @@ def _mark_vertical_missions_done(session: GameSession) -> None:
     """직접 stage advance를 검증할 때 각 전용 미션을 완료 상태로 둔다."""
     if session.vertical_missions is not None:
         session.vertical_missions.rooftop.completed = True
+        session.vertical_missions.broadcast.completed = True
         session.vertical_missions.intercom.completed = True
         session.vertical_missions.simultaneous.completed = True
 

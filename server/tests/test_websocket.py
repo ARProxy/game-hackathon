@@ -331,7 +331,7 @@ class TestVerticalStageInteraction:
             assert started["voice_key"] == "Q"
             assert started["starts_limited_hunt"] is True
 
-    def test_third_floor_ai_points_out_missing_meaning_without_solving(self, client):
+    def test_third_floor_ai_compares_all_candidates_before_acting(self, client):
         from app.game.session import session_manager
         from app.game.vertical_flow import mission_interaction_position
 
@@ -354,21 +354,24 @@ class TestVerticalStageInteraction:
             ws.send_json({
                 "type": "speech",
                 "payload": {
-                    "transcript": "작은 금속 도구와 잠긴 출입구가 있어",
+                    "transcript": "길쭉한 도구",
                     "is_final": True,
                 },
             })
 
             assert ws.receive_json()["type"] == "sound_ping"
             assert ws.receive_json()["type"] == "speech_safe"
-            feedback = ws.receive_json()
-            assistant = ws.receive_json()
-            assert feedback["type"] == "vertical_mission_feedback"
-            assert feedback["missing_labels"] == ["개방 행동"]
-            assert assistant["type"] == "companion_report"
-            assert assistant["speech_intent"] == "ask_clarification"
-            assert "개방 행동" in assistant["message"]
-            assert "정답" not in assistant["message"]
+            decision = ws.receive_json()
+            assert decision["type"] == "partner_decision"
+            assert decision["decision"] == "clarify"
+            assert decision["speech_intent"] == "ask_clarification"
+            assert len(decision["candidates"]) == 3
+            assert "target_prop_id" not in decision
+            assert all(candidate["prop_id"] in {
+                "vertical_f3_candidate_a",
+                "vertical_f3_candidate_b",
+                "vertical_f3_candidate_c",
+            } for candidate in decision["candidates"])
 
     def test_rooftop_contact_cannot_be_submitted_as_seeker_capture(self, client):
         from app.game.session import session_manager

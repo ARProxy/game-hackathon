@@ -6,11 +6,13 @@ import pytest
 
 from app.ai.vertical_missions import (
     BasementFinalMission,
+    BroadcastInferenceMission,
     IntercomMission,
     RooftopSignalMission,
     SimultaneousMission,
     VerticalMissions,
     create_basement_mission,
+    create_broadcast_inference_mission,
     create_vertical_missions,
 )
 from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
@@ -67,6 +69,8 @@ def advance_to_floor(session: GameSession, human, target_phase: VerticalRoundPha
         if session.vertical_missions is not None:
             if phase == VerticalRoundPhase.ROOFTOP_INTRO:
                 session.vertical_missions.rooftop.completed = True
+            elif phase == VerticalRoundPhase.FLOOR_3:
+                session.vertical_missions.broadcast.completed = True
             elif phase == VerticalRoundPhase.FLOOR_2:
                 session.vertical_missions.intercom.completed = True
             elif phase == VerticalRoundPhase.FLOOR_1:
@@ -108,6 +112,45 @@ class TestRooftopSignalMission:
         assert first == repeated
         assert set(first) == {"center", "east", "west"}
         assert len(variants) >= 3
+
+
+class TestBroadcastInferenceMission:
+    def test_ambiguous_description_requires_clarification(self) -> None:
+        mission = create_broadcast_inference_mission()
+
+        decision = mission.decide("길쭉한 도구")
+
+        assert decision.action == "clarify"
+        assert decision.target is None
+        assert len(decision.ranked) == 3
+        assert mission.pending_candidate_id is None
+
+    def test_wrong_hypothesis_is_physically_rejected_then_corrected(self) -> None:
+        mission = create_broadcast_inference_mission()
+        wrong = mission.decide("검은 길쭉한 빛을 비추는 도구")
+
+        assert wrong.action == "act"
+        assert wrong.target is not None
+        assert wrong.target.prop_id == "vertical_f3_candidate_b"
+        rejected = mission.inspect(wrong.target.prop_id)
+        assert not rejected["success"]
+        assert not mission.completed
+
+        corrected = mission.decide("은빛 작은 금속이고 잠긴 출입구를 여는 도구")
+        assert corrected.action == "act"
+        assert corrected.target is not None
+        assert corrected.target.prop_id == "vertical_f3_candidate_a"
+        accepted = mission.inspect(corrected.target.prop_id)
+        assert accepted["success"]
+        assert mission.completed
+        assert mission.attempted_candidate_ids == [
+            "vertical_f3_candidate_b", "vertical_f3_candidate_a",
+        ]
+
+    def test_public_prompt_never_exposes_private_candidate_name(self) -> None:
+        mission = BroadcastInferenceMission()
+
+        assert "열쇠" not in mission.prompt
 
 
 # ---------------------------------------------------------------------------

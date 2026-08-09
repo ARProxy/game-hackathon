@@ -57,7 +57,6 @@ from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPh
 from app.game.state import GamePhase, Player, PlayerRole, PlayerStatus
 from app.game.vertical_flow import (
     BROADCAST_MEANING_LABELS,
-    BROADCAST_MISSION_PROMPT,
     activate_rooftop_signal,
     announce_elevator_arrival,
     activate_basement_device,
@@ -67,7 +66,6 @@ from app.game.vertical_flow import (
     call_elevator,
     complete_current_stage,
     cross_rooftop_stair_boundary,
-    evaluate_broadcast_phrase,
     final_escape_slot,
     parse_basement_device_command,
     refresh_closing_floor,
@@ -316,33 +314,61 @@ class ConnectionManager:
                 and session.broadcast_mission_actor_id == player_id
                 and session.vertical_round.phase == VerticalRoundPhase.FLOOR_3
             ):
-                verdict = evaluate_broadcast_phrase(transcript)
-                if not verdict["success"]:
-                    await self.send_to(room_id, player_id, {
-                        "type": "vertical_mission_feedback",
-                        "success": False,
-                        "missing": verdict["missing"],
-                        "missing_labels": verdict["missing_labels"],
-                        "prompt": BROADCAST_MISSION_PROMPT,
+                mission = session.vertical_missions.broadcast
+                decision = mission.decide(transcript)
+                payload = {
+                    "type": "partner_decision",
+                    "decision": decision.action,
+                    "confidence": decision.confidence,
+                    "reply": decision.reply,
+                    "candidates": [
+                        {
+                            "prop_id": candidate.prop.prop_id,
+                            "zone": candidate.prop.zone,
+                            "score": candidate.score,
+                            "cues": candidate.cues,
+                        }
+                        for candidate in decision.ranked
+                    ],
+                    "utterance": transcript,
+                    "speech_intent": (
+                        SpeechIntent.DECLARE_ACTION.value
+                        if decision.target else SpeechIntent.ASK_CLARIFICATION.value
+                    ),
+                    "speech_mode": SpeechMode.INTERCOM.value,
+                }
+                candidate_memory = [
+                    {
+                        "prop_id": candidate.prop.prop_id,
+                        "zone": candidate.prop.zone,
+                        "confidence_score": candidate.score,
+                        "matched_cues": candidate.cues,
+                        "evaluated_at": time.monotonic(),
+                    }
+                    for candidate in decision.ranked
+                ]
+                for runtime in session.companion_states.values():
+                    runtime.candidate_memory = [dict(item) for item in candidate_memory]
+                if decision.target:
+                    payload.update({
+                        "target_prop_id": decision.target.prop_id,
+                        "position": decision.target.position,
                     })
-                    missing_meanings = " · ".join(verdict["missing_labels"])
-                    await self._broadcast_companion_speech(room_id, {
-                        "type": "companion_report",
-                        "companion_id": "partner",
-                        "message": (
-                            f"방송을 같이 확인했어. {missing_meanings} 뜻이 빠졌어. "
-                            "그 단어를 그대로 읽지 말고 특징과 행동으로 다시 설명해 줘."
-                        ),
-                        "phase": VerticalRoundPhase.FLOOR_3.value,
-                        "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
-                        "speech_mode": SpeechMode.INTERCOM.value,
-                    }, "partner")
-                    return
-                session.broadcast_mission_actor_id = None
-                event = complete_current_stage(session, player_id)
-                await self._publish_vertical_stage_advance(
-                    room_id, player_id, event,
-                )
+                    command_companion(
+                        session, decision.target.prop_id, decision.target.position,
+                        transcript, "partner",
+                    )
+                else:
+                    session.companion_states["partner"].command = None
+                    session.companion_states["partner"].goal_started = None
+                await self._broadcast_companion_speech(room_id, payload, "partner")
+                if decision.target:
+                    await self.broadcast(room_id, {
+                        "type": "partner_command",
+                        "target_prop_id": decision.target.prop_id,
+                        "position": decision.target.position,
+                        "utterance": transcript,
+                    })
                 return
             if (
                 is_final and transcript.strip()
@@ -697,6 +723,13 @@ class ConnectionManager:
                         "reason": str(error),
                     })
                     return
+                if (
+                    session.vertical_missions is not None
+                    and session.vertical_missions.broadcast.completed
+                ):
+                    event = complete_current_stage(session, player_id)
+                    await self._publish_vertical_stage_advance(room_id, player_id, event)
+                    return
                 session.broadcast_mission_actor_id = player_id
                 session.hunter_last_intent = None
                 await self.broadcast(room_id, {
@@ -707,7 +740,7 @@ class ConnectionManager:
                 await self.send_to(room_id, player_id, {
                     "type": "vertical_mission_started",
                     "mission": "floor_3_broadcast",
-                    "prompt": BROADCAST_MISSION_PROMPT,
+                    "prompt": session.vertical_missions.broadcast.prompt,
                     "required_meanings": list(BROADCAST_MEANING_LABELS.values()),
                     "voice_key": "Q",
                     "starts_limited_hunt": True,
@@ -2130,6 +2163,52 @@ class ConnectionManager:
                 **({"speech_intent": speech_event.intent.value, "speech_mode": speech_event.mode.value} if speech_event else {}),
             }, companion_id)
         elif action["type"] == "inspect":
+            broadcast_mission = (
+                session.vertical_missions.broadcast
+                if session.vertical_missions is not None else None
+            )
+            broadcast_candidate_ids = {
+                candidate.prop_id for candidate in broadcast_mission.candidates
+            } if broadcast_mission is not None else set()
+            if (
+                session.vertical_round.phase == VerticalRoundPhase.FLOOR_3
+                and action["prop_id"] in broadcast_candidate_ids
+            ):
+                result = broadcast_mission.inspect(action["prop_id"])
+                await self.broadcast(room_id, {
+                    "type": "vertical_candidate_inspected",
+                    "companion_id": companion_id,
+                    **result,
+                })
+                await self._broadcast_companion_speech(room_id, {
+                    "type": "companion_report",
+                    "companion_id": companion_id,
+                    "message": result["feedback"],
+                    "phase": VerticalRoundPhase.FLOOR_3.value,
+                    "speech_intent": (
+                        SpeechIntent.REPORT_OBSERVATION.value
+                        if result["success"] else SpeechIntent.ASK_CLARIFICATION.value
+                    ),
+                    "speech_mode": SpeechMode.INTERCOM.value,
+                }, companion_id)
+                if result["success"]:
+                    actor_id = session.broadcast_mission_actor_id or companion_id
+                    try:
+                        event = complete_current_stage(session, actor_id)
+                    except InvalidProgression as error:
+                        # 정답 확인 시점에 팀원이 직전 층에 남아 있거나 인간이
+                        # 빙결되었어도 AI 백그라운드 루프를 죽이지 않는다. 조건이
+                        # 회복된 뒤 방송 콘솔 E 입력으로 같은 완료 상태를 재사용한다.
+                        await self.broadcast(room_id, {
+                            "type": "vertical_mission_ready",
+                            "mission": "floor_3_broadcast",
+                            "message": str(error),
+                            "requires_console_interaction": True,
+                        })
+                        return
+                    session.broadcast_mission_actor_id = None
+                    await self._publish_vertical_stage_advance(room_id, actor_id, event)
+                return
             controller_id = next(iter(self.rooms[room_id].players), "")
             session = session_manager.get_or_create(room_id)
             await self._handle_inspect_prop(

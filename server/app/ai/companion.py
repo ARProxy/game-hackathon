@@ -180,6 +180,16 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
             # 이미 같은 층에 있으면 이벤트 소비
             runtime.player_floor_changed = None
 
+    # 플레이어의 최종 설명으로 선택된 후보는 수직 본편의 기본 순찰보다
+    # 우선한다. 위험 회피·구조·실제 층 이동은 위에서 먼저 처리했으므로
+    # 안전 계약을 깨지 않으면서도 3층 조사 명령이 묻히지 않는다.
+    command = runtime.command
+    if command and session.state.phase == GamePhase.PLAYING:
+        return {
+            "state": "INSPECT_CANDIDATE", "target_id": command["prop_id"],
+            "target": command["position"], "reason": "player_description",
+        }
+
     if (
         session.vertical_progression_enabled
         and session.round_data is None
@@ -367,13 +377,6 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                 if state == "ESCAPE" else session.active_gate_payload()["position"]
             ),
             "reason": "team_objective",
-        }
-
-    command = runtime.command
-    if command:
-        return {
-            "state": "INSPECT_CANDIDATE", "target_id": command["prop_id"],
-            "target": command["position"], "reason": "player_description",
         }
 
     mission = session.current_mission()

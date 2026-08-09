@@ -11,7 +11,9 @@ from app.ai.mission import (
     round_to_dict,
 )
 from app.ai.partner import compare_partner_candidates, match_partner_command
+from app.game.progression import VerticalRoundPhase, WorldFloor
 from app.game.session import session_manager
+from app.game.vertical_flow import mission_interaction_position
 from app.ws.manager import ConnectionManager
 
 
@@ -229,3 +231,46 @@ class TestPartnerMissionFlow(unittest.IsolatedAsyncioTestCase):
         assert self.session.current_mission_index == 1
         assert self.session.inspected_prop_ids == {"key"}
         assert self.session.state.phase.value == "final_spell"
+
+    async def test_vertical_wrong_inspection_waits_for_correction_then_advances(self) -> None:
+        self.session.round_data = None
+        self.session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+        x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_3)
+        human = self.session.state.get_player(self.player_id)
+        assert human is not None
+        human.position.x, human.position.y, human.position.z = x, y, z
+        for actor in self.session.state.players.values():
+            if actor.role.value != "seeker":
+                actor.position.floor = WorldFloor.F3
+        self.session.broadcast_mission_actor_id = self.player_id
+        self.websocket.messages.clear()
+
+        await self.manager._handle_companion_action(
+            self.room_id, "partner",
+            {"type": "inspect", "prop_id": "vertical_f3_candidate_b"},
+        )
+
+        wrong = next(
+            message for message in self.websocket.messages
+            if message["type"] == "vertical_candidate_inspected"
+        )
+        assert not wrong["success"]
+        assert self.session.vertical_round.phase == VerticalRoundPhase.FLOOR_3
+
+        self.websocket.messages.clear()
+        await self.manager._handle_companion_action(
+            self.room_id, "partner",
+            {"type": "inspect", "prop_id": "vertical_f3_candidate_a"},
+        )
+
+        accepted = next(
+            message for message in self.websocket.messages
+            if message["type"] == "vertical_candidate_inspected"
+        )
+        advanced = next(
+            message for message in self.websocket.messages
+            if message["type"] == "vertical_stage_advanced"
+        )
+        assert accepted["success"]
+        assert advanced["completed_phase"] == "floor_3"
+        assert advanced["next_phase"] == "floor_2"

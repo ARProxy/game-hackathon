@@ -206,7 +206,7 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
         raise InvalidProgression("수직 진행이 아직 활성화되지 않았다")
     phase = session.vertical_round.phase
 
-    if phase == VerticalRoundPhase.ROOFTOP_INTRO:
+    if phase in {VerticalRoundPhase.ROOFTOP_INTRO, VerticalRoundPhase.FLOOR_3}:
         actor = session.state.get_player(actor_id)
         if (
             actor is None
@@ -214,10 +214,18 @@ def complete_current_stage(session: Any, actor_id: str) -> dict:
             or actor.status != PlayerStatus.ALIVE
         ):
             raise InvalidProgression("살아 있는 도망자만 층 미션을 완료할 수 있다")
-        if actor.position.floor != WorldFloor.ROOF:
+        if actor.position.floor != session.vertical_round.policy.active_floor:
             raise InvalidProgression("현재 활성 층의 actor만 미션을 완료할 수 있다")
-        if session.vertical_missions is None or not session.vertical_missions.rooftop.completed:
+        if (
+            phase == VerticalRoundPhase.ROOFTOP_INTRO
+            and (session.vertical_missions is None or not session.vertical_missions.rooftop.completed)
+        ):
             raise InvalidProgression("옥상 신호 세 곳을 순서대로 동기화해야 한다")
+        if (
+            phase == VerticalRoundPhase.FLOOR_3
+            and (session.vertical_missions is None or not session.vertical_missions.broadcast.completed)
+        ):
+            raise InvalidProgression("3층 AI 후보 확인을 먼저 완료해야 한다")
     else:
         validate_current_stage_interaction(session, actor_id)
 

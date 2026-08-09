@@ -52,7 +52,7 @@ def test_position_slots_use_floor_height_and_finite_map_coordinates() -> None:
         assert all(math.isfinite(value) for value in position), slot_id
         assert abs(position[0]) <= 60 and abs(position[2]) <= 60, slot_id
         base_y = floor_y[slot["floor"]]
-        if slot["kind"] == "device":
+        if slot["kind"] in {"device", "mission_candidate"}:
             assert base_y < position[1] <= base_y + 3.2, slot_id
         elif slot_id in {"ROOF_TO_F3_STAIR_BOTTOM_CROSSING", "F3_TO_ROOF_STAIR_TOP_CROSSING"}:
             assert min(abs(position[1] - height) for height in (7.2, 10.8)) < 0.001, slot_id

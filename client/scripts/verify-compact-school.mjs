@@ -272,6 +272,27 @@ assert.deepEqual(
 assert.ok(COMPACT_SCHOOL.boxes.some((item) => item.id === 'f3_broadcast_on_air' && item.emissive), '방송실 ON AIR 표지가 없다')
 assert.ok(COMPACT_SCHOOL.cylinders.some((item) => item.id === 'f3_broadcast_microphone'), '방송실 마이크가 없다')
 assert.equal(slots.F3_BROADCAST_CONSOLE.interactionPosition[1], 7.2, '방송 콘솔 상호작용 지점이 3층 바닥에서 떴다')
+for (const [suffix, objectId, candidateId] of [
+  ['A', 'f3_inference_candidate_a', 'vertical_f3_candidate_a'],
+  ['B', 'f3_inference_candidate_b', 'vertical_f3_candidate_b'],
+  ['C', 'f3_inference_candidate_c', 'vertical_f3_candidate_c'],
+]) {
+  const slot = slots[`F3_INFERENCE_CANDIDATE_${suffix}`]
+  const stand = COMPACT_SCHOOL.boxes.find((item) => item.id === objectId)
+  assert.ok(stand, `${candidateId} 물리 증거대가 없다`)
+  assert.equal(stand.role, 'candidateStand', `${candidateId} 물리 증거대 역할이 잘못됐다`)
+  assert.equal(stand.collider, false, `${candidateId} 전시물이 기존 받침 가구와 이중 충돌한다`)
+  assert.deepEqual([stand.p[0], stand.p[1], stand.p[2]], slot.position, `${candidateId} 의미 슬롯과 물리 증거대가 어긋났다`)
+  assert.equal(slot.candidateId, candidateId, `${candidateId} 서버 후보 ID가 맵 슬롯과 다르다`)
+  const [approachX, approachY, approachZ] = slot.aiApproachPosition
+  assert.equal(approachY, 7.2, `${candidateId} AI 접근점이 3층 바닥에서 떴다`)
+  assert.ok(slabAt('F3', approachX, approachZ), `${candidateId} AI 접근점 아래 슬래브가 없다`)
+  const blocker = COMPACT_SCHOOL.boxes.find((item) => (
+    item.f === 'F3' && isServerBarrier(item)
+    && pointInsideBoxXZ(approachX, approachZ, item, CAPSULE_RADIUS + 0.08)
+  ))
+  assert.equal(blocker, undefined, `${candidateId} AI 접근점이 ${blocker?.id ?? '장벽'}에 막혔다`)
+}
 for (const suffix of ['A', 'B', 'C']) {
   const slot = slots[`ROOF_RUNNER_SPAWN_${suffix}`]
   assert.ok(slabAt('ROOF', slot.position[0], slot.position[2]), `${suffix} 스폰 아래에 옥상 슬래브가 없다`)

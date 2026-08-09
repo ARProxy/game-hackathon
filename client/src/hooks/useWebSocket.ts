@@ -248,6 +248,29 @@ export default function useWebSocket() {
         break
         }
 
+      case 'vertical_candidate_inspected':
+        clearPartnerTarget()
+        setPartnerDecision(null)
+        if (data.success) {
+          useGameStore.getState().setActiveMissionPrompt(
+            'AI가 방송 기록과 일치하는 증거를 확인했습니다. 다음 구역 개방을 기다리세요.',
+          )
+          addSubtitle(data.companion_id ?? 'partner', data.feedback ?? '방송 기록과 일치해. 이 후보가 맞아.')
+        } else {
+          useGameStore.getState().setActiveMissionPrompt(
+            `AI가 ${data.zone ?? '해당 구역'} 후보를 직접 확인했지만 기록과 달랐습니다. Q로 재질·형태·쓰임의 차이를 교정하세요.`,
+          )
+          addSubtitle(data.companion_id ?? 'partner', data.feedback ?? '직접 확인해 보니 달라. 차이를 교정해 줘.')
+        }
+        break
+
+      case 'vertical_mission_ready':
+        useGameStore.getState().setActiveMissionPrompt(
+          `${data.message ?? 'AI 확인은 끝났지만 팀 이동이 필요합니다.'} 조건을 맞춘 뒤 방송 콘솔에서 E를 누르세요.`,
+        )
+        addSubtitle('system', data.message ?? 'AI 확인 완료. 남은 팀 상태를 정리한 뒤 방송 콘솔을 다시 작동하세요.')
+        break
+
       case 'intercom_result':
         addSubtitle('system', data.success
           ? '인터폰 전달 성공. 1층 방화문이 열립니다.'
