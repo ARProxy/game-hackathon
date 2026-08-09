@@ -26,6 +26,66 @@ def client():
 
 
 class TestWebSocketConnection:
+    def test_two_clients_create_join_ready_and_start_same_authoritative_room(self, client):
+        def receive_type(socket, expected: str) -> dict:
+            for _ in range(12):
+                message = socket.receive_json()
+                if message.get("type") == expected:
+                    return message
+            raise AssertionError(f"{expected} 이벤트를 받지 못했다")
+
+        with client.websocket_connect("/ws/LIVE42/host-live") as host:
+            host.send_json({
+                "type": "create_room",
+                "payload": {"nickname": "방장곰"},
+            })
+            created = receive_type(host, "room_created")
+            assert created["room"]["room_id"] == "LIVE42"
+
+            with client.websocket_connect("/ws/LIVE42/guest-live") as guest:
+                guest.send_json({
+                    "type": "join_room",
+                    "payload": {"nickname": "손님새"},
+                })
+                assert receive_type(host, "room_joined")["room"]["players"][1]["nickname"] == "손님새"
+                receive_type(guest, "room_joined")
+
+                host.send_json({
+                    "type": "select_character",
+                    "payload": {"character_id": "R01"},
+                })
+                receive_type(host, "character_selected")
+                receive_type(guest, "character_selected")
+                guest.send_json({
+                    "type": "select_character",
+                    "payload": {"character_id": "R02"},
+                })
+                receive_type(host, "character_selected")
+                receive_type(guest, "character_selected")
+
+                host.send_json({"type": "player_ready", "payload": {"ready": True}})
+                receive_type(host, "player_ready_changed")
+                receive_type(guest, "player_ready_changed")
+                guest.send_json({"type": "player_ready", "payload": {"ready": True}})
+                ready_host = receive_type(host, "player_ready_changed")
+                receive_type(guest, "player_ready_changed")
+                assert all(player["is_ready"] for player in ready_host["room"]["players"])
+
+                host.send_json({
+                    "type": "start_game",
+                    "payload": {"dynamic_forbidden": True},
+                })
+                starting_host = receive_type(host, "game_starting")
+                starting_guest = receive_type(guest, "game_starting")
+                assert [item["partner_id"] for item in starting_host["ai_partners"]] == [
+                    "partner", "partner-2",
+                ]
+                assert starting_guest["human_players"] == starting_host["human_players"]
+                game_host = receive_type(host, "game_started")
+                game_guest = receive_type(guest, "game_started")
+                assert game_host["state"]["phase"] == "playing"
+                assert game_guest["state"]["players"].keys() == game_host["state"]["players"].keys()
+
     def test_dynamic_start_hides_forbidden_profile(self, client):
         with client.websocket_connect("/ws/dynamic-start/player1") as ws:
             ws.send_json({

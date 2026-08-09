@@ -122,13 +122,12 @@ def test_start_not_ready():
         start_game_from_room(room)
 
 
-def test_solo_ai_fill():
+def test_multiplayer_room_requires_two_humans():
     room = create_room("solo")
     select_character(room, "solo", "R01")
     set_ready(room, "solo")
-    result = start_game_from_room(room)
-    # 4슬롯 - 1인간 = AI 3명
-    assert len(result["ai_partners"]) == 3
+    with pytest.raises(RoomError, match="2명 이상"):
+        start_game_from_room(room)
 
 
 def test_four_players_no_ai():

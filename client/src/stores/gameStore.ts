@@ -53,6 +53,22 @@ export interface ActiveGate {
   position: { x: number; z: number }
 }
 
+export interface MultiplayerRoomState {
+  room_id: string
+  host_id: string
+  phase: 'waiting' | 'character_select' | 'onboarding' | 'playing' | 'result'
+  players: Array<{
+    player_id: string
+    nickname: string
+    character_id: string | null
+    is_ready: boolean
+    is_host: boolean
+  }>
+  available_characters: string[]
+  runner_slots: number
+  ai_slots_needed: number
+}
+
 export interface MissionData {
   mission_id: number
   forbidden_word: string
@@ -214,6 +230,8 @@ interface GameStore {
   gateArrived: boolean
   partnerResultStatus: PlayerStatus | 'missing' | null
   resultAnalysis: ResultAnalysis | null
+  multiplayerRoom: MultiplayerRoomState | null
+  multiplayerError: string | null
 
   // 프롭 상호작용
   inspectingPropId: string | null  // AI 동료가 조사 중인 프롭
@@ -278,6 +296,8 @@ interface GameStore {
   escapePlayer: (playerId: string) => void
   setPartnerResultStatus: (status: PlayerStatus | 'missing') => void
   setResultAnalysis: (analysis: ResultAnalysis | null) => void
+  setMultiplayerRoom: (room: MultiplayerRoomState | null) => void
+  setMultiplayerError: (message: string | null) => void
   setSpeaking: (isSpeaking: boolean) => void
   setLastTranscript: (transcript: string) => void
   addSubtitle: (playerId: string, text: string) => void
@@ -316,6 +336,8 @@ const initialState = {
   gateArrived: false,
   partnerResultStatus: null as PlayerStatus | 'missing' | null,
   resultAnalysis: null as ResultAnalysis | null,
+  multiplayerRoom: null as MultiplayerRoomState | null,
+  multiplayerError: null as string | null,
   inspectingPropId: null as string | null,
   removedPropIds: [] as string[],
   partnerTarget: null as PartnerTarget | null,
@@ -546,6 +568,8 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setPartnerResultStatus: (partnerResultStatus) => set({ partnerResultStatus }),
   setResultAnalysis: (resultAnalysis) => set({ resultAnalysis }),
+  setMultiplayerRoom: (multiplayerRoom) => set({ multiplayerRoom, multiplayerError: null }),
+  setMultiplayerError: (multiplayerError) => set({ multiplayerError }),
 
   setSpeaking: (isSpeaking) => set({ isSpeaking }),
 

@@ -32,11 +32,14 @@ RUNNER_CHARACTERS: dict[str, dict] = {
 
 MAX_RUNNER_SLOTS = 4  # 도망자 슬롯 (인간 + AI 합산, 술래 제외)
 MAX_HUMAN_PLAYERS = 4
+MIN_MULTIPLAYER_HUMANS = 2
+SUPPORTED_AI_PARTNER_IDS = ("partner", "partner-2")
 
 
 @dataclass
 class RoomPlayer:
     player_id: str
+    nickname: str = "도망자"
     character_id: str | None = None
     is_ready: bool = False
     joined_at: float = 0.0
@@ -74,7 +77,7 @@ class RoomConfig:
 
     def ai_slots_needed(self) -> int:
         """인간 플레이어 수에 따라 AI 동료 충원 수를 계산한다."""
-        return max(0, self.runner_slots - self.player_count)
+        return min(len(SUPPORTED_AI_PARTNER_IDS), max(0, self.runner_slots - self.player_count))
 
     def ai_character_ids(self) -> list[str]:
         """AI에게 배정할 캐릭터 ID 목록."""
@@ -92,21 +95,35 @@ def generate_room_id() -> str:
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 
-def create_room(host_id: str) -> RoomConfig:
+def validate_nickname(nickname: str) -> str:
+    normalized = " ".join(nickname.strip().split())
+    if not 2 <= len(normalized) <= 12:
+        raise RoomError("닉네임은 2~12자로 입력해야 한다")
+    if any(character in normalized for character in "<>/\\"):
+        raise RoomError("닉네임에 사용할 수 없는 문자가 있다")
+    return normalized
+
+
+def create_room(
+    host_id: str,
+    room_id: str | None = None,
+    nickname: str = "방장 도망자",
+) -> RoomConfig:
     """새 방을 생성하고 방장을 참가시킨다."""
     room = RoomConfig(
-        room_id=generate_room_id(),
+        room_id=room_id or generate_room_id(),
         host_id=host_id,
         created_at=time.time(),
     )
     room.players[host_id] = RoomPlayer(
         player_id=host_id,
+        nickname=validate_nickname(nickname),
         joined_at=time.time(),
     )
     return room
 
 
-def join_room(room: RoomConfig, player_id: str) -> None:
+def join_room(room: RoomConfig, player_id: str, nickname: str = "참가 도망자") -> None:
     """기존 방에 참가한다."""
     if room.phase != RoomPhase.WAITING:
         raise RoomError("대기 중인 방에만 참가할 수 있다")
@@ -116,6 +133,7 @@ def join_room(room: RoomConfig, player_id: str) -> None:
         raise RoomError("이미 참가한 플레이어다")
     room.players[player_id] = RoomPlayer(
         player_id=player_id,
+        nickname=validate_nickname(nickname),
         joined_at=time.time(),
     )
 
@@ -164,6 +182,8 @@ def start_game_from_room(room: RoomConfig) -> dict:
         raise RoomError("대기 중인 방에서만 게임을 시작할 수 있다")
     if not room.all_ready:
         raise RoomError("모든 플레이어가 준비되어야 한다")
+    if room.player_count < MIN_MULTIPLAYER_HUMANS:
+        raise RoomError("멀티플레이는 인간 플레이어 2명 이상이 필요하다")
 
     ai_characters = room.ai_character_ids()
     room.phase = RoomPhase.ONBOARDING
@@ -174,7 +194,7 @@ def start_game_from_room(room: RoomConfig) -> dict:
             for pid, p in room.players.items()
         },
         "ai_partners": [
-            {"partner_id": f"partner-{i}", "character_id": cid}
+            {"partner_id": SUPPORTED_AI_PARTNER_IDS[i], "character_id": cid}
             for i, cid in enumerate(ai_characters)
         ],
         "seeker_character_id": "R00",
@@ -190,6 +210,7 @@ def room_to_dict(room: RoomConfig) -> dict:
         "players": [
             {
                 "player_id": p.player_id,
+                "nickname": p.nickname,
                 "character_id": p.character_id,
                 "is_ready": p.is_ready,
                 "is_host": p.player_id == room.host_id,

@@ -145,6 +145,21 @@ export default function useWebSocket() {
 
   const handleMessage = useCallback((data: any) => {
     switch (data.type) {
+      case 'room_created':
+      case 'room_joined':
+      case 'character_selected':
+      case 'player_ready_changed':
+        if (data.room) useGameStore.getState().setMultiplayerRoom(data.room)
+        break
+
+      case 'room_error':
+        useGameStore.getState().setMultiplayerError(data.reason ?? '멀티플레이 요청을 처리할 수 없습니다.')
+        break
+
+      case 'game_starting':
+        addSubtitle('system', '모든 플레이어 준비 완료. AI 빈 슬롯을 확정하고 게임을 시작합니다.')
+        break
+
       case 'game_started':
         startRound()
         setForbiddenWords(data.state.forbidden_words ?? [])

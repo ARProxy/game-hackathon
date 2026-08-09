@@ -157,8 +157,11 @@ class TestStartGameWithRoom(unittest.IsolatedAsyncioTestCase):
         mgr = make_manager()
         room_id = setup_room(mgr)
         await mgr._handle_create_room(room_id, "host1", {})
+        await mgr._handle_join_room(room_id, "guest1", {})
         await mgr._handle_select_character(room_id, "host1", {"character_id": "R01"})
+        await mgr._handle_select_character(room_id, "guest1", {"character_id": "R02"})
         await mgr._handle_player_ready(room_id, "host1", {"ready": True})
+        await mgr._handle_player_ready(room_id, "guest1", {"ready": True})
         mgr.broadcast.reset_mock()
 
         await mgr._handle_start_game(room_id, "host1", {
@@ -173,7 +176,9 @@ class TestStartGameWithRoom(unittest.IsolatedAsyncioTestCase):
 
         # game_starting에 AI 파트너 정보 포함
         starting_msg = next(c[0][1] for c in calls if c[0][1]["type"] == "game_starting")
-        assert len(starting_msg["ai_partners"]) == 3  # 4슬롯 - 1인간
+        assert [item["partner_id"] for item in starting_msg["ai_partners"]] == [
+            "partner", "partner-2",
+        ]
 
         # 세션에 AI 파트너 등록 확인
         session = session_manager.get_or_create(room_id)
@@ -333,7 +338,7 @@ class TestFullRoomFlow(unittest.IsolatedAsyncioTestCase):
         assert "game_started" in types
 
         # 방 상태 확인
-        assert config.phase == RoomPhase.ONBOARDING
+        assert config.phase == RoomPhase.PLAYING
 
     async def test_start_without_room_config(self) -> None:
         """방 시스템 없이도 기존 start_game이 정상 동작."""

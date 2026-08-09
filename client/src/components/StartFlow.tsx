@@ -3,12 +3,19 @@ import { CHARACTERS } from '../game/Characters'
 import { useSettingsStore } from '../stores/settingsStore'
 
 export type EntryScreen = 'title' | 'mode' | 'character' | 'multiplayer' | 'exit'
+export interface MultiplayerLaunch {
+  mode: 'host' | 'join'
+  roomId: string
+  nickname: string
+  characterId: string
+}
 
 interface StartFlowProps {
   screen: EntryScreen
   onScreenChange: (screen: EntryScreen) => void
   onStartSolo: (characterId: string) => void
   onQuickStart: () => void
+  onStartMultiplayer: (launch: MultiplayerLaunch) => void
 }
 
 const runners = CHARACTERS.filter((character) => character.role === 'runner')
@@ -38,12 +45,18 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
   )
 }
 
-export default function StartFlow({ screen, onScreenChange, onStartSolo, onQuickStart }: StartFlowProps) {
+function createRoomCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')
+}
+
+export default function StartFlow({ screen, onScreenChange, onStartSolo, onQuickStart, onStartMultiplayer }: StartFlowProps) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedCharacter, setSelectedCharacter] = useState(runners[0]?.id ?? 'R01')
   const [nickname, setNickname] = useState('도망자')
   const [roomCode, setRoomCode] = useState('')
   const [closeBlocked, setCloseBlocked] = useState(false)
+  const multiplayerValid = nickname.trim().length >= 2
 
   const requestExit = () => {
     window.close()
@@ -57,11 +70,13 @@ export default function StartFlow({ screen, onScreenChange, onStartSolo, onQuick
         <section className="title-panel">
           <p className="start-kicker">말하면 위험하다</p>
           <h1>
-            <button type="button" className="quick-start-title" onClick={onQuickStart} title="테스트 게임 바로 시작">
-              <span>얼음,</span> 땡!
-            </button>
+            {import.meta.env.DEV ? (
+              <button type="button" className="quick-start-title" onClick={onQuickStart} title="개발 게임 바로 시작">
+                <span>얼음,</span> 땡!
+              </button>
+            ) : <><span>얼음,</span> 땡!</>}
           </h1>
-          <p className="quick-start-hint">타이틀 클릭 · 테스트 바로 시작</p>
+          {import.meta.env.DEV && <p className="quick-start-hint">개발 모드 · 타이틀 클릭 바로 시작</p>}
           <p className="title-copy">금지된 말을 피해 단서를 모으고<br />술래가 닿기 전에 학교를 탈출하라.</p>
           <nav className="start-actions" aria-label="메인 메뉴">
             <button className="start-button primary" onClick={() => onScreenChange('mode')}>게임 시작</button>
@@ -103,11 +118,12 @@ export default function StartFlow({ screen, onScreenChange, onStartSolo, onQuick
           <button className="back-button" onClick={() => onScreenChange('mode')}>← 모드 선택</button>
           <p className="start-kicker">MULTIPLAYER LOBBY</p><h2>친구와 탈출 준비</h2>
           <label className="text-field"><span>닉네임</span><input maxLength={12} value={nickname} onChange={(event) => setNickname(event.target.value)} /></label>
+          <label className="text-field"><span>캐릭터</span><select value={selectedCharacter} onChange={(event) => setSelectedCharacter(event.target.value)}>{runners.map((character) => <option key={character.id} value={character.id}>{character.name} · {character.tag}</option>)}</select></label>
           <div className="multi-actions">
-            <button className="mode-card" disabled><b>새 방 만들기</b><span>서버 권위 방 계약 구현 후 활성화됩니다.</span></button>
-            <label className="join-card"><span>방 코드</span><input maxLength={8} value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase())} placeholder="ICE-000" /><button disabled>서버 연결 후 참가 가능</button></label>
+            <button className="mode-card" disabled={!multiplayerValid} onClick={() => onStartMultiplayer({ mode: 'host', roomId: createRoomCode(), nickname: nickname.trim(), characterId: selectedCharacter })}><b>새 방 만들기</b><span>6자리 초대 코드를 만들고 대기방으로 이동합니다.</span></button>
+            <label className="join-card"><span>방 코드</span><input maxLength={6} value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="ABC234" /><button disabled={!multiplayerValid || roomCode.length !== 6} onClick={() => onStartMultiplayer({ mode: 'join', roomId: roomCode, nickname: nickname.trim(), characterId: selectedCharacter })}>방 참가</button></label>
           </div>
-          <p className="contract-note">현재는 솔로 플레이만 완주할 수 있습니다. 멀티 버튼은 실제 서버 방·준비·재접속 상태가 연결되기 전까지 게임을 시작하지 않습니다.</p>
+          <p className="contract-note">2~4명의 인간이 참가할 수 있으며, 빈 도망자 슬롯은 최대 두 AI 동료가 채웁니다. 모두 캐릭터 선택과 준비를 마치면 방장이 시작합니다.</p>
         </section>
       )}
 

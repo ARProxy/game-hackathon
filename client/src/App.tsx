@@ -18,13 +18,12 @@ import HUD from './components/HUD'
 import MiniMap from './components/MiniMap'
 import ResultScreen from './components/ResultScreen'
 import SoundController from './components/SoundController'
-import StartFlow, { type EntryScreen } from './components/StartFlow'
+import StartFlow, { type EntryScreen, type MultiplayerLaunch } from './components/StartFlow'
 import GameErrorBoundary from './components/GameErrorBoundary'
 import PauseMenu from './components/PauseMenu'
 import { useGameStore } from './stores/gameStore'
-import useWebSocket from './hooks/useWebSocket'
+import useWebSocket, { sendGameMessage } from './hooks/useWebSocket'
 import useSpeech from './hooks/useSpeech'
-import { sendGameMessage } from './hooks/useWebSocket'
 import './App.css'
 
 /* ─────────────────────────────────────────────
@@ -286,7 +285,12 @@ function Scene({
  * GameController
  * - 서버 연결, PTT, 비공개 동적 금기어 게임 시작
  * ───────────────────────────────────────────── */
-function GameController() {
+type GameLaunch = (
+  | { mode: 'solo'; roomId: string; nickname: string; characterId: string }
+  | MultiplayerLaunch
+) & { playerId: string }
+
+function GameController({ launch }: { launch: GameLaunch }) {
   const { connect, send, disconnect } = useWebSocket()
   const phase = useGameStore((state) => state.phase)
   const connected = useGameStore((state) => state.connected)
@@ -302,24 +306,38 @@ function GameController() {
 
   /* 서버 자동 연결 */
   useEffect(() => {
-    const roomId = `solo-${Date.now()}`
-    const playerId = `player-${Math.random().toString(36).slice(2, 8)}`
-    setRoom(roomId, playerId)
+    setRoom(launch.roomId, launch.playerId)
     // 개발 Strict Mode의 setup → cleanup → setup 검사에서 CONNECTING 소켓을
     // 즉시 닫지 않도록 실제 연결은 다음 이벤트 루프에 생성한다.
-    const connectTimer = window.setTimeout(() => connect(roomId, playerId), 0)
+    const connectTimer = window.setTimeout(() => connect(launch.roomId, launch.playerId), 0)
     return () => {
       window.clearTimeout(connectTimer)
       disconnect()
     }
-  }, [connect, disconnect, setRoom])
+  }, [connect, disconnect, launch.playerId, launch.roomId, setRoom])
 
-  /* 질문이나 금기어 공개 없이 바로 관찰형 라운드를 시작한다. */
+  /* 솔로는 즉시 시작하고, 멀티는 같은 소켓에서 방 생성/참가부터 진행한다. */
   useEffect(() => {
     if (connected && phase === 'lobby') {
-      send({ type: 'start_game', payload: { dynamic_forbidden: true } })
+      if (launch.mode === 'solo') {
+        send({ type: 'start_game', payload: { dynamic_forbidden: true } })
+      } else {
+        send({
+          type: launch.mode === 'host' ? 'create_room' : 'join_room',
+          payload: { nickname: launch.nickname },
+        })
+      }
     }
-  }, [connected, phase, send])
+  }, [connected, launch.mode, launch.nickname, phase, send])
+
+  const multiplayerRoom = useGameStore((state) => state.multiplayerRoom)
+  useEffect(() => {
+    if (launch.mode === 'solo' || !multiplayerRoom || phase !== 'lobby') return
+    const self = multiplayerRoom.players.find((player) => player.player_id === launch.playerId)
+    if (self && self.character_id === null) {
+      send({ type: 'select_character', payload: { character_id: launch.characterId } })
+    }
+  }, [launch.characterId, launch.mode, launch.playerId, multiplayerRoom, phase, send])
 
   /* Q키 Push-to-Talk */
   useSpeech({
@@ -365,6 +383,49 @@ function GameController() {
   )
 }
 
+function MultiplayerLobby({ launch, onLeave }: { launch: GameLaunch; onLeave: () => void }) {
+  const room = useGameStore((state) => state.multiplayerRoom)
+  const error = useGameStore((state) => state.multiplayerError)
+  const connected = useGameStore((state) => state.connected)
+  const phase = useGameStore((state) => state.phase)
+  if (launch.mode === 'solo' || phase !== 'lobby') return null
+  const self = room?.players.find((player) => player.player_id === launch.playerId)
+  const allReady = Boolean(room && room.players.length >= 2 && room.players.every((player) => player.is_ready))
+  const selectable = Array.from(new Set([
+    ...(self?.character_id ? [self.character_id] : []),
+    ...(room?.available_characters ?? []),
+  ]))
+  return (
+    <div className="start-modal-backdrop" style={{ zIndex: 190 }}>
+      <section className="start-modal" role="dialog" aria-modal="true" aria-labelledby="multi-lobby-title">
+        <p className="start-kicker">LIVE MULTIPLAYER</p>
+        <h2 id="multi-lobby-title">대기방 {launch.roomId}</h2>
+        <p className="contract-note">{connected ? '서버 연결됨' : '서버에 연결 중'} · 초대 코드를 친구에게 전달하세요.</p>
+        {error && <div role="alert" className="speech-fallback-alert" style={{ position: 'static' }}>{error}</div>}
+        <div style={{ display: 'grid', gap: 8, margin: '16px 0' }}>
+          {(room?.players ?? []).map((player) => (
+            <div key={player.player_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 11px', border: '1px solid rgba(82,229,255,.24)', borderRadius: 8 }}>
+              <span>{player.is_host ? '★ ' : ''}{player.nickname}</span>
+              <span>{player.character_id ?? '선택 중'} · {player.is_ready ? '준비 완료' : '대기'}</span>
+            </div>
+          ))}
+          {room && Array.from({ length: room.ai_slots_needed }, (_, index) => (
+            <div key={`ai-${index}`} style={{ padding: '8px 11px', opacity: .58 }}>AI 동료 슬롯 {index + 1} · 게임 시작 시 충원</div>
+          ))}
+        </div>
+        {self && (
+          <label className="text-field"><span>내 캐릭터</span><select value={self.character_id ?? ''} onChange={(event) => sendGameMessage({ type: 'select_character', payload: { character_id: event.target.value } })}><option value="" disabled>선택</option>{selectable.map((id) => <option key={id} value={id}>{id}</option>)}</select></label>
+        )}
+        <div className="exit-actions" style={{ marginTop: 16 }}>
+          <button className="start-button" onClick={onLeave}>나가기</button>
+          {self && <button className="start-button" disabled={!self.character_id} onClick={() => sendGameMessage({ type: 'player_ready', payload: { ready: !self.is_ready } })}>{self.is_ready ? '준비 해제' : '준비'}</button>}
+          {self?.is_host && <button className="start-button primary" disabled={!allReady} onClick={() => sendGameMessage({ type: 'start_game', payload: { dynamic_forbidden: true } })}>게임 시작</button>}
+        </div>
+      </section>
+    </div>
+  )
+}
+
 /* ─────────────────────────────────────────────
  * App — 루트
  * Tab: Claude 원본 비교 ↔ 3D 전환
@@ -405,6 +466,7 @@ function GameApp() {
   const [visibleFloors, setVisibleFloors] = useState<FloorKey[] | undefined>(undefined)
   const [floorLabel, setFloorLabel] = useState('전체')
   const [sceneKey, setSceneKey] = useState(0)
+  const [launch, setLaunch] = useState<GameLaunch | null>(null)
   // 접근 가능 층은 서버의 문·이동 권한 계약이고 렌더 가시성 계약이 아니다.
   // 게임에서는 전체 학교 외형을 유지하고, 개발용 원본 비교 모드에서만 층을 숨긴다.
   const renderedFloors = DEV_TOOLS_ENABLED && cameraMode === 'reference' ? visibleFloors : undefined
@@ -412,6 +474,11 @@ function GameApp() {
     setPlayerCharacterId(characterId)
     useGameStore.getState().reset()
     useGameStore.getState().setSelectedCharacter(characterId)
+    setLaunch({
+      mode: 'solo', roomId: `solo-${Date.now()}`,
+      playerId: `player-${Math.random().toString(36).slice(2, 8)}`,
+      nickname: '도망자', characterId,
+    })
     setGameRunning(true)
   }, [])
   const startQuickGame = useCallback(() => {
@@ -419,12 +486,28 @@ function GameApp() {
     setPlayerCharacterId(characterId)
     useGameStore.getState().reset()
     useGameStore.getState().setSelectedCharacter(characterId)
+    setLaunch({
+      mode: 'solo', roomId: `dev-${Date.now()}`,
+      playerId: `player-${Math.random().toString(36).slice(2, 8)}`,
+      nickname: '개발 도망자', characterId,
+    })
+    setGameRunning(true)
+  }, [])
+  const startMultiplayer = useCallback((multiplayer: MultiplayerLaunch) => {
+    useGameStore.getState().reset()
+    useGameStore.getState().setSelectedCharacter(multiplayer.characterId)
+    setPlayerCharacterId(multiplayer.characterId)
+    setLaunch({
+      ...multiplayer,
+      playerId: `human-${Math.random().toString(36).slice(2, 9)}`,
+    })
     setGameRunning(true)
   }, [])
   const returnToMainMenu = useCallback(() => {
     useGameStore.getState().reset()
     setEntryScreen('title')
     setGameRunning(false)
+    setLaunch(null)
     setSceneKey((key) => key + 1)
   }, [])
 
@@ -462,14 +545,15 @@ function GameApp() {
       {/* 타이틀 클릭 자체가 오디오 잠금 해제 제스처가 되도록 항상 마운트한다. */}
       <SoundController />
       {!isGameRunning && (
-        <StartFlow screen={entryScreen} onScreenChange={setEntryScreen} onStartSolo={startSolo} onQuickStart={startQuickGame} />
+        <StartFlow screen={entryScreen} onScreenChange={setEntryScreen} onStartSolo={startSolo} onQuickStart={startQuickGame} onStartMultiplayer={startMultiplayer} />
       )}
 
       {isGameRunning && <GameErrorBoundary
         onRetry={() => setSceneKey((key) => key + 1)}
         onMainMenu={returnToMainMenu}
       >
-      <GameController />
+      {launch && <GameController launch={launch} />}
+      {launch && <MultiplayerLobby launch={launch} onLeave={returnToMainMenu} />}
 
       <Canvas
         key={sceneKey}

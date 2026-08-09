@@ -136,6 +136,11 @@ class ConnectionManager:
     def disconnect(self, room_id: str, player_id: str) -> None:
         self._cancel_freeze_timeout(room_id, player_id)
         room = self.rooms.get(room_id)
+        config = self.rooms_config.get(room_id)
+        if config:
+            from app.game.room import leave_room
+            if leave_room(config, player_id):
+                self.rooms_config.pop(room_id, None)
         if room:
             room.players.pop(player_id, None)
             if not room.players:
@@ -1919,7 +1924,13 @@ class ConnectionManager:
         from app.game.room import RoomError, create_room, room_to_dict
 
         try:
-            config = create_room(player_id)
+            if room_id in self.rooms_config:
+                raise RoomError("이미 생성된 방 코드다")
+            config = create_room(
+                player_id,
+                room_id=room_id,
+                nickname=str(payload.get("nickname", "방장 도망자")),
+            )
             self.rooms_config[room_id] = config
             await self.broadcast(room_id, {
                 "type": "room_created",
@@ -1942,7 +1953,10 @@ class ConnectionManager:
             })
             return
         try:
-            join_room(config, player_id)
+            join_room(
+                config, player_id,
+                nickname=str(payload.get("nickname", "참가 도망자")),
+            )
             await self.broadcast(room_id, {
                 "type": "room_joined",
                 "player_id": player_id,
@@ -2002,9 +2016,15 @@ class ConnectionManager:
 
         session = session_manager.get_or_create(room_id)
         config = self.rooms_config.get(room_id)
+        game_info: dict | None = None
 
         # 방 시스템이 활성화된 경우 AI 충원 처리
         if config and config.phase not in {RoomPhase.ONBOARDING, RoomPhase.PLAYING}:
+            if player_id != config.host_id:
+                await self.send_to(room_id, player_id, {
+                    "type": "room_error", "reason": "방장만 게임을 시작할 수 있다",
+                })
+                return
             try:
                 game_info = start_game_from_room(config)
             except RoomError as error:
@@ -2034,6 +2054,15 @@ class ConnectionManager:
             forbidden_words,
             dynamic_forbidden=dynamic_forbidden,
         )
+        if config and game_info is not None:
+            active_ai_ids = {
+                item["partner_id"] for item in game_info["ai_partners"]
+            }
+            for companion_id in DEFAULT_AI_PARTNER_IDS:
+                if companion_id not in active_ai_ids:
+                    session.state.players.pop(companion_id, None)
+                    session.position_samples.pop(companion_id, None)
+            config.phase = RoomPhase.PLAYING
         round_data = None
         if not dynamic_forbidden and not requested_words:
             round_data = generate_round(forbidden_words)
