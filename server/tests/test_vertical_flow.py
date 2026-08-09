@@ -95,6 +95,39 @@ def test_rooftop_mission_advances_only_when_actor_is_near_device() -> None:
     assert result["progression"]["accessible_floors"] == ["ROOF", "F3"]
 
 
+def test_rooftop_wrong_input_names_the_next_signal_for_recovery() -> None:
+    from app.game.map_slots import get_map_slot
+
+    session, human = active_session()
+    human.position.floor = WorldFloor.ROOF
+    expected = session.vertical_missions.rooftop.next_signal_id
+    wrong = next(signal_id for signal_id in ("center", "east", "west") if signal_id != expected)
+    slot = get_map_slot({
+        "center": "ROOF_SIGNAL_CENTER",
+        "east": "ROOF_SIGNAL_EAST",
+        "west": "ROOF_SIGNAL_WEST",
+    }[wrong])
+    human.position.x, human.position.y, human.position.z = slot["interactionPosition"]
+    expected_label = {"center": "중앙", "east": "동쪽", "west": "서쪽"}[expected]
+
+    with pytest.raises(InvalidProgression, match=f"다음은 {expected_label} 신호"):
+        activate_rooftop_signal(session, "human", wrong)
+
+    expected_slot = get_map_slot({
+        "center": "ROOF_SIGNAL_CENTER",
+        "east": "ROOF_SIGNAL_EAST",
+        "west": "ROOF_SIGNAL_WEST",
+    }[expected])
+    human.position.x, human.position.y, human.position.z = expected_slot["interactionPosition"]
+    activate_rooftop_signal(session, "human", expected)
+    next_label = {
+        "center": "중앙", "east": "동쪽", "west": "서쪽",
+    }[session.vertical_missions.rooftop.next_signal_id]
+
+    with pytest.raises(InvalidProgression, match=f"이미 입력한 {expected_label}.*다음은 {next_label}"):
+        activate_rooftop_signal(session, "human", expected)
+
+
 def test_actor_on_wrong_floor_cannot_complete_current_mission() -> None:
     session, human = active_session()
     x, y, z = mission_interaction_position(VerticalRoundPhase.ROOFTOP_INTRO)

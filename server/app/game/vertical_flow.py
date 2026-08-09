@@ -180,9 +180,17 @@ def activate_rooftop_signal(session: Any, actor_id: str, signal_id: str) -> dict
         raise InvalidProgression("옥상 신호 장치와 거리가 너무 멀다")
     result = session.vertical_missions.rooftop.activate(signal_id)
     if not result.get("success"):
+        expected_signal_id = str(result.get("expected_signal_id", ""))
+        signal_labels = {"center": "중앙", "east": "동쪽", "west": "서쪽"}
+        expected_label = signal_labels.get(expected_signal_id, "다음")
         if result.get("reason") == "already_active":
-            raise InvalidProgression("이미 동기화한 옥상 신호 장치다")
-        raise InvalidProgression("처음 본 점멸 순서와 다르다. 기억한 다음 중계기를 찾아야 한다")
+            active_label = signal_labels.get(signal_id, "현재")
+            raise InvalidProgression(
+                f"이미 입력한 {active_label} 신호다. 다음은 {expected_label} 신호다"
+            )
+        raise InvalidProgression(
+            f"입력 순서가 다르다. 다음은 {expected_label} 신호다. R로 전체 순서를 다시 볼 수 있다"
+        )
     return result
 
 

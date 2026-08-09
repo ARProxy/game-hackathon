@@ -408,7 +408,7 @@ export default function VerticalObjectives({ playerRef }: {
   const phase = useGameStore((state) => state.phase)
   const missionNearbyRef = useRef(false)
   const nearbyTransitionRef = useRef<{ source: string; route: string } | null>(null)
-  const stairBoundaryRequestRef = useRef(false)
+  const stairBoundaryRequestAtRef = useRef(0)
   const [missionNearby, setMissionNearby] = useState(false)
   const previousFloor = progression?.accessible_floors.find((floor) => floor !== progression.active_floor)
   const targetFloor = progression?.active_floor && playerFloor !== progression.active_floor
@@ -449,7 +449,7 @@ export default function VerticalObjectives({ playerRef }: {
         }) ?? null
       : null
 
-    if (!player || !stairDirection || stairBoundaryRequestRef.current) return
+    if (!player || !stairDirection) return
     const boundarySlotId = stairDirection === 'down'
       ? 'ROOF_TO_F3_STAIR_BOTTOM_CROSSING'
       : 'F3_TO_ROOF_STAIR_TOP_CROSSING'
@@ -460,8 +460,11 @@ export default function VerticalObjectives({ playerRef }: {
     if (
       crossedHeight
       && Math.hypot(_playerPosition.x - boundary[0], _playerPosition.z - boundary[2]) <= 1.25
+      && performance.now() - stairBoundaryRequestAtRef.current >= 900
     ) {
-      stairBoundaryRequestRef.current = true
+      // 네트워크 프레임 유실이나 서버 판정 경합으로 첫 요청이 거절돼도
+      // 경계에 머무는 동안 다시 시도한다. 층 변경 후에는 조건에서 빠진다.
+      stairBoundaryRequestAtRef.current = performance.now()
       sendGameMessage({
         type: 'action',
         payload: { action_type: 'cross_rooftop_stair_boundary', direction: stairDirection },
@@ -470,7 +473,7 @@ export default function VerticalObjectives({ playerRef }: {
   })
 
   useEffect(() => {
-    stairBoundaryRequestRef.current = false
+    stairBoundaryRequestAtRef.current = 0
   }, [playerFloor, progression?.phase])
 
   useEffect(() => {

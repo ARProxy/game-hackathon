@@ -402,8 +402,11 @@ export default function HUD() {
     s.companionIntents['partner-2']?.reason,
   ))
   const verticalProgression = useGameStore((s) => s.verticalProgression)
+  const playerFloor = useGameStore((s) => s.players[s.playerId]?.position.floor)
   const rooftopSignal = useGameStore((s) => s.rooftopSignal)
   const activeMissionPrompt = useGameStore((s) => s.activeMissionPrompt)
+  const movingFromRoofToThirdFloor = verticalProgression?.phase === 'floor_3'
+    && playerFloor === 'ROOF'
 
   return (
     <div style={{
@@ -514,11 +517,15 @@ export default function HUD() {
             background: 'rgba(8,28,36,.86)', fontSize: 12,
           }}>
             <div style={{ color: '#52E5FF', fontWeight: 900, marginBottom: 3 }}>
-              {VERTICAL_PHASE_LABELS[verticalProgression.phase]
+              {movingFromRoofToThirdFloor
+                ? '옥상 완료 · 3층 계단 이동'
+                : VERTICAL_PHASE_LABELS[verticalProgression.phase]
                 ?? `${verticalProgression.active_floor} · 현재 미션`}
             </div>
             <div style={{ lineHeight: 1.45 }}>
-              {activeMissionPrompt
+              {movingFromRoofToThirdFloor
+                ? '북서쪽 노란 표식의 방화문으로 들어가 U자 계단을 끝까지 내려가세요. 계단 하단에서 3층으로 자동 전환됩니다.'
+                : activeMissionPrompt
                 ?? VERTICAL_INSTRUCTIONS[verticalProgression.phase]
                 ?? '현재 구역의 청색 목표를 찾아 E로 상호작용하세요.'}
             </div>

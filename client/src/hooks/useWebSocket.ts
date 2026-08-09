@@ -481,6 +481,7 @@ export default function useWebSocket() {
           || data.action_type === 'activate_device'
           || data.action_type === 'activate_basement_device'
           || data.action_type === 'use_floor_transition'
+          || data.action_type === 'cross_rooftop_stair_boundary'
           || data.action_type === 'vertical_escape') {
           addSubtitle('system', data.reason ?? '현재 위치에서는 장치를 사용할 수 없습니다.')
         }

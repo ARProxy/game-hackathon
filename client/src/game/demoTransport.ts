@@ -1,6 +1,7 @@
 /** 서버를 실행할 수 없는 심사 환경용 결정적 로컬 게임 transport. */
 
 import { actorSpawnPosition } from './spawnContract'
+import verticalMapContract from './verticalMapContract.json'
 
 type Emit = (message: Record<string, unknown>) => void
 
@@ -33,6 +34,7 @@ const ROOFTOP_PROGRESSION = {
   fw_speed_multiplier: 1,
 }
 const ROOFTOP_SIGNALS = ['center', 'east', 'west'] as const
+const ROOF_STAIR_BOTTOM = verticalMapContract.slots.ROOF_TO_F3_STAIR_BOTTOM_CROSSING
 
 export default class DemoTransport {
   private playerId: string
@@ -40,6 +42,7 @@ export default class DemoTransport {
   private phase = 'lobby'
   private missionIndex = 0
   private rooftopSignalIndex = 0
+  private rooftopCompleted = false
   private gateArrived = false
   private playerPosition = actorSpawnPosition('human')
   private seekerPosition = actorSpawnPosition('seeker')
@@ -127,6 +130,7 @@ export default class DemoTransport {
       'partner-2': actorSpawnPosition('partner-2'),
     }
     this.rooftopSignalIndex = 0
+    this.rooftopCompleted = false
     this.send({
       type: 'game_started',
       state: {
@@ -248,9 +252,17 @@ export default class DemoTransport {
       this.playerPosition = { ...this.playerPosition, x: Number(payload.x), z: Number(payload.z) }
     } else if (action === 'interact_stage_mission' && this.rooftopSignalIndex < ROOFTOP_SIGNALS.length) {
       const expected = ROOFTOP_SIGNALS[this.rooftopSignalIndex]
-      if (payload.signal_id !== expected) return
+      if (payload.signal_id !== expected) {
+        const expectedLabel = { center: '중앙', east: '동쪽', west: '서쪽' }[expected]
+        this.send({
+          type: 'action_rejected', action_type: action,
+          reason: `입력 순서가 다릅니다. 다음은 ${expectedLabel} 신호입니다. R로 전체 순서를 다시 볼 수 있습니다.`,
+        })
+        return
+      }
       this.rooftopSignalIndex += 1
       const completed = this.rooftopSignalIndex === ROOFTOP_SIGNALS.length
+      this.rooftopCompleted = completed
       this.send({
         type: 'rooftop_signal_progress', actor_id: this.playerId,
         signal_id: expected,
@@ -262,6 +274,23 @@ export default class DemoTransport {
       if (completed) this.send({
         type: 'vertical_stage_advanced', actor_id: this.playerId,
         completed_phase: 'rooftop_intro', next_phase: 'floor_3', clue: null,
+        progression: {
+          ...ROOFTOP_PROGRESSION,
+          phase: 'floor_3', active_floor: 'F3', accessible_floors: ['ROOF', 'F3'],
+          closing_pending_floor: 'ROOF', seeker_count: 1,
+        },
+      })
+    } else if (action === 'cross_rooftop_stair_boundary' && this.rooftopCompleted) {
+      this.playerPosition = {
+        x: ROOF_STAIR_BOTTOM.position[0],
+        y: ROOF_STAIR_BOTTOM.position[1],
+        z: ROOF_STAIR_BOTTOM.position[2],
+        floor: 'F3', zone: ROOF_STAIR_BOTTOM.zone,
+      }
+      this.send({
+        type: 'actor_floor_changed', actor_id: this.playerId,
+        route: 'roof_f3_stairs', traversal: 'stairs', direction: 'down',
+        position: this.playerPosition,
         progression: {
           ...ROOFTOP_PROGRESSION,
           phase: 'floor_3', active_floor: 'F3', accessible_floors: ['ROOF', 'F3'],
