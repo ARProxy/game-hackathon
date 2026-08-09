@@ -743,8 +743,11 @@ function addRoof() {
   // 서측 HVAC와 동측 안테나는 세 미션 지점을 시각적으로 구분한다.
   for (let i = 0; i < 4; i++) {
     const z = -33 + i * 3.2
-    addBox({ floor: 'ROOF', p: [-43.2, y + 0.65, z], s: [2.2, 1.3, 1.9], material: 'extSteel', role: 'hvac' })
-    addBox({ floor: 'ROOF', p: [-43.2, y + 0.72, z - 0.98], s: [1.5, 0.78, 0.08], material: 'extSteelDark', role: 'hvacGrille', collider: false })
+    // 세 번째 설비는 서쪽 신호기와 겹치던 위치에서 외벽 쪽으로 물린다.
+    // 구조 밀도는 유지하되 콘솔 앞 캡슐 회전 반경과 남북 통로를 확보한다.
+    const x = i === 2 ? -45.2 : -43.2
+    addBox({ floor: 'ROOF', p: [x, y + 0.65, z], s: [2.2, 1.3, 1.9], material: 'extSteel', role: 'hvac' })
+    addBox({ floor: 'ROOF', p: [x, y + 0.72, z - 0.98], s: [1.5, 0.78, 0.08], material: 'extSteelDark', role: 'hvacGrille', collider: false })
   }
   addCylinder({ floor: 'ROOF', p: [-4.8, y + 3.5, -28], r: 0.11, h: 7, material: 'steel', role: 'antennaMast', collider: true })
   for (let i = 0; i < 4; i++) addCylinder({ floor: 'ROOF', p: [-4.8, y + 2.2 + i * 0.7, -28], r: 0.42, h: 0.045, material: 'rail', role: 'antennaRing', rot: [Math.PI / 2, 0, 0] })

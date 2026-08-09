@@ -170,9 +170,9 @@ assert.equal(slabAt('ROOF', -24, -28), false, 'ㅁ자 건물의 중앙 중정이
 const missionConsole = COMPACT_SCHOOL.boxes.find((item) => item.id === 'roof_signal_center')
 assert.ok(missionConsole, '옥상 중앙 신호 콘솔이 없다')
 assert.deepEqual(
-  [missionConsole.p[0], missionConsole.p[2]],
+  [slots.ROOF_SIGNAL_CENTER.interactionPosition[0], slots.ROOF_SIGNAL_CENTER.interactionPosition[2]],
   [slots.ROOF_INTRO_MISSION.position[0], slots.ROOF_INTRO_MISSION.position[2]],
-  '옥상 미션 좌표와 실제 콘솔이 어긋났다',
+  '옥상 시작 미션 좌표와 중앙 콘솔 안전 조작 지점이 어긋났다',
 )
 for (const [slotId, consoleId] of [
   ['ROOF_SIGNAL_CENTER', 'roof_signal_center'],
@@ -191,7 +191,7 @@ for (const [slotId, consoleId] of [
     assert.ok(slabAt('ROOF', approachX, approachZ), `${slotId} AI 접근 지점 아래에 옥상 슬래브가 없다`)
     const blocker = COMPACT_SCHOOL.boxes.find((item) => (
       item.f === 'ROOF' && isServerBarrier(item)
-      && pointInsideBoxXZ(approachX, approachZ, item, CAPSULE_RADIUS)
+      && pointInsideBoxXZ(approachX, approachZ, item, CAPSULE_RADIUS + 0.12)
     ))
     assert.equal(blocker, undefined, `${slotId} AI 접근 지점이 ${blocker?.id ?? '장벽'}과 겹친다`)
     assert.ok(
@@ -203,6 +203,30 @@ for (const [slotId, consoleId] of [
     )
   }
 }
+
+const assertClearRoofRoute = (points, label) => {
+  for (let index = 1; index < points.length; index++) {
+    const [fromX, fromZ] = points[index - 1]
+    const [toX, toZ] = points[index]
+    const steps = Math.max(1, Math.ceil(Math.hypot(toX - fromX, toZ - fromZ) / 0.25))
+    for (let step = 0; step <= steps; step++) {
+      const t = step / steps
+      const x = fromX + (toX - fromX) * t
+      const z = fromZ + (toZ - fromZ) * t
+      assert.ok(slabAt('ROOF', x, z), `${label} [${x.toFixed(2)}, ${z.toFixed(2)}] 아래 옥상 바닥이 없다`)
+      const blocker = COMPACT_SCHOOL.boxes.find((item) => (
+        item.f === 'ROOF' && isServerBarrier(item)
+        && pointInsideBoxXZ(x, z, item, CAPSULE_RADIUS + 0.12)
+      ))
+      assert.equal(blocker, undefined, `${label}가 ${blocker?.id ?? '장벽'}에 막혔다`)
+    }
+  }
+}
+
+assertClearRoofRoute([[-24, -37.4], [-24, -37.75]], '중앙 스폰→중앙 신호')
+assertClearRoofRoute([[-24, -37.75], [-38, -37.75], [-38, -27.8], [-41.1, -27.8]], '중앙→서쪽 신호')
+assertClearRoofRoute([[-24, -37.75], [-10, -37.75], [-10, -27.8], [-6.9, -27.8]], '중앙→동쪽 신호')
+assertClearRoofRoute([[-41.1, -27.8], [-38, -27.8], [-38, -37.75], [-36, -37.75], [-36, -39.7]], '서쪽 신호→옥상 계단문')
 const broadcastConsole = COMPACT_SCHOOL.boxes.find((item) => item.id === 'f3_broadcast_console')
 assert.ok(broadcastConsole, '3층 방송실 물리 콘솔이 없다')
 assert.equal(broadcastConsole.role, 'missionConsole', '방송 콘솔이 서버 장벽 계약에서 빠졌다')
