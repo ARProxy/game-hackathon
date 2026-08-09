@@ -31,7 +31,10 @@ RUNNER_CHARACTERS: dict[str, dict] = {
 }
 
 MAX_RUNNER_SLOTS = 4  # 도망자 슬롯 (인간 + AI 합산, 술래 제외)
-MAX_HUMAN_PLAYERS = 4
+# 현재 층별 협동 미션은 AI 두 명의 독립 관찰·작동 역할을 핵심으로 한다.
+# 인간 3~4명을 허용하면서 AI를 제거하면 인터폰/CCTV/지하가 교착되므로,
+# 제출 계약은 인간 2명 + AI 2명으로 고정한다.
+MAX_HUMAN_PLAYERS = 2
 MIN_MULTIPLAYER_HUMANS = 2
 SUPPORTED_AI_PARTNER_IDS = ("partner", "partner-2")
 

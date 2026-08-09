@@ -111,7 +111,7 @@ export default function StartFlow({ screen, onScreenChange, onStartSolo, onQuick
             <button className="mode-card" disabled={!multiplayerValid} onClick={() => onStartMultiplayer({ mode: 'host', roomId: createRoomCode(), nickname: nickname.trim(), characterId: selectedCharacter })}><b>새 방 만들기</b><span>6자리 초대 코드를 만들고 대기방으로 이동합니다.</span></button>
             <label className="join-card"><span>방 코드</span><input maxLength={6} value={roomCode} onChange={(event) => setRoomCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="ABC234" /><button disabled={!multiplayerValid || roomCode.length !== 6} onClick={() => onStartMultiplayer({ mode: 'join', roomId: roomCode, nickname: nickname.trim(), characterId: selectedCharacter })}>방 참가</button></label>
           </div>
-          <p className="contract-note">2~4명의 인간이 참가할 수 있으며, 빈 도망자 슬롯은 최대 두 AI 동료가 채웁니다. 모두 캐릭터 선택과 준비를 마치면 방장이 시작합니다.</p>
+          <p className="contract-note">제출용 협동 모드는 인간 2명과 독립 AI 동료 2명으로 진행됩니다. 두 인간이 캐릭터 선택과 준비를 마치면 방장이 시작합니다.</p>
         </section>
       )}
 

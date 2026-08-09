@@ -36,11 +36,9 @@ def test_join_room():
 def test_join_room_full():
     room = create_room("host1")
     join_room(room, "p2")
-    join_room(room, "p3")
-    join_room(room, "p4")
     assert room.is_full
     with pytest.raises(RoomError, match="가득"):
-        join_room(room, "p5")
+        join_room(room, "p3")
 
 
 def test_join_room_duplicate():
@@ -130,17 +128,17 @@ def test_multiplayer_room_requires_two_humans():
         start_game_from_room(room)
 
 
-def test_four_players_no_ai():
+def test_two_players_keep_both_required_ai_roles():
     room = create_room("p1")
     join_room(room, "p2")
-    join_room(room, "p3")
-    join_room(room, "p4")
-    chars = ["R01", "R02", "R03", "R04"]
-    for pid, cid in zip(["p1", "p2", "p3", "p4"], chars):
+    chars = ["R01", "R02"]
+    for pid, cid in zip(["p1", "p2"], chars):
         select_character(room, pid, cid)
         set_ready(room, pid)
     result = start_game_from_room(room)
-    assert len(result["ai_partners"]) == 0
+    assert [item["partner_id"] for item in result["ai_partners"]] == [
+        "partner", "partner-2",
+    ]
 
 
 def test_room_to_dict():
