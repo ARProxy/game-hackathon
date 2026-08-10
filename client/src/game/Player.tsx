@@ -65,8 +65,12 @@ const Player = forwardRef<PlayerHandle, PlayerProps>(function Player({
       const body = rigidBodyRef.current
       if (!body) return
       const position = body.translation()
+      const velocity = body.linvel()
       body.setTranslation({ x: position.x + x, y: position.y + y, z: position.z + z }, true)
-      body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      // Scripted horizontal walking still needs gravity so stairs and ramps can
+      // change elevation naturally. Explicit vertical moves (elevators) settle
+      // the body at the requested floor instead.
+      body.setLinvel({ x: 0, y: y === 0 ? velocity.y : 0, z: 0 }, true)
     },
   }))
 

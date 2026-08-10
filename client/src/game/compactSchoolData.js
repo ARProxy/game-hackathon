@@ -280,7 +280,7 @@ function addFloorShell(floor) {
   const south = facadeOpenings(floor, 'south')
   if (floor === 'F1') {
     const filtered = south.filter((opening) => Math.abs(opening.center + 24) > 3)
-    filtered.push({ center: -24, width: 2.8, type: 'door', id: 'main_entry', kind: 'fire', permanentlyLocked: true, head: 2.45 })
+    filtered.push({ center: -24, width: 2.8, type: 'door', id: 'main_entry', kind: 'fire', unlockFloor: 'FIELD', permanentlyLocked: false, head: 2.45 })
     addWallRun(floor, 'x', B.z1, B.x0, B.x1, filtered, { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
   } else addWallRun(floor, 'x', B.z1, B.x0, B.x1, south, { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
   addWallRun(floor, 'z', B.x0, B.z0, B.z1, facadeOpenings(floor, 'west'), { lower: 'wallOutBase', upper: 'extStucco', glass: 'darkGlass' })
@@ -566,6 +566,139 @@ function addInteriorDensity() {
       id: `${floor}_${side}_corridor_bench`, floor, p: [x, y + 0.4, -28], s: [0.48, 0.8, 2.05],
       material: 'wood', role: 'furniture', collider: true,
     })
+  }
+}
+
+/**
+ * 반복 골조 위에 실제 학교에서 기대하는 생활 설비를 얹는다.
+ * 모두 얇은 비충돌 인스턴스라 추격 동선을 바꾸거나 드로우콜을 크게
+ * 늘리지 않으면서, 복도와 방이 빈 블록 세트처럼 보이는 문제를 줄인다.
+ */
+function addSchoolLifeDetails() {
+  const floorAccent = { F1: 'safetyRed', F2: 'signBlue', F3: 'safetyYellow' }
+  for (const floor of ['F1', 'F2', 'F3']) {
+    const y = FY[floor]
+    const accent = floorAccent[floor]
+
+    // 각 출입구 옆 표준 문패. 층별 색으로 멀리서도 현재 층을 구분한다.
+    for (const center of [-36, -28, -20, -12]) {
+      addBox({
+        id: `${floor}_north_room_plaque_${center}`, floor,
+        p: [center + 0.76, y + 1.78, -39.82], s: [0.58, 0.26, 0.055],
+        material: accent, role: 'roomPlaque', collider: false,
+      })
+      addBox({
+        id: `${floor}_south_room_plaque_${center}`, floor,
+        p: [center - 0.76, y + 1.78, -16.18], s: [0.58, 0.26, 0.055],
+        material: accent, role: 'roomPlaque', collider: false,
+      })
+    }
+    for (const center of [-32, -24]) {
+      addBox({
+        id: `${floor}_west_room_plaque_${center}`, floor,
+        p: [-39.82, y + 1.78, center + 0.76], s: [0.055, 0.26, 0.58],
+        material: accent, role: 'roomPlaque', collider: false,
+      })
+      addBox({
+        id: `${floor}_east_room_plaque_${center}`, floor,
+        p: [-8.18, y + 1.78, center - 0.76], s: [0.055, 0.26, 0.58],
+        material: accent, role: 'roomPlaque', collider: false,
+      })
+    }
+
+    // 중앙 게시판과 종이 공지. 반복 배치는 정상 학교를 기억하는 기준이 된다.
+    addBox({
+      id: `${floor}_corridor_bulletin_frame`, floor,
+      p: [-24, y + 1.65, -39.79], s: [3.55, 1.38, 0.09],
+      material: 'wood', role: 'bulletinBoard', collider: false,
+    })
+    addBox({
+      id: `${floor}_corridor_bulletin_surface`, floor,
+      p: [-24, y + 1.65, -39.70], s: [3.3, 1.16, 0.035],
+      material: 'paper', role: 'bulletinSurface', collider: false,
+    })
+    const noticeColors = ['signBlue', 'safetyYellow', 'white', 'safetyGreen', 'paper', 'safetyRed']
+    for (let index = 0; index < noticeColors.length; index++) {
+      const column = index % 3
+      const row = Math.floor(index / 3)
+      addBox({
+        id: `${floor}_corridor_notice_${index + 1}`, floor,
+        p: [-25.08 + column * 1.08, y + 1.92 - row * 0.55, -39.67],
+        s: [0.74, 0.38, 0.018], material: noticeColors[index],
+        role: 'noticePaper', collider: false,
+      })
+    }
+
+    // 아날로그 시계: 원형 본체와 두 바늘을 분리해 실루엣을 읽게 한다.
+    addCylinder({
+      id: `${floor}_corridor_clock`, floor, p: [-32, y + 2.12, -39.73],
+      r: 0.34, h: 0.075, material: 'white', role: 'wallClock',
+      rot: [Math.PI / 2, 0, 0],
+    })
+    addBox({
+      id: `${floor}_corridor_clock_hour`, floor,
+      p: [-32.04, y + 2.17, -39.66], s: [0.045, 0.18, 0.025],
+      rot: [0, 0, -0.48], material: 'extSteelDark', role: 'clockHand', collider: false,
+    })
+    addBox({
+      id: `${floor}_corridor_clock_minute`, floor,
+      p: [-31.92, y + 2.18, -39.65], s: [0.045, 0.26, 0.025],
+      rot: [0, 0, 0.72], material: 'extSteelDark', role: 'clockHand', collider: false,
+    })
+
+    // 소화기함은 서쪽 코어, 음수대는 동쪽 코어의 층 랜드마크다.
+    addBox({
+      id: `${floor}_fire_cabinet`, floor, p: [-39.73, y + 1.02, -28],
+      s: [0.12, 1.38, 0.72], material: 'white', role: 'emergencyCabinet', collider: false,
+    })
+    addCylinder({
+      id: `${floor}_fire_extinguisher`, floor, p: [-39.61, y + 0.72, -28],
+      r: 0.15, h: 0.62, material: 'safetyRed', role: 'fireExtinguisher',
+    })
+    addBox({
+      id: `${floor}_water_fountain`, floor, p: [-8.28, y + 0.58, -28],
+      s: [0.46, 1.02, 1.22], material: 'extSteel', role: 'waterFountain', collider: false,
+    })
+    addBox({
+      id: `${floor}_water_fountain_basin`, floor, p: [-8.5, y + 1.03, -28],
+      s: [0.34, 0.12, 0.92], material: 'darkGlass', role: 'waterBasin', collider: false,
+    })
+    addCylinder({
+      id: `${floor}_water_fountain_button`, floor, p: [-8.53, y + 0.82, -27.55],
+      r: 0.055, h: 0.035, material: 'signBlue', role: 'waterButton',
+      rot: [0, 0, Math.PI / 2],
+    })
+  }
+
+  // 모든 방의 천장등·스위치·소량의 서류를 기능 위치에 배치한다.
+  for (const room of rooms) {
+    const y = FY[room.floor]
+    const axes = roomAxes(room)
+    for (const lateral of [-2.1, 2.1]) {
+      const [lightX, lightZ] = axes.point(lateral, 4.1)
+      addBox({
+        id: `${room.id}_ceiling_light_${lateral}`, floor: room.floor,
+        p: [lightX, y + 3.08, lightZ], s: axes.size(1.35, 0.055, 0.24),
+        rot: [0, axes.yaw, 0], material: TONE.warm,
+        role: 'emissive', collider: false,
+      })
+      boxes[boxes.length - 1].emissive = true
+    }
+    const [switchX, switchZ] = axes.point(-2.95, 1.0)
+    addBox({
+      id: `${room.id}_light_switch`, floor: room.floor,
+      p: [switchX, y + 1.22, switchZ], s: axes.size(0.13, 0.2, 0.035),
+      rot: [0, axes.yaw, 0], material: 'white', role: 'lightSwitch', collider: false,
+    })
+    if (['classroom', 'library', 'office'].includes(roomKind(room.name))) {
+      const [paperX, paperZ] = axes.point(0.28, 3.1)
+      for (let index = 0; index < 3; index++) addBox({
+        id: `${room.id}_paper_stack_${index + 1}`, floor: room.floor,
+        p: [paperX + index * 0.09, y + 0.8 + index * 0.018, paperZ],
+        s: axes.size(0.42, 0.025, 0.3), rot: [0, axes.yaw + index * 0.035, 0],
+        material: index === 1 ? 'signBlue' : 'paper', role: 'loosePaper', collider: false,
+      })
+    }
   }
 }
 
@@ -1181,6 +1314,7 @@ function addNavigation() {
 addGrounds()
 for (const floor of ['F1', 'F2', 'F3']) addFloorShell(floor)
 addInteriorDensity()
+addSchoolLifeDetails()
 addElevatorShafts()
 addStairs()
 addRoof()

@@ -83,8 +83,10 @@ class GameSession:
         self.state = GameState(room_id=room_id)
         self.vertical_round = VerticalRoundState()
         self.final_route_choice = FinalRoute.FIELD
+        self.mission_seed = 0
         self.vertical_progression_enabled = bool(VERTICAL_MAP_CONTRACT["enabled"])
         self.broadcast_mission_actor_id: str | None = None
+        self.broadcast_hunt_grace_until = 0.0
         self.intercom_mission_actor_id: str | None = None
         self.security_mission_actor_id: str | None = None
         self.final_station_actor_ids: set[str] = set()
@@ -143,6 +145,8 @@ class GameSession:
                 player.frozen_at += paused_for
         for seeker_id in tuple(self.hunter_transit_until):
             self.hunter_transit_until[seeker_id] += paused_for
+        if self.broadcast_hunt_grace_until > time.monotonic():
+            self.broadcast_hunt_grace_until += paused_for
         self.paused_at = None
         now = time.monotonic()
         self.hunter_last_tick = now
@@ -164,7 +168,9 @@ class GameSession:
         self.dynamic_forbidden = DynamicForbiddenProfile()
         self.vertical_round = VerticalRoundState()
         self.final_route_choice = random.choice(tuple(FinalRoute))
+        self.mission_seed = random.SystemRandom().randrange(1, 1_000_000)
         self.broadcast_mission_actor_id = None
+        self.broadcast_hunt_grace_until = 0.0
         self.intercom_mission_actor_id = None
         self.security_mission_actor_id = None
         self.final_station_actor_ids.clear()
@@ -252,7 +258,7 @@ class GameSession:
         self.state.started_at = time.time()
         if self.vertical_progression_enabled:
             from app.ai.vertical_missions import create_vertical_missions
-            self.vertical_missions = create_vertical_missions(words, seed=random.randint(0, 9999))
+            self.vertical_missions = create_vertical_missions(words, seed=self.mission_seed)
         logger.info(
             "game setup: room=%s words=%s", self.state.room_id, words
         )
@@ -279,6 +285,11 @@ class GameSession:
                 self.vertical_missions.rooftop.public_state()
                 if self.vertical_missions is not None else None
             ),
+            "mission_generation": {
+                "seed": self.mission_seed,
+                "randomized": True,
+                "changes": ["옥상 신호", "3층 증거 위치", "2층 기호", "1층 관제 경로", "파이널 경로"],
+            },
         }
 
     def vertical_progression_payload(self) -> dict:

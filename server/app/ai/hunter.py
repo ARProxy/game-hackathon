@@ -189,6 +189,11 @@ def seeker_can_capture(session: Any, seeker_id: str) -> bool:
     if transit_until > time.monotonic():
         return False
     threat = effective_seeker_threat(session)
+    if (
+        threat == SeekerThreat.LIMITED_HUNT
+        and getattr(session, "broadcast_hunt_grace_until", 0.0) > time.monotonic()
+    ):
+        return False
     if threat not in {
         SeekerThreat.LIMITED_HUNT,
         SeekerThreat.FULL_HUNT,
@@ -265,6 +270,14 @@ def record_hunter_signal(
         return False
 
     source = session.state.get_player(player_id)
+    signal_timestamp = time.monotonic()
+    if effective_seeker_threat(session) == SeekerThreat.LIMITED_HUNT:
+        # 첫 방송을 유예 시간 안에 말해도 소리가 사라지지 않게 한다. 술래는
+        # 안전 여유가 끝난 직후 그 발화 위치를 조사해 기획된 첫 추격을 만든다.
+        signal_timestamp = max(
+            signal_timestamp,
+            getattr(session, "broadcast_hunt_grace_until", 0.0),
+        )
 
     # 모든 술래(주 + 협공)에게 신호를 전달한다
     delivered = False
@@ -277,13 +290,13 @@ def record_hunter_signal(
             continue
 
         if (
-            strength in {"speech", "ai_action", "ai_speech"}
+            strength in {"speech", "ai_action", "ai_speech", "door"}
             and source is not None
             and not source.shares_floor_with(seeker)
         ):
             continue
 
-        if strength in {"speech", "ai_action", "ai_speech"}:
+        if strength in {"speech", "ai_action", "ai_speech", "door"}:
             distance = math.hypot(
                 float(position["x"]) - seeker.position.x,
                 float(position["z"]) - seeker.position.z,
@@ -291,8 +304,15 @@ def record_hunter_signal(
             # S5: speech_mode가 있으면 모드별 반경, 없으면 기본 청각 반경
             if speech_mode is not None:
                 effective_radius = SPEECH_MODE_RADIUS[speech_mode]
+            elif strength == "door":
+                effective_radius = CONTRACT["doorHearingDistance"]
             else:
                 effective_radius = CONTRACT["hearingDistance"]
+            if effective_seeker_threat(session) == SeekerThreat.LIMITED_HUNT:
+                effective_radius = min(
+                    effective_radius,
+                    float(CONTRACT["limitedHunt"]["hearingDistance"]),
+                )
             effective_radius *= vertical_threat_snapshot(session)["hearing_multiplier"]
             if distance > effective_radius:
                 continue
@@ -307,7 +327,7 @@ def record_hunter_signal(
                 "strength": strength,
                 "floor": floor_override or (source.position.floor.value if source is not None else seeker.position.floor.value),
                 "speech_mode": speech_mode.value if speech_mode else None,
-                "timestamp": time.monotonic(),
+                "timestamp": signal_timestamp,
             }
         elif seeker.player_id == "seeker-2":
             session.secondary_hunter_signal = {
@@ -315,7 +335,7 @@ def record_hunter_signal(
                 "position": {"x": float(position["x"]), "z": float(position["z"])},
                 "strength": strength,
                 "floor": floor_override or (source.position.floor.value if source is not None else seeker.position.floor.value),
-                "timestamp": time.monotonic(),
+                "timestamp": signal_timestamp,
             }
 
     return delivered
@@ -371,6 +391,22 @@ def decide_hunter_intent(session: Any) -> dict:
             "reason": "omen_patrol",
         }
 
+    if (
+        threat == SeekerThreat.LIMITED_HUNT
+        and getattr(session, "broadcast_hunt_grace_until", 0.0) > now
+    ):
+        intro_target = CONTRACT["limitedHunt"]["introPatrolTarget"]
+        return {
+            "state": "HUNT",
+            "target_id": None,
+            "target": {
+                "x": float(intro_target["x"]),
+                "z": float(intro_target["z"]),
+            },
+            "reason": "limited_intro_reposition",
+            "grace_remaining": round(session.broadcast_hunt_grace_until - now, 3),
+        }
+
     if session.state.phase == GamePhase.ESCAPE and session.active_gate_id:
         if (
             session.vertical_progression_enabled
@@ -391,7 +427,17 @@ def decide_hunter_intent(session: Any) -> dict:
     else:
         forward_x, forward_z = forward_x / forward_length, forward_z / forward_length
 
-    vision_distance = CONTRACT["visionDistance"] * vertical_threat_snapshot(session)["vision_multiplier"]
+    limited_contract = CONTRACT["limitedHunt"] if threat == SeekerThreat.LIMITED_HUNT else None
+    vision_distance = float(
+        limited_contract["visionDistance"] if limited_contract else CONTRACT["visionDistance"]
+    ) * vertical_threat_snapshot(session)["vision_multiplier"]
+    proximity_distance = float(
+        limited_contract["proximityDetectionDistance"]
+        if limited_contract else CONTRACT["proximityDetectionDistance"]
+    )
+    memory_seconds = float(
+        limited_contract["memorySeconds"] if limited_contract else CONTRACT["memorySeconds"]
+    )
     visible: list[tuple[float, Any]] = []
     for runner in session.state.players.values():
         if runner.role == PlayerRole.SEEKER or runner.status in {
@@ -413,11 +459,11 @@ def decide_hunter_intent(session: Any) -> dict:
             continue
         dot = (dx / distance) * forward_x + (dz / distance) * forward_z
         in_cone = dot >= math.cos(math.radians(CONTRACT["visionAngleDegrees"] / 2))
-        if distance <= CONTRACT["proximityDetectionDistance"] or in_cone:
+        if distance <= proximity_distance or in_cone:
             frozen_bonus = 3.0 if runner.status == PlayerStatus.FROZEN else 0.0
             signal_bonus = 2.0 if (
                 session.hunter_signal
-                and now - session.hunter_signal["timestamp"] <= CONTRACT["memorySeconds"]
+                and now - session.hunter_signal["timestamp"] <= memory_seconds
                 and session.hunter_signal["player_id"] == runner.player_id
             ) else 0.0
             gate_bonus = 0.0
@@ -445,7 +491,7 @@ def decide_hunter_intent(session: Any) -> dict:
         }
 
     signal = session.hunter_signal
-    if signal and now - signal["timestamp"] <= CONTRACT["memorySeconds"]:
+    if signal and now - signal["timestamp"] <= memory_seconds:
         return {
             "state": "INVESTIGATE",
             "target_id": signal["player_id"],
@@ -454,7 +500,7 @@ def decide_hunter_intent(session: Any) -> dict:
         }
 
     last_seen = session.hunter_last_seen
-    if last_seen and now - last_seen["timestamp"] <= CONTRACT["memorySeconds"]:
+    if last_seen and now - last_seen["timestamp"] <= memory_seconds:
         return {
             "state": "SEARCH",
             "target_id": last_seen["player_id"],

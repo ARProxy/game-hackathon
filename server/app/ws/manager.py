@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import math
+import os
 import time
 from dataclasses import dataclass, field
 
@@ -67,6 +68,7 @@ from app.game.vertical_flow import (
     complete_current_stage,
     cross_rooftop_stair_boundary,
     final_escape_slot,
+    final_station_position,
     parse_basement_device_command,
     refresh_closing_floor,
     request_elevator_trip,
@@ -375,6 +377,27 @@ class ConnectionManager:
                         "position": decision.target.position,
                         "utterance": transcript,
                     })
+                    if getattr(session, "recording_showcase_mode", None) == "full":
+                        inspection = mission.inspect(decision.target.prop_id)
+                        await self.broadcast(room_id, {
+                            "type": "vertical_candidate_inspected",
+                            "companion_id": "partner",
+                            **inspection,
+                        })
+                        await self._broadcast_companion_speech(room_id, {
+                            "type": "companion_report",
+                            "companion_id": "partner",
+                            "message": inspection["feedback"],
+                            "phase": VerticalRoundPhase.FLOOR_3.value,
+                            "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
+                            "speech_mode": SpeechMode.INTERCOM.value,
+                        }, "partner")
+                        if inspection["success"]:
+                            event = complete_current_stage(session, player_id)
+                            session.broadcast_mission_actor_id = None
+                            await self._publish_vertical_stage_advance(
+                                room_id, player_id, event,
+                            )
                 return
             if (
                 is_final and transcript.strip()
@@ -444,6 +467,20 @@ class ConnectionManager:
                     "type": "security_route_progress",
                     **result,
                 })
+                if (
+                    getattr(session, "recording_showcase_mode", None) == "full"
+                    and result.get("accepted_commands") == result.get("total_commands")
+                ):
+                    session.vertical_missions.simultaneous.ai_arrived = True
+                    session.vertical_missions.simultaneous.ai_ready = True
+                    await self._broadcast_companion_speech(room_id, {
+                        "type": "companion_report",
+                        "companion_id": session.vertical_missions.simultaneous.ai_companion_id,
+                        "message": "원격 봉쇄 장치에 도착했어! 경비실 A 장치에서 E를 누르면 내가 B를 동시에 작동할게.",
+                        "phase": VerticalRoundPhase.FLOOR_1.value,
+                        "speech_intent": SpeechIntent.DECLARE_ACTION.value,
+                        "speech_mode": SpeechMode.RADIO.value,
+                    }, session.vertical_missions.simultaneous.ai_companion_id)
                 if not result.get("success"):
                     await self._broadcast_companion_speech(room_id, {
                         "type": "companion_report",
@@ -673,6 +710,22 @@ class ConnectionManager:
                 },
             }, exclude=player_id)
 
+        elif action_type == "door_interaction":
+            if not player or player.status != PlayerStatus.ALIVE:
+                return
+            signal_position = {"x": player.position.x, "z": player.position.z}
+            delivered = record_hunter_signal(
+                session, player_id, signal_position, "door",
+            )
+            await self.broadcast(room_id, {
+                "type": "sound_ping",
+                "player_id": player_id,
+                "position": signal_position,
+                "source": "door",
+                "door_id": str(payload.get("door_id", "")),
+                "heard_by_seeker": delivered,
+            })
+
         elif action_type == "actor_move":
             await self.send_to(room_id, player_id, {
                 "type": "action_rejected", "action_type": "actor_move",
@@ -711,6 +764,19 @@ class ConnectionManager:
                     })
                     return
                 await self.broadcast(room_id, {"type": "final_station_activated", **station})
+                if getattr(session, "recording_showcase_mode", None) == "full":
+                    for companion_id in DEFAULT_AI_PARTNER_IDS:
+                        companion = session.state.get_player(companion_id)
+                        if companion is None or companion.status != PlayerStatus.ALIVE:
+                            continue
+                        sx, sy, sz = final_station_position(companion_id)
+                        companion.position.x, companion.position.y, companion.position.z = sx, sy, sz
+                        companion.position.floor = WorldFloor.FIELD
+                        companion.position.zone = "field_center"
+                        station = activate_final_station(session, companion_id)
+                        await self.broadcast(room_id, {
+                            "type": "final_station_activated", **station,
+                        })
                 if station["all_ready"]:
                     session.spell_words = list(VERTICAL_SPELL_WORDS)
                     session.state.phase = GamePhase.FINAL_SPELL
@@ -733,10 +799,25 @@ class ConnectionManager:
                     session.vertical_missions is not None
                     and session.vertical_missions.broadcast.completed
                 ):
-                    event = complete_current_stage(session, player_id)
+                    try:
+                        event = complete_current_stage(session, player_id)
+                    except InvalidProgression as error:
+                        await self.send_to(room_id, player_id, {
+                            "type": "action_rejected", "action_type": action_type,
+                            "reason": str(error),
+                        })
+                        return
                     await self._publish_vertical_stage_advance(room_id, player_id, event)
                     return
+                starts_limited_hunt = session.broadcast_mission_actor_id is None
                 session.broadcast_mission_actor_id = player_id
+                if starts_limited_hunt:
+                    session.broadcast_hunt_grace_until = (
+                        time.monotonic()
+                        + float(HUNTER_CONTRACT["limitedHunt"]["introGraceSeconds"])
+                    )
+                    session.hunter_signal = None
+                    session.hunter_last_seen = None
                 session.hunter_last_intent = None
                 await self.broadcast(room_id, {
                     "type": "vertical_threat_changed",
@@ -749,7 +830,11 @@ class ConnectionManager:
                     "prompt": session.vertical_missions.broadcast.prompt,
                     "required_meanings": list(BROADCAST_MEANING_LABELS.values()),
                     "voice_key": "Q",
-                    "starts_limited_hunt": True,
+                    "starts_limited_hunt": starts_limited_hunt,
+                    "hunt_grace_seconds": (
+                        float(HUNTER_CONTRACT["limitedHunt"]["introGraceSeconds"])
+                        if starts_limited_hunt else 0.0
+                    ),
                 })
                 return
             if session.vertical_round.phase == VerticalRoundPhase.FLOOR_2:
@@ -763,6 +848,19 @@ class ConnectionManager:
                     })
                     return
                 session.intercom_mission_actor_id = player_id
+                if getattr(session, "recording_showcase_mode", None) == "full":
+                    session.vertical_missions.intercom.ai_arrived = True
+                    description = session.vertical_missions.intercom.describe_for_ai(
+                        session.state.forbidden_words,
+                    )
+                    await self._broadcast_companion_speech(room_id, {
+                        "type": "companion_report",
+                        "companion_id": session.vertical_missions.intercom.ai_companion_id,
+                        "message": f"인터폰에 기호가 보여! {description}",
+                        "phase": VerticalRoundPhase.FLOOR_2.value,
+                        "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
+                        "speech_mode": SpeechMode.INTERCOM.value,
+                    }, session.vertical_missions.intercom.ai_companion_id)
                 await self.send_to(room_id, player_id, {
                     "type": "vertical_mission_started",
                     **mission_info,
@@ -813,9 +911,19 @@ class ConnectionManager:
             await self._publish_vertical_stage_advance(room_id, player_id, event)
 
         elif action_type == "use_floor_transition":
+            requested_route = str(payload.get("route", "west"))
+            if (
+                getattr(session, "recording_showcase_mode", None) == "full"
+                and requested_route == "field"
+                and player is not None
+                and player.position.floor == WorldFloor.F1
+            ):
+                crossing = get_map_slot("F1_FIELD_OUTSIDE_CROSSING")["position"]
+                player.position.x = float(crossing[0])
+                player.position.z = float(crossing[2])
             try:
                 event = use_open_floor_transition(
-                    session, player_id, str(payload.get("route", "west")),
+                    session, player_id, requested_route,
                 )
             except InvalidProgression as error:
                 await self.send_to(room_id, player_id, {
@@ -826,6 +934,7 @@ class ConnectionManager:
                 return
             await self.broadcast(room_id, {"type": "actor_floor_changed", **event})
             if player and player.role == PlayerRole.HUMAN:
+                self._sync_full_recording_companions(session, event)
                 # AI에게 플레이어 층 이동 이벤트 알림 (강제 이동 아님)
                 # AI는 자신의 현재 목표에 따라 독립적으로 층 이동을 판단한다.
                 for companion_id in DEFAULT_AI_PARTNER_IDS:
@@ -855,6 +964,7 @@ class ConnectionManager:
                 return
             await self.broadcast(room_id, {"type": "actor_floor_changed", **event})
             if player and player.role == PlayerRole.HUMAN:
+                self._sync_full_recording_companions(session, event)
                 for companion_id in DEFAULT_AI_PARTNER_IDS:
                     runtime = session.companion_states.get(companion_id)
                     if runtime:
@@ -1018,10 +1128,24 @@ class ConnectionManager:
             # 플레이어가 A를 작동하면 AI가 준비되어 있을 때 자동으로 B도 작동
             if device == "A" and session.vertical_missions is not None:
                 vm = session.vertical_missions
+                if (
+                    getattr(session, "recording_showcase_mode", None) == "full"
+                    and vm.simultaneous.accepted_commands >= len(vm.simultaneous.route_commands)
+                ):
+                    vm.simultaneous.ai_arrived = True
+                    vm.simultaneous.ai_ready = True
                 if vm.simultaneous.ai_ready and not vm.simultaneous.completed:
                     ai_id = vm.simultaneous.ai_companion_id
                     ai_actor = session.state.get_player(ai_id)
                     if ai_actor and ai_actor.status == PlayerStatus.ALIVE:
+                        if getattr(session, "recording_showcase_mode", None) == "full":
+                            device_slot = get_map_slot(vm.simultaneous.device_b_slot)
+                            bx, by, bz = device_slot["position"]
+                            ai_actor.position.x = float(bx)
+                            ai_actor.position.y = float(by)
+                            ai_actor.position.z = float(bz)
+                            ai_actor.position.floor = WorldFloor(device_slot["floor"])
+                            ai_actor.position.zone = str(device_slot.get("zone", ai_actor.position.zone))
                         try:
                             activate_simultaneous_device(session, ai_id, "B")
                         except InvalidProgression:
@@ -1277,10 +1401,36 @@ class ConnectionManager:
         )
         return True
 
+    @staticmethod
+    def _sync_full_recording_companions(session: Any, event: dict) -> None:
+        """Keep the dev-only uninterrupted recording run focused on the player."""
+        if getattr(session, "recording_showcase_mode", None) != "full":
+            return
+        position = event.get("position", {})
+        floor = WorldFloor(str(position.get("floor", WorldFloor.ROOF.value)))
+        base_x = float(position.get("x", 0.0))
+        base_y = float(position.get("y", 0.0))
+        base_z = float(position.get("z", 0.0))
+        for index, companion_id in enumerate(DEFAULT_AI_PARTNER_IDS):
+            companion = session.state.get_player(companion_id)
+            if companion is None or companion.status != PlayerStatus.ALIVE:
+                continue
+            offset = -1.15 if index == 0 else 1.15
+            companion.position.x = base_x + offset
+            companion.position.y = base_y
+            companion.position.z = base_z + 0.7
+            companion.position.floor = floor
+            companion.position.zone = str(position.get("zone", companion.position.zone))
+            session.position_samples[companion_id] = MovementSample(
+                companion.position.x, companion.position.z, time.monotonic(),
+            )
+
     async def _finish_seeker_catch(
         self, room_id: str, player_id: str, player: Player
     ) -> None:
         session = session_manager.get_or_create(room_id)
+        if getattr(session, "recording_showcase_mode", None) == "full":
+            return
         player.eliminate()
 
         vertical_escape = (
@@ -2054,6 +2204,38 @@ class ConnectionManager:
             forbidden_words,
             dynamic_forbidden=dynamic_forbidden,
         )
+        if (
+            payload.get("recording_showcase") is True
+            and os.environ.get("ICE_DDAENG_DEV_SHOWCASE") == "1"
+        ):
+            showcase_mode = str(payload.get("recording_showcase_mode", "f3"))
+            session.recording_showcase_mode = showcase_mode
+            if showcase_mode == "full" and session.vertical_missions is not None:
+                session.final_route_choice = FinalRoute.FIELD
+                session.vertical_missions.rooftop.sequence = ["center", "east", "west"]
+                session.vertical_missions.simultaneous.route_commands = ["직진", "왼쪽", "오른쪽"]
+                session.vertical_missions.intercom.sequence = [
+                    {"shape": "삼각형", "color": "빨간"},
+                    {"shape": "원", "color": "파란"},
+                    {"shape": "별", "color": "노란"},
+                ]
+            elif showcase_mode == "f3":
+                session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+                session.vertical_round.closing_pending_floor = WorldFloor.ROOF
+                showcase_positions = {
+                    player_id: (-28.0, 7.2, -38.35, "f3_broadcast_corridor"),
+                    "partner": (-34.0, 7.2, -30.0, "f3_west_corridor"),
+                    "partner-2": (-17.0, 7.2, -30.0, "f3_east_corridor"),
+                    "seeker": (-36.0, 7.2, -38.2, "f3_core_nw"),
+                }
+                for actor_id, (x, y, z, zone) in showcase_positions.items():
+                    actor = session.state.get_player(actor_id)
+                    if actor is None:
+                        continue
+                    actor.position.x, actor.position.y, actor.position.z = x, y, z
+                    actor.position.floor = WorldFloor.F3
+                    actor.position.zone = zone
+                    session.position_samples[actor_id] = MovementSample(x, z, time.monotonic())
         if config and game_info is not None:
             active_ai_ids = {
                 item["partner_id"] for item in game_info["ai_partners"]

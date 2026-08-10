@@ -309,9 +309,9 @@ function FloorTransitionBeacon({ position, targetFloor, primary, traversal }: {
 }
 
 const BROADCAST_MEANINGS = [
-  { label: '문을 여는 도구', color: '#52E5FF' },
-  { label: '잠긴 출입구', color: '#FFD166' },
-  { label: '개방 행동', color: '#FF5C78' },
+  { label: '재질', color: '#52E5FF' },
+  { label: '형태', color: '#FFD166' },
+  { label: '쓰임', color: '#FF5C78' },
 ]
 
 function BroadcastMissionObjective({

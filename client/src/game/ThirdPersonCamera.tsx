@@ -27,9 +27,10 @@ const _cameraOffset = new THREE.Vector3()
 interface ThirdPersonCameraProps {
   targetRef: React.RefObject<THREE.Group | null>
   enabled: boolean
+  followTargetHeading?: boolean
 }
 
-export default function ThirdPersonCamera({ targetRef, enabled }: ThirdPersonCameraProps) {
+export default function ThirdPersonCamera({ targetRef, enabled, followTargetHeading = false }: ThirdPersonCameraProps) {
   const { camera, gl } = useThree()
   const { world, rapier } = useRapier()
   const yaw = useRef(0)    // 좌우 회전
@@ -85,6 +86,16 @@ export default function ThirdPersonCamera({ targetRef, enabled }: ThirdPersonCam
     if (!enabled || !targetRef.current) return
 
     targetRef.current.getWorldPosition(_targetPosition)
+
+    if (followTargetHeading) {
+      const targetYaw = targetRef.current.rotation.y - Math.PI
+      const yawDelta = THREE.MathUtils.euclideanModulo(
+        targetYaw - yaw.current + Math.PI,
+        Math.PI * 2,
+      ) - Math.PI
+      yaw.current += yawDelta * (1 - Math.exp(-8 * delta))
+      pitch.current = THREE.MathUtils.damp(pitch.current, 0.24, 8, delta)
+    }
 
     // 구면 좌표로 카메라 위치 계산
     const offsetX = Math.sin(yaw.current) * Math.cos(pitch.current) * DISTANCE

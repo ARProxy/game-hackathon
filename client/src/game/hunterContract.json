@@ -3,6 +3,7 @@
   "visionAngleDegrees": 100,
   "proximityDetectionDistance": 8,
   "hearingDistance": 18,
+  "doorHearingDistance": 10,
   "memorySeconds": 4,
   "thinkIntervalSeconds": 0.25,
   "detectedHoldSeconds": 0.45,
@@ -11,6 +12,14 @@
   "chaseSpeed": 3.6,
   "rushSpeed": 5.2,
   "catchDistance": 1.1,
+  "limitedHunt": {
+    "introGraceSeconds": 4,
+    "visionDistance": 9,
+    "proximityDetectionDistance": 4.5,
+    "hearingDistance": 12,
+    "memorySeconds": 3,
+    "introPatrolTarget": { "x": -10, "z": -28 }
+  },
   "director": {
     "targetRoundSeconds": 180,
     "minSpeedMultiplier": 0.72,

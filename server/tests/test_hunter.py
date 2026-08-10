@@ -39,6 +39,15 @@ def test_contract_matches_design_detection_numbers() -> None:
     assert CONTRACT["visionAngleDegrees"] == 100
     assert CONTRACT["proximityDetectionDistance"] == 8
     assert CONTRACT["hearingDistance"] == 18
+    assert CONTRACT["doorHearingDistance"] == 10
+    assert CONTRACT["limitedHunt"] == {
+        "introGraceSeconds": 4,
+        "visionDistance": 9,
+        "proximityDetectionDistance": 4.5,
+        "hearingDistance": 12,
+        "memorySeconds": 3,
+        "introPatrolTarget": {"x": -10, "z": -28},
+    }
 
 
 def test_hunt_replaces_default_patrol_when_no_information() -> None:
@@ -399,6 +408,64 @@ def test_third_floor_broadcast_opens_limited_patrol_and_visual_chase() -> None:
     human.position.x, human.position.z = -23.0, -38.0
     session.hunter_forward = {"x": 1.0, "z": 0.0}
     assert decide_hunter_intent(session)["state"] == "DETECTED"
+
+
+def test_third_floor_broadcast_intro_grace_repositions_and_blocks_capture() -> None:
+    session = make_session("hunter-limited-intro")
+    seeker = session.state.get_player("seeker")
+    human = session.state.get_player("human")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    session.broadcast_mission_actor_id = "human"
+    session.broadcast_hunt_grace_until = time.monotonic() + 4.0
+    seeker.position.floor = human.position.floor = WorldFloor.F3
+    seeker.position.x, seeker.position.z = -28.0, -38.0
+    human.position.x, human.position.z = -28.0, -44.8
+
+    intent = decide_hunter_intent(session)
+
+    assert intent["reason"] == "limited_intro_reposition"
+    assert intent["target"] == {"x": -10.0, "z": -28.0}
+    assert intent["grace_remaining"] > 0
+    assert not seeker_can_capture(session, "seeker")
+    assert record_hunter_signal(
+        session, "human", {"x": human.position.x, "z": human.position.z}, "speech",
+    )
+    assert session.hunter_signal["timestamp"] >= session.broadcast_hunt_grace_until
+
+    session.broadcast_hunt_grace_until = time.monotonic() - 0.1
+    assert seeker_can_capture(session, "seeker")
+
+
+def test_third_floor_limited_hunt_uses_reduced_proximity_and_hearing() -> None:
+    session = make_session("hunter-limited-senses")
+    seeker = session.state.get_player("seeker")
+    human = session.state.get_player("human")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    session.broadcast_mission_actor_id = "human"
+    seeker.position.floor = human.position.floor = WorldFloor.F3
+    seeker.position.x, seeker.position.z = -24.0, -38.0
+    human.position.x, human.position.z = -18.0, -38.0
+    session.hunter_forward = {"x": -1.0, "z": 0.0}
+
+    intent = decide_hunter_intent(session)
+    assert intent["reason"] == "limited_patrol"
+
+    human.position.x, human.position.z = -11.5, -38.0
+    assert not record_hunter_signal(
+        session, "human", {"x": human.position.x, "z": human.position.z}, "speech",
+    )
+    human.position.x, human.position.z = -13.0, -38.0
+    assert record_hunter_signal(
+        session, "human", {"x": human.position.x, "z": human.position.z}, "speech",
+    )
+    human.position.x, human.position.z = -13.5, -38.0
+    assert not record_hunter_signal(
+        session, "human", {"x": human.position.x, "z": human.position.z}, "door",
+    )
+    human.position.x, human.position.z = -14.5, -38.0
+    assert record_hunter_signal(
+        session, "human", {"x": human.position.x, "z": human.position.z}, "door",
+    )
 
 
 def test_third_floor_omen_patrol_actually_moves_from_reveal_door() -> None:

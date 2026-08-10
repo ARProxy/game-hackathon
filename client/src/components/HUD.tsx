@@ -136,6 +136,90 @@ function RoundElapsedTime() {
   )
 }
 
+function ForbiddenProfileAlert() {
+  const signal = useGameStore((s) => s.forbiddenProfileSignal)
+  const [visibleSignalId, setVisibleSignalId] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!signal) return
+    setVisibleSignalId(signal.id)
+    const timer = window.setTimeout(() => setVisibleSignalId(null), 4200)
+    return () => window.clearTimeout(timer)
+  }, [signal])
+
+  if (!signal || visibleSignalId !== signal.id) return null
+
+  const firstActivation = signal.kind === 'activated'
+
+  return (
+    <div
+      key={signal.id}
+      role="status"
+      aria-live="assertive"
+      style={{
+        position: 'absolute',
+        top: 92,
+        left: '50%',
+        width: 'min(440px, calc(100vw - 40px))',
+        transform: 'translateX(-50%)',
+        zIndex: 20,
+        overflow: 'hidden',
+        padding: '14px 18px 13px',
+        border: '1px solid rgba(255, 74, 130, 0.82)',
+        borderRadius: 12,
+        background: 'linear-gradient(105deg, rgba(24,4,13,.96), rgba(70,5,29,.94), rgba(24,4,13,.96))',
+        boxShadow: '0 0 0 1px rgba(255,47,110,.12) inset, 0 0 34px rgba(255,47,110,.34)',
+        textAlign: 'center',
+        animation: 'forbidden-profile-alert 4.2s ease both',
+      }}
+    >
+      <style>{`
+        @keyframes forbidden-profile-alert {
+          0% { opacity: 0; transform: translate(-50%, -12px) scale(.98); filter: brightness(2); }
+          7% { opacity: 1; transform: translate(-50%, 0) scale(1.01); }
+          11% { filter: brightness(.75); }
+          15%, 82% { opacity: 1; transform: translate(-50%, 0) scale(1); filter: brightness(1); }
+          100% { opacity: 0; transform: translate(-50%, -6px) scale(.99); }
+        }
+        @keyframes forbidden-profile-scan {
+          from { transform: translateX(-115%); }
+          to { transform: translateX(115%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [data-forbidden-profile-alert] { animation: none !important; }
+          [data-forbidden-profile-scan] { animation: none !important; }
+        }
+      `}</style>
+      <div data-forbidden-profile-alert style={{ position: 'relative', zIndex: 1 }}>
+        <div style={{
+          color: '#FF8BAD',
+          fontSize: 11,
+          fontWeight: 900,
+          letterSpacing: '.2em',
+          marginBottom: 5,
+        }}>
+          {firstActivation ? '언어 감시 시작' : '언어 감시 변동 감지'}
+        </div>
+        <div style={{ fontSize: 19, fontWeight: 900, letterSpacing: '-.02em' }}>
+          {firstActivation ? '학교가 당신의 말버릇을 학습했습니다' : '금지어 규칙이 바뀌었습니다'}
+        </div>
+        <div style={{ marginTop: 5, color: 'rgba(255,255,255,.7)', fontSize: 12, lineHeight: 1.45 }}>
+          {firstActivation
+            ? '무엇이 위험한지는 알려주지 않습니다. 말의 결과를 관찰하세요.'
+            : '방금까지 안전했던 표현도 다시 의심하세요. 변경 내용은 비공개입니다.'}
+        </div>
+      </div>
+      <div data-forbidden-profile-scan style={{
+        position: 'absolute',
+        inset: 0,
+        width: '45%',
+        background: 'linear-gradient(90deg, transparent, rgba(255,120,160,.18), transparent)',
+        animation: 'forbidden-profile-scan 1.05s ease-out 2',
+      }} />
+    </div>
+  )
+}
+
 function FrozenCountdown() {
   const phase = useGameStore((s) => s.phase)
   const playerId = useGameStore((s) => s.playerId)
@@ -395,6 +479,7 @@ function TextSpeechFallback({ phase, connected, gateArrived, playerStatus }: {
 export default function HUD() {
   const phase = useGameStore((s) => s.phase)
   const forbiddenProfile = useGameStore((s) => s.forbiddenProfile)
+  const missionGeneration = useGameStore((s) => s.missionGeneration)
   const isSpeaking = useGameStore((s) => s.isSpeaking)
   const lastTranscript = useGameStore((s) => s.lastTranscript)
   const connected = useGameStore((s) => s.connected)
@@ -477,11 +562,20 @@ export default function HUD() {
             fontSize: 11,
             color: forbiddenProfile.status === 'observing' ? '#BDEFFF' : '#FF8BAD',
           }}>
-            {forbiddenProfile.status === 'observing'
-              ? '학교가 당신의 말버릇을 듣고 있습니다'
-              : forbiddenProfile.status === 'locked'
-                ? '말의 흔적이 봉인되었습니다'
-                : '언어 감시 활성'}
+            <div style={{ fontWeight: 900 }}>
+              {forbiddenProfile.status === 'observing'
+                ? '말버릇 학습 중'
+                : forbiddenProfile.status === 'locked'
+                  ? '말의 흔적이 봉인되었습니다'
+                  : '언어 감시 활성'}
+            </div>
+            <div style={{ marginTop: 3, opacity: .72, lineHeight: 1.4 }}>
+              {forbiddenProfile.status === 'observing'
+                ? '학교가 대화를 듣고 있습니다 · 아직 감시 규칙 형성 전'
+                : forbiddenProfile.status === 'locked'
+                  ? '파이널 동안 현재 규칙이 더 이상 바뀌지 않습니다'
+                  : '금지어는 플레이 중 주기적으로 바뀝니다 · 내용은 비공개'}
+            </div>
           </div>
         )}
 
@@ -542,6 +636,17 @@ export default function HUD() {
                 : VERTICAL_PHASE_LABELS[verticalProgression.phase]
                 ?? `${verticalProgression.active_floor} · 현재 미션`}
             </div>
+            {missionGeneration?.randomized && (
+              <div style={{
+                marginBottom: 5,
+                color: '#FFE7A3',
+                fontSize: 9,
+                fontWeight: 800,
+                letterSpacing: '.06em',
+              }}>
+                무작위 미션 #{String(missionGeneration.seed).padStart(6, '0')} · 매 판 새 구성
+              </div>
+            )}
             <div style={{ lineHeight: 1.45 }}>
               {movingFromRoofToThirdFloor
                 ? '북서쪽 노란 표식의 방화문으로 들어가 U자 계단을 끝까지 내려가세요. 계단 하단에서 3층으로 자동 전환됩니다.'
@@ -658,6 +763,8 @@ export default function HUD() {
       )}
 
       <PartnerFrozenAlert />
+
+      <ForbiddenProfileAlert />
 
       {phase === 'playing' && partnerDecision && (
         <div style={{

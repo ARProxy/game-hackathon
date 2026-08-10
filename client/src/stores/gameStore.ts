@@ -132,6 +132,12 @@ export interface ForbiddenProfileState {
   status: 'observing' | 'active' | 'shifted' | 'locked'
 }
 
+export interface ForbiddenProfileSignal {
+  id: number
+  kind: 'activated' | 'shifted'
+  timestamp: number
+}
+
 export interface ForbiddenProfileHistoryEntry {
   generation: number
   words: string[]
@@ -139,6 +145,12 @@ export interface ForbiddenProfileHistoryEntry {
   activated_at?: number
   retired_at?: number | null
   duration_seconds?: number
+}
+
+export interface MissionGenerationState {
+  seed: number
+  randomized: boolean
+  changes: string[]
 }
 
 export interface ResultAnalysis {
@@ -215,7 +227,9 @@ interface GameStore {
   currentFloor: MapFloor
   forbiddenWords: string[]
   forbiddenProfile: ForbiddenProfileState | null
+  forbiddenProfileSignal: ForbiddenProfileSignal | null
   forbiddenProfileHistory: ForbiddenProfileHistoryEntry[]
+  missionGeneration: MissionGenerationState | null
   freezeCount: number
   roundStartedAt: number | null
   elapsedSeconds: number | null
@@ -270,7 +284,9 @@ interface GameStore {
   finishGame: (outcome: Exclude<GameOutcome, null>, reason: string) => void
   setForbiddenWords: (words: string[]) => void
   setForbiddenProfile: (profile: ForbiddenProfileState | null) => void
+  signalForbiddenProfile: (kind: ForbiddenProfileSignal['kind']) => void
   setForbiddenProfileHistory: (history: ForbiddenProfileHistoryEntry[]) => void
+  setMissionGeneration: (missionGeneration: MissionGenerationState | null) => void
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   setVerticalProgression: (progression: VerticalProgressionState) => void
   setRooftopSignal: (signal: RooftopSignalState) => void
@@ -320,7 +336,9 @@ const initialState = {
   currentFloor: 'OUT' as const,
   forbiddenWords: [],
   forbiddenProfile: null as ForbiddenProfileState | null,
+  forbiddenProfileSignal: null as ForbiddenProfileSignal | null,
   forbiddenProfileHistory: [] as ForbiddenProfileHistoryEntry[],
+  missionGeneration: null as MissionGenerationState | null,
   freezeCount: 0,
   roundStartedAt: null as number | null,
   elapsedSeconds: null as number | null,
@@ -399,7 +417,13 @@ export const useGameStore = create<GameStore>((set) => ({
   setPaused: (isPaused) => set({ isPaused }),
   setCurrentFloor: (currentFloor) => set({ currentFloor }),
 
-  startRound: () => set({ roundStartedAt: Date.now(), elapsedSeconds: null, resultAnalysis: null }),
+  startRound: () => set({
+    roundStartedAt: Date.now(),
+    elapsedSeconds: null,
+    resultAnalysis: null,
+    forbiddenProfileSignal: null,
+    missionGeneration: null,
+  }),
 
   finishGame: (outcome, resultReason) =>
     set((state) => ({
@@ -415,7 +439,17 @@ export const useGameStore = create<GameStore>((set) => ({
 
   setForbiddenProfile: (forbiddenProfile) => set({ forbiddenProfile }),
 
+  signalForbiddenProfile: (kind) => set((state) => ({
+    forbiddenProfileSignal: {
+      id: (state.forbiddenProfileSignal?.id ?? 0) + 1,
+      kind,
+      timestamp: Date.now(),
+    },
+  })),
+
   setForbiddenProfileHistory: (forbiddenProfileHistory) => set({ forbiddenProfileHistory }),
+
+  setMissionGeneration: (missionGeneration) => set({ missionGeneration }),
 
   setRoundData: (props, missions, totalClues) =>
     set({

@@ -7,6 +7,7 @@ import { COMPACT_SCHOOL, type CompactDoor, type CompactFloor } from './compactSc
 import { useGameStore } from '../stores/gameStore'
 import type { PlayerHandle } from './Player'
 import { isStageDoor, stageDoorUnlocked } from './stageDoorAccess.js'
+import { sendGameMessage } from '../hooks/useWebSocket'
 
 const INTERACTION_DISTANCE = 1.75
 const MOTION_EPSILON = 0.0005
@@ -50,6 +51,10 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
       event.preventDefault()
       targets.current.set(door.id, !targets.current.get(door.id))
       activeDoorIds.current.add(door.id)
+      sendGameMessage({
+        type: 'action',
+        payload: { action_type: 'door_interaction', door_id: door.id },
+      })
     }
     window.addEventListener('keydown', toggle)
     return () => window.removeEventListener('keydown', toggle)

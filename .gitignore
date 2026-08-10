@@ -7,6 +7,9 @@ __pycache__/
 # Build
 dist/
 build/
+tmp/
+output/video/ice-ddaeng-gameplay-highlight.mp4
+output/video/ice-ddaeng-gameplay-highlight-v2.mp4
 
 # IDE
 .vscode/

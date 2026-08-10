@@ -82,6 +82,12 @@ F3_INFERENCE_CANDIDATE_SLOTS = (
     "F3_INFERENCE_CANDIDATE_C",
 )
 
+F3_INFERENCE_LOCATIONS = (
+    ("F3_INFERENCE_CANDIDATE_A", "방송실"),
+    ("F3_INFERENCE_CANDIDATE_B", "서쪽 편집실"),
+    ("F3_INFERENCE_CANDIDATE_C", "동쪽 서예실"),
+)
+
 
 def _f3_candidate(
     *,
@@ -112,49 +118,58 @@ def _f3_candidate(
     )
 
 
-def create_broadcast_inference_mission() -> "BroadcastInferenceMission":
-    """맵의 세 물리 증거대와 1:1로 연결된 서버 비공개 후보를 만든다."""
-    candidates = [
-        _f3_candidate(
-            slot_id="F3_INFERENCE_CANDIDATE_A",
+def create_broadcast_inference_mission(
+    seed: int | None = None,
+) -> "BroadcastInferenceMission":
+    """세 후보의 증거대 위치를 시드로 섞어 매 판 탐색 동선을 바꾼다.
+
+    후보의 의미와 정답은 검증된 템플릿에 남기고 위치만 바꾼다. 따라서
+    LLM이 임의의 정답을 만들거나 도달 불가능한 장소를 선택할 수 없다.
+    ``seed=None``은 단위 테스트와 레거시 호출의 기존 배치를 보존한다.
+    """
+    locations = list(F3_INFERENCE_LOCATIONS)
+    if seed is not None:
+        random.Random(seed ^ 0x46334252).shuffle(locations)
+
+    candidate_specs = [
+        dict(
             prop_id="vertical_f3_candidate_a",
             name="비상 해제 열쇠",
             color="#C8D2DC",
             mesh="key",
             is_real=True,
-            zone="방송실",
             tags=["shiny", "small", "metal", "long", "door-related"],
             descriptions=[
                 "은빛 금속", "작고 길쭉한 물건", "잠긴 출입구를 여는 도구",
                 "자물쇠에 넣어 돌리는 물건",
             ],
         ),
-        _f3_candidate(
-            slot_id="F3_INFERENCE_CANDIDATE_B",
+        dict(
             prop_id="vertical_f3_candidate_b",
             name="손전등",
             color="#20242A",
             mesh="cylinder",
             is_real=False,
-            zone="서쪽 편집실",
             tags=["black", "long", "light", "tool"],
             descriptions=[
                 "검은 원통", "길쭉한 손잡이", "어두운 곳에 빛을 비추는 도구",
             ],
         ),
-        _f3_candidate(
-            slot_id="F3_INFERENCE_CANDIDATE_C",
+        dict(
             prop_id="vertical_f3_candidate_c",
             name="방송 리모컨",
             color="#30343A",
             mesh="box",
             is_real=False,
-            zone="동쪽 서예실",
             tags=["black", "rectangular", "electronic"],
             descriptions=[
                 "검은 네모", "작은 버튼이 많은 장치", "기계를 멀리서 조작하는 도구",
             ],
         ),
+    ]
+    candidates = [
+        _f3_candidate(slot_id=slot_id, zone=zone, **spec)
+        for spec, (slot_id, zone) in zip(candidate_specs, locations)
     ]
     return BroadcastInferenceMission(candidates=candidates)
 
@@ -604,11 +619,13 @@ def create_vertical_missions(
             3, seed=seed, forbidden_words=forbidden_words,
         ),
     )
-    simultaneous = SimultaneousMission()
+    route_commands = ["직진", "왼쪽", "오른쪽"]
+    random.Random(effective_seed ^ 0x46314354).shuffle(route_commands)
+    simultaneous = SimultaneousMission(route_commands=route_commands)
     basement = create_basement_mission(seed=effective_seed)
     return VerticalMissions(
         rooftop=RooftopSignalMission(sequence=rooftop_sequence),
-        broadcast=create_broadcast_inference_mission(),
+        broadcast=create_broadcast_inference_mission(seed=effective_seed),
         intercom=intercom,
         simultaneous=simultaneous,
         basement=basement,

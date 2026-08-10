@@ -22,6 +22,8 @@ import SoundController from './components/SoundController'
 import StartFlow, { type EntryScreen, type MultiplayerLaunch } from './components/StartFlow'
 import GameErrorBoundary from './components/GameErrorBoundary'
 import PauseMenu from './components/PauseMenu'
+import RecordingShowcaseDirector from './game/RecordingShowcaseDirector'
+import FullRecordingShowcaseDirector from './game/FullRecordingShowcaseDirector'
 import { useGameStore } from './stores/gameStore'
 import { useSettingsStore } from './stores/settingsStore'
 import useWebSocket, { sendGameMessage } from './hooks/useWebSocket'
@@ -40,6 +42,10 @@ type CameraMode = 'reference' | '3d'
 const DEV_TOOLS_ENABLED = import.meta.env.DEV
 const SEEKER_VISUAL_PREVIEW = DEV_TOOLS_ENABLED
   && new URLSearchParams(window.location.search).get('preview') === 'seeker'
+const RECORDING_SHOWCASE_F3 = DEV_TOOLS_ENABLED
+  && new URLSearchParams(window.location.search).get('showcase') === 'f3'
+const RECORDING_SHOWCASE_FULL = DEV_TOOLS_ENABLED
+  && new URLSearchParams(window.location.search).get('showcase') === 'full'
 
 /* ─────────────────────────────────────────────
  * 층 필터 (원본 비교 모드에서 숫자키로 전환)
@@ -255,6 +261,8 @@ function Scene({
           <Props />
           <VerticalObjectives playerRef={playerGroupRef} />
           <Player key={`player-${playerId}-${playerCharacterId}`} ref={playerRef} position={SPAWNS.player} characterId={playerCharacterId} />
+          {RECORDING_SHOWCASE_F3 && <RecordingShowcaseDirector playerRef={playerRef} />}
+          {RECORDING_SHOWCASE_FULL && <FullRecordingShowcaseDirector playerRef={playerRef} />}
           {remoteHumans.map((player, index) => (
             <RemotePlayer
               key={player.playerId}
@@ -290,6 +298,7 @@ function Scene({
         <ThirdPersonCamera
           targetRef={playerGroupRef}
           enabled={cameraMode === '3d' && !isPaused}
+          followTargetHeading={RECORDING_SHOWCASE_F3 || RECORDING_SHOWCASE_FULL}
         />
       </Physics>
 
@@ -343,7 +352,14 @@ function GameController({ launch }: { launch: GameLaunch }) {
   useEffect(() => {
     if (connected && phase === 'lobby') {
       if (launch.mode === 'solo') {
-        send({ type: 'start_game', payload: { dynamic_forbidden: true } })
+        send({
+          type: 'start_game',
+          payload: {
+            dynamic_forbidden: true,
+            recording_showcase: RECORDING_SHOWCASE_F3 || RECORDING_SHOWCASE_FULL,
+            recording_showcase_mode: RECORDING_SHOWCASE_FULL ? 'full' : 'f3',
+          },
+        })
       } else {
         send({
           type: launch.mode === 'host' ? 'create_room' : 'join_room',

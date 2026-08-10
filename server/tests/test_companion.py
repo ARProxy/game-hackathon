@@ -456,7 +456,7 @@ def test_floor_one_companion_moves_only_after_cctv_direction_is_accepted() -> No
     assert waiting["reason"] == "security_waiting_for_guidance"
 
     sim.start_guidance("human")
-    sim.submit_direction("앞으로 직진")
+    sim.submit_direction(sim.expected_command)
     moving = decide_companion_intent(session, "partner")
 
     assert moving["reason"] == "security_guided_route"

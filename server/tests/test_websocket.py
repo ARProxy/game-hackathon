@@ -421,6 +421,8 @@ class TestVerticalStageInteraction:
             ]
             assert started["voice_key"] == "Q"
             assert started["starts_limited_hunt"] is True
+            assert started["hunt_grace_seconds"] == 4
+            assert session.broadcast_hunt_grace_until > time.monotonic()
 
     def test_third_floor_ai_compares_all_candidates_before_acting(self, client):
         from app.game.session import session_manager

@@ -115,6 +115,24 @@ class TestRooftopSignalMission:
 
 
 class TestBroadcastInferenceMission:
+    def test_seed_randomizes_candidate_locations_without_changing_safe_templates(self) -> None:
+        variants = {
+            tuple(
+                (candidate.prop_id, candidate.zone)
+                for candidate in create_broadcast_inference_mission(seed=seed).candidates
+            )
+            for seed in range(12)
+        }
+
+        assert len(variants) >= 3
+        for seed in range(12):
+            mission = create_broadcast_inference_mission(seed=seed)
+            assert {candidate.prop_id for candidate in mission.candidates} == {
+                "vertical_f3_candidate_a",
+                "vertical_f3_candidate_b",
+                "vertical_f3_candidate_c",
+            }
+
     def test_ambiguous_description_requires_clarification(self) -> None:
         mission = create_broadcast_inference_mission()
 
@@ -305,6 +323,22 @@ class TestCreateVerticalMissions:
         a = create_vertical_missions(["열쇠"], seed=99)
         b = create_vertical_missions(["열쇠"], seed=99)
         assert a.intercom.sequence == b.intercom.sequence
+        assert a.rooftop.sequence == b.rooftop.sequence
+        assert a.simultaneous.route_commands == b.simultaneous.route_commands
+        assert [candidate.zone for candidate in a.broadcast.candidates] == [
+            candidate.zone for candidate in b.broadcast.candidates
+        ]
+
+    def test_round_seed_changes_multiple_mission_layers(self) -> None:
+        variants = {
+            (
+                tuple(create_vertical_missions([], seed=seed).rooftop.sequence),
+                tuple(create_vertical_missions([], seed=seed).simultaneous.route_commands),
+                tuple(candidate.zone for candidate in create_vertical_missions([], seed=seed).broadcast.candidates),
+            )
+            for seed in range(12)
+        }
+        assert len(variants) >= 6
 
 
 # ---------------------------------------------------------------------------
@@ -439,10 +473,11 @@ class TestSimultaneousFlow:
         session.state.get_player("seeker").position.floor = WorldFloor.ROOF
 
         started = start_security_guidance(session, "human")
-        assert started["expected_command"] == "직진"
+        sim = session.vertical_missions.simultaneous
+        assert started["expected_command"] == sim.route_commands[0]
         assert not submit_security_direction(session, "human", "뒤로 가")["success"]
 
-        for command in ("앞으로", "좌회전", "우회전"):
+        for command in sim.route_commands:
             progress = submit_security_direction(session, "human", command)
             assert progress["success"]
             intent = decide_companion_intent(session, "partner")

@@ -1,0 +1,13 @@
+.git
+.gitignore
+.pytest_cache
+.agent-reports
+_assets-archive
+client/node_modules
+client/dist
+server/.venv
+server/.pytest_cache
+**/__pycache__
+**/*.pyc
+**/*.log
+.DS_Store
