@@ -390,14 +390,6 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     }
 
     if (progression.phase === 'field_final' && player.position.floor === 'F1') {
-      if (actionStep.current === 0 && elapsed >= 0.9) {
-        sendAction('showcase_partner_caught', { target_id: 'partner-2' })
-        actionStep.current = 1
-        holdUntil.current = now + 4.2
-        lastActionAt.current = now
-        return
-      }
-      if (now < holdUntil.current) return
       if ((followPath(F1_TO_FIELD_PATH, delta) || elapsed >= 28) && now - lastActionAt.current >= 1.2) {
         sendAction('use_floor_transition', { route: 'field' })
         lastActionAt.current = now
@@ -420,7 +412,20 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     }
 
     if (store.phase === 'final_spell') {
-      if (elapsed >= 3.5 && now - lastActionAt.current >= 3) {
+      if (actionStep.current === 0 && elapsed >= 0.5) {
+        store.addSubtitle('partner', '왼쪽 장치 준비됐어. 살아남은 사람끼리 맞추자.')
+        actionStep.current = 1
+      } else if (actionStep.current === 1 && elapsed >= 1.7) {
+        store.addSubtitle('partner-2', '오른쪽도 준비. 셋에 동시에 말해.')
+        actionStep.current = 2
+      } else if (actionStep.current === 2 && elapsed >= 2.8) {
+        sendGameMessage({
+          type: 'speech',
+          payload: { transcript: '하나 둘 셋, 달빛 교정 탈출', is_final: true },
+        })
+        actionStep.current = 3
+      }
+      if (elapsed >= 4.6 && now - lastActionAt.current >= 3) {
         sendGameMessage({
           type: 'spell',
           payload: { spell_text: '달빛 교정 탈출' },

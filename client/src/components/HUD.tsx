@@ -13,6 +13,8 @@ import rescueContract from '../game/rescueContract.json'
 import { useSettingsStore } from '../stores/settingsStore'
 
 const FREEZE_TIMEOUT_MS = 30_000
+const FULL_SHOWCASE = import.meta.env.DEV
+  && new URLSearchParams(window.location.search).get('showcase') === 'full'
 
 function clueKey(clue: ClueFragment, index: number): string {
   return clue.fragment_id ?? `${clue.order ?? index}-${clue.word ?? clue.symbol ?? 'fragment'}`
@@ -22,6 +24,46 @@ function compactClue(clue: ClueFragment): string {
   return clue.riddle
     ? `${clue.symbol ?? '◆'} ${clue.relation ?? clue.riddle}`
     : `[${clue.order ?? '?'}] ${clue.word ?? '미확인'}`
+}
+
+function ShowcaseStoryAlert() {
+  const phase = useGameStore((s) => s.phase)
+  const verticalPhase = useGameStore((s) => s.verticalProgression?.phase)
+  const playerFloor = useGameStore((s) => s.players[s.playerId]?.position.floor)
+  const [message, setMessage] = useState<string | null>(null)
+  const lastKey = useRef('')
+
+  useEffect(() => {
+    if (!FULL_SHOWCASE || phase !== 'playing') return
+    const key = `${verticalPhase}:${playerFloor}`
+    if (key === lastKey.current) return
+    lastKey.current = key
+    const nextMessage = verticalPhase === 'rooftop_intro'
+      ? '학교를 탈출하세요'
+      : verticalPhase === 'floor_3' && playerFloor === 'F3'
+        ? '3층 · 술래 1마리'
+        : verticalPhase === 'floor_2' && playerFloor === 'F2'
+          ? '2층 · 술래 2마리'
+          : verticalPhase === 'floor_1' && playerFloor === 'F1'
+            ? '1층 · 술래 3마리'
+            : verticalPhase === 'field_final' && playerFloor === 'FIELD'
+              ? '운동장 · 술래 3마리 추격'
+              : null
+    if (!nextMessage) return
+    setMessage(nextMessage)
+    const timer = window.setTimeout(
+      () => setMessage(null),
+      nextMessage === '학교를 탈출하세요' ? 4300 : 2800,
+    )
+    return () => window.clearTimeout(timer)
+  }, [phase, playerFloor, verticalPhase])
+
+  if (!message) return null
+  return (
+    <div className="showcase-story-alert" role="status">
+      <span>{message}</span>
+    </div>
+  )
 }
 
 const HUNTER_LABELS: Record<string, string> = {
@@ -584,6 +626,7 @@ export default function HUD() {
       fontFamily: "'Pretendard', sans-serif",
       color: 'white',
     }}>
+      <ShowcaseStoryAlert />
 
       {/* 상단 — 연결 상태 + 비공개 언어 감시 */}
       <div style={{

@@ -213,6 +213,15 @@ function Scene({
   const players = useGameStore((state) => state.players)
   const multiplayerRoom = useGameStore((state) => state.multiplayerRoom)
   const seekerCount = useGameStore((state) => state.verticalProgression?.seeker_count ?? 1)
+  const verticalPhase = useGameStore((state) => state.verticalProgression?.phase)
+  const showcaseSeekerCount = RECORDING_SHOWCASE_FULL
+    ? verticalPhase === 'floor_3' ? 1
+      : verticalPhase === 'floor_2' ? 2
+        : verticalPhase === 'floor_1'
+          || verticalPhase === 'field_final'
+          || verticalPhase === 'escape_open' ? 3
+            : 0
+    : seekerCount
   const activePartnerIds = Object.values(players)
     .filter((player) => player.role === 'ai_partner')
     .map((player) => player.playerId)
@@ -301,13 +310,23 @@ function Scene({
             characterId={runnerIds.filter((id) => id !== playerCharacterId)[1] ?? 'R06'}
             spawn={SPAWNS.ai2}
           />}
-          {seekerCount >= 1 && <Seeker playerRef={playerGroupRef} spawn={SPAWNS.seeker} />}
-          {seekerCount >= 2 && (
+          {showcaseSeekerCount >= 1 && <Seeker playerRef={playerGroupRef} spawn={SPAWNS.seeker} />}
+          {showcaseSeekerCount >= 2 && (
             <Seeker
               playerRef={playerGroupRef}
               spawn={SPAWNS.seeker2}
               seekerId="seeker-2"
               requestsThink={false}
+              showcaseMirror={RECORDING_SHOWCASE_FULL}
+            />
+          )}
+          {showcaseSeekerCount >= 3 && (
+            <Seeker
+              playerRef={playerGroupRef}
+              spawn={[SPAWNS.seeker[0] + 4.2, SPAWNS.seeker[1], SPAWNS.seeker[2] + 2.8]}
+              seekerId="seeker-3"
+              requestsThink={false}
+              showcaseMirror
             />
           )}
         </group>

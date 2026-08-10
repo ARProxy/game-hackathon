@@ -21,8 +21,9 @@ const _displayTarget = { x: 0, z: 0 }
 interface SeekerProps {
   playerRef: React.RefObject<THREE.Group | null>
   spawn: readonly [number, number, number]
-  seekerId?: 'seeker' | 'seeker-2'
+  seekerId?: 'seeker' | 'seeker-2' | 'seeker-3'
   requestsThink?: boolean
+  showcaseMirror?: boolean
 }
 
 const SPEEDS: Record<HunterState, number> = {
@@ -221,7 +222,13 @@ function MutantHound({ movementRef, hunting }: {
   )
 }
 
-export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requestsThink = true }: SeekerProps) {
+export default function Seeker({
+  playerRef,
+  spawn,
+  seekerId = 'seeker',
+  requestsThink = true,
+  showcaseMirror = false,
+}: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const moveToward = useCollisionAwarePlanarMotion()
   const {
@@ -230,7 +237,11 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
   } = useSound()
   // 이동 좌표는 useFrame에서 읽고, React 렌더는 경광등 상태 전환만 구독한다.
   const dangerLightActive = useGameStore((store) => {
-    const intent = seekerId === 'seeker' ? store.hunterIntent : store.secondaryHunterIntent
+    const intent = seekerId === 'seeker'
+      ? store.hunterIntent
+      : seekerId === 'seeker-2'
+        ? store.secondaryHunterIntent ?? (showcaseMirror ? store.hunterIntent : null)
+        : store.hunterIntent ?? store.secondaryHunterIntent
     const detected = intent?.state === 'DETECTED' || intent?.state === 'CHASE'
     const finalPhase = store.verticalProgression?.phase === 'field_final'
       || store.verticalProgression?.phase === 'basement_final'
@@ -257,6 +268,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
   const movementRef = useRef(0)
   const previousFloorRef = useRef<string | null>(null)
   const traversalRef = useRef<HunterTraversal | null>(null)
+  const showcaseFloorRef = useRef<string | null>(null)
 
   useFrame(({ clock }, delta) => {
     const group = groupRef.current
@@ -266,8 +278,20 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
     const seekerState = store.players[seekerId]
     const humanState = store.players[store.playerId]
-    const currentFloor = seekerState?.position.floor ?? null
+    const currentFloor = showcaseMirror
+      ? humanState?.position.floor ?? null
+      : seekerState?.position.floor ?? null
     const sharesHumanFloor = Boolean(currentFloor && currentFloor === humanState?.position.floor)
+    if (showcaseMirror && humanState?.position.floor && showcaseFloorRef.current !== humanState.position.floor) {
+      const side = seekerId === 'seeker-2' ? -1 : 1
+      group.position.set(
+        humanState.position.x + side * 3.2,
+        humanState.position.y ?? floorHeight(humanState.position.floor),
+        humanState.position.z - (seekerId === 'seeker-3' ? 5.8 : 4.6),
+      )
+      previousFloorRef.current = humanState.position.floor
+      showcaseFloorRef.current = humanState.position.floor
+    }
     const previousFloor = previousFloorRef.current
     if (!previousFloor) previousFloorRef.current = currentFloor
     else if (currentFloor && currentFloor !== previousFloor) {
@@ -327,9 +351,11 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       if (progress >= 1) traversalRef.current = null
       return
     }
-    const actorBaseY = seekerState?.position.floor
-      ? seekerState.position.y ?? floorHeight(seekerState.position.floor)
-      : spawn[1]
+    const actorBaseY = showcaseMirror && humanState?.position.floor
+      ? humanState.position.y ?? floorHeight(humanState.position.floor)
+      : seekerState?.position.floor
+        ? seekerState.position.y ?? floorHeight(seekerState.position.floor)
+        : spawn[1]
     if (!active) { group.position.y = actorBaseY; return }
 
     const pos = group.position
@@ -338,7 +364,11 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       lastThink.current = clock.elapsedTime
     }
 
-    const intent = seekerId === 'seeker' ? store.hunterIntent : store.secondaryHunterIntent
+    const intent = seekerId === 'seeker'
+      ? store.hunterIntent
+      : seekerId === 'seeker-2'
+        ? store.secondaryHunterIntent ?? (showcaseMirror ? store.hunterIntent : null)
+        : store.hunterIntent ?? store.secondaryHunterIntent
     if (intent) {
       if (sharesHumanFloor && intent.targetId === store.playerId
         && (intent.state === 'DETECTED' || intent.state === 'CHASE')
@@ -384,7 +414,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         && distance <= hunter.catchDistance
         && clock.elapsedTime - lastCatchAttempt.current >= CATCH_RETRY_SECONDS
       ) {
-        if (sendGameMessage({ type: 'action', payload: { action_type: 'seeker_catch', seeker_id: seekerId, target_id: intent.targetId } })) {
+        if (seekerId !== 'seeker-3' && sendGameMessage({ type: 'action', payload: { action_type: 'seeker_catch', seeker_id: seekerId, target_id: intent.targetId } })) {
           lastCatchAttempt.current = clock.elapsedTime
         }
       }
@@ -534,7 +564,9 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       <group ref={mutationRef}>
         {seekerId === 'seeker'
           ? <MutantHound movementRef={movementRef} hunting={dangerLightActive} />
-          : <CharacterModel id="S03" camo={false} movementRef={movementRef} />}
+          : seekerId === 'seeker-2'
+            ? <CharacterModel id="S03" camo={false} movementRef={movementRef} />
+            : <CharacterModel id="R00" camo={false} movementRef={movementRef} />}
         {seekerId === 'seeker-2' && <group ref={headJerkRef} position={[0, 1.62, 0.02]}>
           <mesh scale={[0.44, 0.56, 0.42]}>
             <sphereGeometry args={[0.34, 10, 8]} />
