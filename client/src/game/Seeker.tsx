@@ -72,7 +72,7 @@ function sampleTraversal(path: HunterTraversal, progress: number, output: THREE.
   return output.copy(path.points.at(-1)!)
 }
 
-/** 귀여운 동물 실루엣을 지우고, 학교 경비견이 비정상적으로 늘어난 SCP형 변이체로 보이게 한다. */
+/** 원화 S2: 머리카락으로 얼굴을 가린 채 네 팔다리가 접힌 학교 변이체. */
 function MutantHound({ movementRef, hunting }: {
   movementRef: React.RefObject<number>
   hunting: boolean
@@ -123,11 +123,11 @@ function MutantHound({ movementRef, hunting }: {
     <group ref={bodyRef} scale={[1.08, 1.08, 1.08]}>
       <mesh position={[0, 0.92, -0.08]} scale={[0.72, 0.78, 1.48]}>
         <sphereGeometry args={[0.62, 10, 7]} />
-        <meshStandardMaterial color="#100C0E" roughness={.94} />
+        <meshStandardMaterial color="#3A2926" roughness={.98} />
       </mesh>
       <mesh position={[0, 1.22, 0.18]} scale={[1.18, .8, .92]}>
         <sphereGeometry args={[0.57, 10, 7]} />
-        <meshStandardMaterial color="#211317" roughness={.9} />
+        <meshStandardMaterial color="#51352F" roughness={.96} />
       </mesh>
       {[[-.31,1.27,-.17],[-.16,1.34,-.32],[0,1.37,-.38],[.16,1.34,-.32],[.31,1.27,-.17]].map((p, index) => (
         <mesh key={`rib-${index}`} position={p as [number,number,number]} rotation={[Math.PI / 2, 0, 0]} scale={[1, .42, 1]}>
@@ -138,6 +138,15 @@ function MutantHound({ movementRef, hunting }: {
       <mesh position={[0, 1.43, -0.68]} rotation={[.15, 0, 0]}>
         <coneGeometry args={[.15, .72, 5]} />
         <meshStandardMaterial color="#190E12" roughness={1} />
+      </mesh>
+      {/* 원화의 회색 학교 장비 파우치. 귀여운 동물과 같은 장비였다는 흔적이다. */}
+      <mesh position={[0.57, 1.0, 0.12]} rotation={[0.05, -0.12, -0.08]}>
+        <boxGeometry args={[0.34, 0.42, 0.16]} />
+        <meshStandardMaterial color="#59636A" roughness={0.93} />
+      </mesh>
+      <mesh position={[0.57, 1.16, 0.215]}>
+        <boxGeometry args={[0.26, 0.035, 0.02]} />
+        <meshStandardMaterial color="#899197" roughness={0.8} />
       </mesh>
       <group ref={headRef} position={[0, 1.34, .82]}>
         <mesh position={[0, 0, .18]} scale={[.62,.68,1.08]}>
@@ -180,16 +189,23 @@ function MutantHound({ movementRef, hunting }: {
           <coneGeometry args={[.18,.39,5]} />
           <meshStandardMaterial color="#0B080A" roughness={1} />
         </mesh>
+        {/* 얼굴 전체를 덮는 축축한 머리카락은 원화에서 가장 먼저 읽히는 특징이다. */}
+        {[-.28,-.2,-.12,-.04,.04,.12,.2,.28].map((x, index) => (
+          <mesh key={`hair-${index}`} position={[x, -.08 - Math.abs(x) * .16, .58]} rotation={[.08, 0, x * .45]}>
+            <capsuleGeometry args={[.026 + (index % 3) * .006, .46 + (index % 2) * .12, 3, 6]} />
+            <meshStandardMaterial color={index % 2 ? '#120D0D' : '#211616'} roughness={1} />
+          </mesh>
+        ))}
       </group>
       {legs.map(([x,y,z,rz], index) => (
         <group key={`leg-${index}`} ref={(leg) => { legRefs.current[index] = leg }} position={[x,y,z]} rotation={[0,0,rz]}>
           <mesh position={[0,-.29,0]} rotation={[0,0,index < 2 ? rz * 1.4 : -rz]}>
             <capsuleGeometry args={[.075,.62,4,7]} />
-            <meshStandardMaterial color="#170E11" roughness={.98} />
+            <meshStandardMaterial color="#49302C" roughness={.99} />
           </mesh>
           <mesh position={[index < 2 ? x * .18 : -x * .14,-.76,.1]} rotation={[.34,0,-rz * 1.8]}>
             <capsuleGeometry args={[.06,.48,4,7]} />
-            <meshStandardMaterial color="#2C171C" roughness={.95} />
+            <meshStandardMaterial color="#392522" roughness={.98} />
           </mesh>
           <mesh position={[index < 2 ? x * .18 : -x * .14,-1.03,.25]} scale={[1.2,.42,1.8]}>
             <sphereGeometry args={[.13,8,6]} />
@@ -518,7 +534,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       <group ref={mutationRef}>
         {seekerId === 'seeker'
           ? <MutantHound movementRef={movementRef} hunting={dangerLightActive} />
-          : <CharacterModel id="S02" camo={false} movementRef={movementRef} />}
+          : <CharacterModel id="S03" camo={false} movementRef={movementRef} />}
         {seekerId === 'seeker-2' && <group ref={headJerkRef} position={[0, 1.62, 0.02]}>
           <mesh scale={[0.44, 0.56, 0.42]}>
             <sphereGeometry args={[0.34, 10, 8]} />

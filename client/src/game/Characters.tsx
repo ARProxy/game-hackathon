@@ -33,6 +33,8 @@ export type Part = {
   c: string
   /** 발광 강도 */
   em?: number
+  /** 재질 거칠기. 봉제 인형은 0.9 이상으로 천 느낌을 유지한다. */
+  rough?: number
   /** 반투명도 */
   op?: number
   /** 플랫 셰이딩 — 얼음 결정면을 또렷하게 (유리질 반사) */
@@ -122,11 +124,18 @@ export const CHARACTERS: Character[] = [
   {
     id: 'R01', tag: 'R1', name: '토끼 후드', role: 'runner', c: '#E9E2D2', glow: '#A8D9F0', accessory: '늘어진 귀 · 작은 가방', shoes: '폭신한 발',
     parts: [
-      { t: 'sph', p: [0, 0.92, 0], r: 0.43, s: [0.9, 1.25, 0.78], c: '#E9E2D2', part: 'body' },
+      { t: 'sph', p: [0, 0.88, 0], r: 0.45, s: [0.92, 1.2, 0.82], c: '#E9E2D2', rough: 0.94, part: 'body' },
       { t: 'sph', p: [0, 1.27, 0.27], r: 0.29, s: [1, 0.75, 0.35], c: '#182634', part: 'face' },
       { t: 'sph', p: [-0.1, 1.3, 0.37], r: 0.04, c: '#DDF6FF', em: 0.4, part: 'eye' }, { t: 'sph', p: [0.1, 1.3, 0.37], r: 0.04, c: '#DDF6FF', em: 0.4, part: 'eye' },
-      { t: 'cap', p: [-0.2, 1.73, 0], r: 0.065, h: 0.42, c: '#D8D2C7', rot: [0, 0, -0.18], part: 'ear' }, { t: 'cap', p: [0.2, 1.73, 0], r: 0.065, h: 0.42, c: '#D8D2C7', rot: [0, 0, 0.18], part: 'ear' },
-      { t: 'sph', p: [-0.17, 0.15, 0.06], r: 0.16, s: [1, 0.65, 1.2], c: '#F3EEE4', part: 'shoe' }, { t: 'sph', p: [0.17, 0.15, 0.06], r: 0.16, s: [1, 0.65, 1.2], c: '#F3EEE4', part: 'shoe' },
+      { t: 'sph', p: [-0.135, 1.32, 0.405], r: 0.012, c: '#FFFFFF', em: 0.8, part: 'eyeGlint' }, { t: 'sph', p: [0.065, 1.32, 0.405], r: 0.012, c: '#FFFFFF', em: 0.8, part: 'eyeGlint' },
+      { t: 'cap', p: [-0.2, 1.68, 0], r: 0.075, h: 0.36, c: '#D8D2C7', rough: 0.95, rot: [0.08, 0, -0.2], part: 'ear' }, { t: 'cap', p: [0.2, 1.68, 0], r: 0.075, h: 0.36, c: '#D8D2C7', rough: 0.95, rot: [-0.08, 0, 0.2], part: 'ear' },
+      { t: 'cap', p: [-0.2, 1.69, 0.05], r: 0.027, h: 0.29, c: '#D79AA8', rough: 0.92, rot: [0.08, 0, -0.2], part: 'earInner' }, { t: 'cap', p: [0.2, 1.69, 0.05], r: 0.027, h: 0.29, c: '#D79AA8', rough: 0.92, rot: [-0.08, 0, 0.2], part: 'earInner' },
+      { t: 'cap', p: [-0.4, 0.8, 0.02], r: 0.075, h: 0.3, c: '#E9E2D2', rough: 0.94, rot: [0, 0, -0.18], part: 'arm' }, { t: 'cap', p: [0.4, 0.8, 0.02], r: 0.075, h: 0.3, c: '#E9E2D2', rough: 0.94, rot: [0, 0, 0.18], part: 'arm' },
+      { t: 'sph', p: [-0.43, 0.6, 0.06], r: 0.1, c: '#F3EEE4', rough: 0.96, part: 'hand' }, { t: 'sph', p: [0.43, 0.6, 0.06], r: 0.1, c: '#F3EEE4', rough: 0.96, part: 'hand' },
+      { t: 'cap', p: [0, 0.72, 0.34], r: 0.055, h: 0.56, c: '#20282C', rot: [0, 0, 1.5708], part: 'belt' },
+      { t: 'sph', p: [0.34, 0.69, 0.3], r: 0.16, s: [0.72, 0.9, 0.28], c: '#64717A', rough: 0.82, part: 'pouch' },
+      { t: 'sph', p: [0, 0.83, -0.42], r: 0.16, s: [1.05, 1.12, 0.45], c: '#65717A', rough: 0.82, part: 'pack' },
+      { t: 'sph', p: [-0.17, 0.15, 0.06], r: 0.16, s: [1, 0.65, 1.2], c: '#F3EEE4', rough: 0.96, part: 'shoe' }, { t: 'sph', p: [0.17, 0.15, 0.06], r: 0.16, s: [1, 0.65, 1.2], c: '#F3EEE4', rough: 0.96, part: 'shoe' },
     ],
   },
   {
@@ -258,28 +267,44 @@ export const CHARACTERS: Character[] = [
 
 const animalParts = (kind: 'bear' | 'chick' | 'cat' | 'frog', body: string, accent: string): Part[] => {
   const shared: Part[] = [
-    { t: 'sph', p: [0, 0.86, 0], r: 0.43, s: [0.94, 1.18, 0.82], c: body, part: 'body' },
-    { t: 'sph', p: [-0.14, 1.08, 0.35], r: 0.052, c: '#17202A', part: 'eye' },
-    { t: 'sph', p: [0.14, 1.08, 0.35], r: 0.052, c: '#17202A', part: 'eye' },
-    { t: 'sph', p: [-0.18, 0.13, 0.06], r: 0.16, s: [1, 0.62, 1.2], c: accent, part: 'shoe' },
-    { t: 'sph', p: [0.18, 0.13, 0.06], r: 0.16, s: [1, 0.62, 1.2], c: accent, part: 'shoe' },
+    { t: 'sph', p: [0, 0.86, 0], r: 0.45, s: [0.96, 1.18, 0.84], c: body, rough: 0.94, part: 'body' },
+    { t: 'cap', p: [-0.4, 0.79, 0.01], r: 0.075, h: 0.3, c: body, rough: 0.94, rot: [0, 0, -0.17], part: 'arm' },
+    { t: 'cap', p: [0.4, 0.79, 0.01], r: 0.075, h: 0.3, c: body, rough: 0.94, rot: [0, 0, 0.17], part: 'arm' },
+    { t: 'sph', p: [-0.43, 0.59, 0.06], r: 0.1, c: accent, rough: 0.95, part: 'hand' },
+    { t: 'sph', p: [0.43, 0.59, 0.06], r: 0.1, c: accent, rough: 0.95, part: 'hand' },
+    { t: 'cap', p: [0, 0.72, 0.35], r: 0.055, h: 0.58, c: '#20272B', rot: [0, 0, 1.5708], part: 'belt' },
+    { t: 'sph', p: [0.35, 0.68, 0.3], r: 0.16, s: [0.72, 0.9, 0.28], c: '#68747B', rough: 0.82, part: 'pouch' },
+    { t: 'sph', p: [0, 0.86, -0.42], r: 0.17, s: [1.08, 1.14, 0.44], c: '#657178', rough: 0.82, part: 'pack' },
+    { t: 'sph', p: [-0.18, 0.13, 0.06], r: 0.16, s: [1, 0.62, 1.2], c: accent, rough: 0.95, part: 'shoe' },
+    { t: 'sph', p: [0.18, 0.13, 0.06], r: 0.16, s: [1, 0.62, 1.2], c: accent, rough: 0.95, part: 'shoe' },
   ]
   if (kind === 'bear') return [...shared,
-    { t: 'sph', p: [-0.29, 1.35, 0], r: 0.14, c: '#7D5538', part: 'ear' }, { t: 'sph', p: [0.29, 1.35, 0], r: 0.14, c: '#7D5538', part: 'ear' },
-    { t: 'sph', p: [0, 0.96, 0.38], r: 0.17, s: [1, 0.75, 0.45], c: '#D9B98D', part: 'muzzle' }, { t: 'sph', p: [0, 1.04, 0.47], r: 0.055, c: '#2D201B', part: 'nose' },
+    { t: 'sph', p: [-0.29, 1.35, 0], r: 0.14, c: '#7D5538', rough: 0.95, part: 'ear' }, { t: 'sph', p: [0.29, 1.35, 0], r: 0.14, c: '#7D5538', rough: 0.95, part: 'ear' },
+    { t: 'sph', p: [-0.14, 1.1, 0.36], r: 0.052, c: '#121619', part: 'eye' }, { t: 'sph', p: [0.14, 1.1, 0.36], r: 0.052, c: '#121619', part: 'eye' },
+    { t: 'sph', p: [-0.16, 1.12, 0.405], r: 0.014, c: '#FFFFFF', em: 0.45, part: 'eyeGlint' }, { t: 'sph', p: [0.12, 1.12, 0.405], r: 0.014, c: '#FFFFFF', em: 0.45, part: 'eyeGlint' },
+    { t: 'sph', p: [0, 0.96, 0.38], r: 0.18, s: [1, 0.78, 0.45], c: '#D9B98D', rough: 0.94, part: 'muzzle' }, { t: 'sph', p: [0, 1.04, 0.47], r: 0.057, c: '#2D201B', part: 'nose' },
+    { t: 'tor', p: [0, 0.91, 0.46], r: 0.07, tb: 0.012, s: [1, 0.62, 1], c: '#4C3026', part: 'mouth' },
   ]
   if (kind === 'chick') return [...shared,
+    { t: 'sph', p: [-0.14, 1.1, 0.36], r: 0.052, c: '#17202A', part: 'eye' }, { t: 'sph', p: [0.14, 1.1, 0.36], r: 0.052, c: '#17202A', part: 'eye' },
     { t: 'cone', p: [0, 0.98, 0.48], r: 0.1, h: 0.2, c: '#E98424', rot: [1.5708, 0, 0], part: 'beak' },
     { t: 'cap', p: [-0.09, 1.5, 0], r: 0.025, h: 0.24, c: '#E9A919', rot: [0, 0, -0.22], part: 'feather' }, { t: 'cap', p: [0, 1.53, 0], r: 0.025, h: 0.28, c: '#E9A919', part: 'feather' }, { t: 'cap', p: [0.09, 1.5, 0], r: 0.025, h: 0.24, c: '#E9A919', rot: [0, 0, 0.22], part: 'feather' },
+    { t: 'cap', p: [-0.16, 0.23, 0.02], r: 0.026, h: 0.25, c: '#D9751E', part: 'leg' }, { t: 'cap', p: [0.16, 0.23, 0.02], r: 0.026, h: 0.25, c: '#D9751E', part: 'leg' },
   ]
   if (kind === 'cat') return [...shared,
     { t: 'cone', p: [-0.26, 1.43, 0], r: 0.17, h: 0.32, c: '#7E8995', rot: [0, 0, -0.08], part: 'ear' }, { t: 'cone', p: [0.26, 1.43, 0], r: 0.17, h: 0.32, c: '#7E8995', rot: [0, 0, 0.08], part: 'ear' },
-    { t: 'sph', p: [0, 0.94, 0.44], r: 0.04, c: '#E9A0A5', part: 'nose' }, { t: 'cap', p: [0.42, 0.68, -0.2], r: 0.055, h: 0.65, c: '#697784', rot: [0.35, 0, -0.4], part: 'tail' },
+    { t: 'sph', p: [-0.14, 1.1, 0.36], r: 0.055, s: [0.72, 1.18, 0.72], c: '#13191F', part: 'eye' }, { t: 'sph', p: [0.14, 1.1, 0.36], r: 0.055, s: [0.72, 1.18, 0.72], c: '#13191F', part: 'eye' },
+    { t: 'sph', p: [0, 0.98, 0.44], r: 0.04, c: '#E9A0A5', part: 'nose' },
+    { t: 'tor', p: [0, 0.91, 0.45], r: 0.055, tb: 0.01, s: [1, 0.6, 1], c: '#3A4650', part: 'mouth' },
+    { t: 'cap', p: [-0.21, 0.97, 0.43], r: 0.008, h: 0.2, c: '#D7DCE0', rot: [0, 0, 1.38], part: 'whisker' }, { t: 'cap', p: [0.21, 0.97, 0.43], r: 0.008, h: 0.2, c: '#D7DCE0', rot: [0, 0, -1.38], part: 'whisker' },
+    { t: 'cap', p: [0.42, 0.68, -0.2], r: 0.055, h: 0.65, c: '#697784', rough: 0.94, rot: [0.35, 0, -0.4], part: 'tail' },
   ]
   return [...shared,
-    { t: 'sph', p: [-0.22, 1.45, 0], r: 0.16, c: '#DDF4D4', part: 'eye' }, { t: 'sph', p: [0.22, 1.45, 0], r: 0.16, c: '#DDF4D4', part: 'eye' },
+    { t: 'sph', p: [-0.22, 1.45, 0], r: 0.16, c: '#DDF4D4', rough: 0.9, part: 'eye' }, { t: 'sph', p: [0.22, 1.45, 0], r: 0.16, c: '#DDF4D4', rough: 0.9, part: 'eye' },
     { t: 'sph', p: [-0.22, 1.47, 0.12], r: 0.07, c: '#17251B', part: 'pupil' }, { t: 'sph', p: [0.22, 1.47, 0.12], r: 0.07, c: '#17251B', part: 'pupil' },
-    { t: 'sph', p: [0, 0.67, 0.38], r: 0.23, s: [1.1, 1.1, 0.32], c: '#B8DDA7', part: 'belly' },
+    { t: 'sph', p: [-0.245, 1.5, 0.18], r: 0.018, c: '#FFFFFF', em: 0.4, part: 'eyeGlint' }, { t: 'sph', p: [0.195, 1.5, 0.18], r: 0.018, c: '#FFFFFF', em: 0.4, part: 'eyeGlint' },
+    { t: 'sph', p: [0, 0.68, 0.38], r: 0.23, s: [1.1, 1.1, 0.32], c: '#B8DDA7', rough: 0.94, part: 'belly' },
+    { t: 'tor', p: [0, 1.02, 0.42], r: 0.11, tb: 0.015, s: [1.35, 0.5, 1], c: '#385A3B', part: 'mouth' },
   ]
 }
 
@@ -404,7 +429,7 @@ function PartMesh({ part, opacity, tint, tagMap }: {
       {geom}
       <meshStandardMaterial
         color={color}
-        roughness={part.flat ? 0.12 : 0.62}
+        roughness={part.rough ?? (part.flat ? 0.12 : 0.62)}
         metalness={part.flat ? 0.1 : 0.04}
         flatShading={part.flat}
         side={part.flat ? THREE.DoubleSide : THREE.FrontSide}
