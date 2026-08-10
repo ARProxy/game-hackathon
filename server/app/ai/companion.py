@@ -180,6 +180,17 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                         entering_index = 0 if stair_direction in {"down", "out"} else -1
                         target_x = float(authored[entering_index][0])
                         target_z = float(authored[entering_index][2])
+                # 계단 모서리나 다른 AI에 끼여 영구적으로 다음 단계가 막히지
+                # 않도록 충분한 물리 이동 시간을 준 뒤 서버 권위로 복구한다.
+                # 빙결 구조나 현 층 임무를 맡은 경우는 위에서 계속 대기한다.
+                transition_wait = max(
+                    0.0, now - float(floor_event.get("timestamp", now)),
+                )
+                recovering_navigation = transition_wait >= float(
+                    CONTRACT["floorTransitionRecoverySeconds"],
+                )
+                if recovering_navigation:
+                    target_x, target_z = partner.position.x, partner.position.z
                 return {
                     "state": "FOLLOW_TO_FLOOR",
                     "target_id": None,
@@ -187,7 +198,10 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
                         "x": target_x + (lateral_offset if stair_direction else 0),
                         "z": target_z,
                     },
-                    "reason": "player_descended",
+                    "reason": (
+                        "floor_transition_recovery"
+                        if recovering_navigation else "player_descended"
+                    ),
                     "_floor_event": floor_event,
                     "_stair_direction": stair_direction,
                     "_traversal": traversal,

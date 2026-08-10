@@ -6,6 +6,7 @@ import time
 import pytest
 
 from app.ai.companion import (
+    CONTRACT,
     advance_companion,
     command_companion,
     companion_snapshot,
@@ -593,6 +594,35 @@ def test_rooftop_companions_use_separate_stair_lanes_before_following_player_dow
             "direction": "down",
             "path_id": "ROOF_F3_STAIRS",
         }
+
+
+def test_companion_recovers_stalled_floor_transition_after_grace_period() -> None:
+    session = make_session("companion-floor-transition-recovery")
+    session.round_data = None
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    partner = session.state.get_player("partner-2")
+    session.state.get_player("seeker").position.floor = WorldFloor.F1
+    destination = get_map_slot("ROOF_TO_F3_STAIR_BOTTOM_CROSSING")
+    runtime = session.companion_states["partner-2"]
+    runtime.player_floor_changed = {
+        "floor": "F3",
+        "position": {
+            "x": destination["position"][0], "y": destination["position"][1],
+            "z": destination["position"][2], "floor": "F3", "zone": destination["zone"],
+        },
+        "traversal": "stairs", "path_id": "ROOF_F3_STAIRS", "direction": "down",
+        "timestamp": time.monotonic() - CONTRACT["floorTransitionRecoverySeconds"] - 0.1,
+    }
+
+    intent, action = advance_companion(session, "partner-2")
+
+    assert intent["state"] == "FOLLOW_TO_FLOOR"
+    assert intent["reason"] == "floor_transition_recovery"
+    assert action == {
+        "type": "floor_transition",
+        "target_floor": runtime.player_floor_changed["position"],
+        "traversal": "stairs", "direction": "down", "path_id": "ROOF_F3_STAIRS",
+    }
 
 
 def test_companion_walks_to_authored_stair_entry_before_following_between_floors() -> None:

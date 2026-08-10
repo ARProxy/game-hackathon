@@ -47,6 +47,22 @@ NAVIGATION_NODES_BY_FLOOR: dict[str, tuple[dict, ...]] = {
         node["floor"] for node in COLLISION_CONTRACT.get("navigationNodes", ())
     }
 }
+DYNAMIC_DOORS_BY_ID: dict[str, dict] = {
+    str(door["id"]): door for door in COLLISION_CONTRACT.get("dynamicDoors", ())
+}
+DYNAMIC_DOOR_RECTS_BY_FLOOR: dict[str, tuple[tuple[str, tuple[float, float, float, float]], ...]] = {
+    floor: tuple(
+        (
+            str(door["id"]),
+            (
+                float(door["center"][0]), float(door["center"][1]),
+                float(door["size"][0]) + 0.18, float(door["size"][1]) + 0.18,
+            ),
+        )
+        for door in COLLISION_CONTRACT.get("dynamicDoors", ()) if door["floor"] == floor
+    )
+    for floor in {door["floor"] for door in COLLISION_CONTRACT.get("dynamicDoors", ())}
+}
 
 
 def next_navigation_waypoint(
@@ -201,3 +217,33 @@ def has_clear_catch_line(
 ) -> bool:
     walls = WALL_RECTS_BY_FLOOR.get(floor, ())
     return not any(segment_intersects_rect(start, end, wall) for wall in walls)
+
+
+def blocking_closed_door(
+    start: tuple[float, float], end: tuple[float, float], floor: str,
+    door_open_states: dict[str, bool] | None,
+) -> dict | None:
+    """선분을 처음 가로막는 닫힌 교실 문을 반환한다."""
+    # None은 문 계약을 사용하지 않는 기존 순수 경로 검사와의 호환 모드다.
+    if door_open_states is None:
+        return None
+    states = door_open_states
+    blocked = [
+        (math.dist(start, (rect[0], rect[1])), door_id)
+        for door_id, rect in DYNAMIC_DOOR_RECTS_BY_FLOOR.get(floor, ())
+        if not states.get(door_id, False) and segment_intersects_rect(start, end, rect)
+    ]
+    if not blocked:
+        return None
+    _, door_id = min(blocked)
+    return DYNAMIC_DOORS_BY_ID[door_id]
+
+
+def has_clear_hunter_line(
+    start: tuple[float, float], end: tuple[float, float], floor: str,
+    door_open_states: dict[str, bool] | None,
+) -> bool:
+    """정적 벽과 현재 닫힌 문을 함께 적용한 술래 전용 시야선."""
+    return has_clear_catch_line(start, end, floor) and blocking_closed_door(
+        start, end, floor, door_open_states,
+    ) is None

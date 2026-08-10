@@ -39,6 +39,21 @@ button { color: inherit; }
 
 @media (prefers-reduced-motion: reduce) { .chase-feedback, .world-grain { animation: none; } }
 
+.world-event-feedback { position: fixed; inset: 0; z-index: 76; overflow: hidden; pointer-events: none; color: #eaf7ff; font-family: ui-rounded, "Apple SD Gothic Neo", sans-serif; }
+.world-event-feedback > i { position: absolute; inset: 0; display: block; }
+.world-event-feedback section { position: absolute; top: 12%; left: 50%; display: grid; width: min(560px, calc(100vw - 40px)); gap: 4px; padding: 14px 18px; border: 1px solid rgba(173,225,255,.5); background: rgba(3,10,15,.88); box-shadow: 0 12px 45px rgba(0,0,0,.62); transform: translateX(-50%); animation: world-event-banner 4.6s ease both; }
+.world-event-feedback small { color: #8fd3e8; font-size: 9px; font-weight: 900; letter-spacing: .28em; }
+.world-event-feedback strong { font-size: 19px; }
+.world-event-feedback span { color: #bfd0d8; font-size: 12px; line-height: 1.45; }
+.world-event-feedback.local_blackout > i { background: radial-gradient(circle at 50% 48%, rgba(0,0,0,.06) 0 11%, rgba(0,0,0,.52) 28%, rgba(0,0,0,.92) 76%), linear-gradient(rgba(8,18,24,.2), rgba(0,0,0,.72)); animation: local-blackout-entry 14s linear both; }
+.world-event-feedback.dual_hunter_breach > i { background: linear-gradient(90deg, rgba(125,0,24,.26), transparent 36% 64%, rgba(164,221,255,.24)), radial-gradient(circle, transparent 35%, rgba(0,0,0,.56)); animation: dual-hunter-breach 6.5s ease both; }
+.world-event-feedback.dual_hunter_breach section { border-color: rgba(202,232,255,.62); }
+.world-event-feedback.reduced-flashes > i { animation: none; opacity: .72; }
+@keyframes local-blackout-entry { 0% { opacity: 0; } 2% { opacity: 1; } 4% { opacity: .22; } 7%, 92% { opacity: 1; } 95% { opacity: .35; } 100% { opacity: 0; } }
+@keyframes dual-hunter-breach { 0% { opacity: 0; transform: scale(1.08); } 8% { opacity: 1; } 18% { opacity: .35; } 28%, 78% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
+@keyframes world-event-banner { 0% { opacity: 0; transform: translate(-50%, -18px); } 9%, 72% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -8px); } }
+@media (prefers-reduced-motion: reduce) { .world-event-feedback > i, .world-event-feedback section { animation: none; } }
+
 .school-minimap { position: absolute; right: clamp(8px, 1.4vw, 16px); z-index: 70; width: min(196px, calc(100vw - 16px)); max-width: calc(100vw - 16px); box-sizing: border-box; overflow: hidden; padding: 8px; border: 1px solid rgba(143,211,232,.38); border-radius: 12px; background: rgba(5,12,18,.88); box-shadow: 0 10px 34px rgba(0,0,0,.3); backdrop-filter: blur(7px); }
 .school-minimap__header { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 10px; letter-spacing: .06em; }
 .school-minimap__header strong { min-width: 0; overflow: hidden; color: #bdefff; text-overflow: ellipsis; white-space: nowrap; }

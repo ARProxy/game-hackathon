@@ -177,6 +177,35 @@ function WorldPostEffects() {
   )
 }
 
+function WorldEventFeedback() {
+  const event = useGameStore((state) => state.activeWorldEvent)
+  const setActiveWorldEvent = useGameStore((state) => state.setActiveWorldEvent)
+  const reducedFlashes = useSettingsStore((state) => state.reducedFlashes)
+
+  useEffect(() => {
+    if (!event) return
+    const remaining = Math.max(0, event.durationMs - (Date.now() - event.startedAt))
+    const timer = window.setTimeout(() => setActiveWorldEvent(null), remaining)
+    return () => window.clearTimeout(timer)
+  }, [event, setActiveWorldEvent])
+
+  if (!event) return null
+  return (
+    <div
+      className={`world-event-feedback ${event.eventType} ${reducedFlashes ? 'reduced-flashes' : ''}`}
+      role="status"
+      aria-live="assertive"
+    >
+      <i aria-hidden="true" />
+      <section>
+        <small>SCHOOL ANOMALY</small>
+        <strong>{event.title}</strong>
+        <span>{event.message}</span>
+      </section>
+    </div>
+  )
+}
+
 function Scene({
   cameraMode,
   visibleFloors,
@@ -627,6 +656,7 @@ function GameApp() {
       </Canvas>
 
       <WorldPostEffects />
+      <WorldEventFeedback />
       {cameraMode === '3d' && <>
         <HUD />
         <MiniMap />

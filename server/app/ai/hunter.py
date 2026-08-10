@@ -17,7 +17,9 @@ from app.ai.speech import SPEECH_MODE_RADIUS, SpeechMode
 from app.game.authority import (
     NAVIGATION_NODES_BY_FLOOR,
     WALL_RECTS_BY_FLOOR,
+    blocking_closed_door,
     has_clear_catch_line,
+    has_clear_hunter_line,
     next_navigation_waypoint,
     segment_intersects_rect,
 )
@@ -213,14 +215,20 @@ def vertical_threat_snapshot(session: Any, now: float | None = None) -> dict[str
     started_at = session.state.started_at or checked_at
     time_tier = session.vertical_round.time_escalation_tier(checked_at - started_at)
     rage = session.vertical_round.forbidden_rage_policy
+    active_event = getattr(session, "active_world_event", None)
+    blackout_active = bool(
+        active_event
+        and active_event.get("event_type") == "local_blackout"
+        and float(active_event.get("ends_at", 0.0)) > time.monotonic()
+    )
     return {
         "stage_speed_multiplier": round(
             VERTICAL_PHASE_SPEED.get(session.vertical_round.phase, 1.0)
             * (1.0 + time_tier * 0.08) * rage.speed_multiplier,
             4,
         ),
-        "hearing_multiplier": 1.25 if rage.hearing_expanded else 1.0,
-        "vision_multiplier": 1.2 if rage.vision_expanded else 1.0,
+        "hearing_multiplier": (1.25 if rage.hearing_expanded else 1.0) * (1.3 if blackout_active else 1.0),
+        "vision_multiplier": (1.2 if rage.vision_expanded else 1.0) * (0.62 if blackout_active else 1.0),
     }
 
 
@@ -451,10 +459,11 @@ def decide_hunter_intent(session: Any) -> dict:
         distance = math.hypot(dx, dz)
         if distance > vision_distance or distance <= 0:
             continue
-        if not has_clear_catch_line(
+        if not has_clear_hunter_line(
             (seeker.position.x, seeker.position.z),
             (runner.position.x, runner.position.z),
             seeker.position.floor.value,
+            session.door_open_states,
         ):
             continue
         dot = (dx / distance) * forward_x + (dz / distance) * forward_z
@@ -512,12 +521,11 @@ def decide_hunter_intent(session: Any) -> dict:
         return {
             "state": "HUNT",
             "target_id": None,
-            "target": _timed_hunter_patrol_target(
+            "target": _limited_hunt_patrol_target(
                 seeker.position.floor.value,
                 seeker.position.x,
                 seeker.position.z,
                 now,
-                focus=(-28.0, -38.0),
             ),
             "reason": "limited_patrol",
         }
@@ -561,6 +569,60 @@ def advance_hunter(session: Any) -> dict:
         **vertical_threat_snapshot(session),
         "seeker_threat": effective_seeker_threat(session).value,
     }
+    # 닫힌 교실 문은 짧은 피난처다. 술래는 문 앞에서 난동을 부리지만,
+    # 플레이어가 조용하면 기존 기억 시간이 끝난 뒤 순찰로 복귀한다.
+    target_line_end = (float(intent["target"]["x"]), float(intent["target"]["z"]))
+    blocking_door = blocking_closed_door(
+        (seeker.position.x, seeker.position.z), target_line_end,
+        seeker.position.floor.value, session.door_open_states,
+    )
+    pressure = session.hunter_door_pressure
+    target_is_human = bool(intent.get("target_id")) and intent["state"] in {
+        "CHASE", "INVESTIGATE", "SEARCH",
+    }
+    if not target_is_human:
+        session.hunter_door_pressure = None
+    elif blocking_door is not None:
+        door_x, door_z = map(float, blocking_door["center"])
+        door_distance = math.hypot(door_x - seeker.position.x, door_z - seeker.position.z)
+        if door_distance <= float(CONTRACT["doorPressure"]["approachDistance"]):
+            door_id = str(blocking_door["id"])
+            if not pressure or pressure.get("door_id") != door_id:
+                pressure = {
+                    "door_id": door_id,
+                    "target_id": intent.get("target_id"),
+                    "started_at": now,
+                }
+                session.hunter_door_pressure = pressure
+            signal = session.hunter_signal
+            fresh_noise = bool(
+                signal
+                and signal.get("player_id") == pressure.get("target_id")
+                and float(signal.get("timestamp", 0)) > float(pressure["started_at"]) + 0.05
+            )
+            warning = float(CONTRACT["doorPressure"]["warningSeconds"])
+            can_breach = (
+                fresh_noise
+                and (seeker.position.floor.value != "F3" or CONTRACT["doorPressure"]["floor3CanBreach"])
+                and now - float(pressure["started_at"]) >= warning
+            )
+            if can_breach:
+                session.door_open_states[door_id] = True
+                session.hunter_door_pressure = None
+                intent.update({
+                    "reason": "door_breached",
+                    "door_opened": door_id,
+                    "mutation_phase": "LUNGE",
+                })
+            else:
+                intent.update({
+                    "state": "SEARCH",
+                    "target": {"x": door_x, "z": door_z},
+                    "reason": "door_pressure",
+                    "door_id": door_id,
+                    "door_pressure_seconds": round(now - float(pressure["started_at"]), 3),
+                    "mutation_phase": "POUND",
+                })
     dx = intent["target"]["x"] - seeker.position.x
     dz = intent["target"]["z"] - seeker.position.z
     distance = math.hypot(dx, dz)
@@ -581,6 +643,7 @@ def advance_hunter(session: Any) -> dict:
                 seeker.position.x, seeker.position.z,
                 intent["target"]["x"], intent["target"]["z"], step,
                 seeker.position.floor.value,
+                door_open_states=session.door_open_states,
             )
             seeker.position.x, seeker.position.z = next_x, next_z
             session.position_samples[seeker.player_id] = MovementSample(seeker.position.x, seeker.position.z, now)
@@ -681,10 +744,11 @@ def _decide_blocker_intent(session: Any, primary_intent: dict) -> dict:
         dist = math.hypot(dx, dz)
         if dist > vision_distance or dist <= 0:
             continue
-        if not has_clear_catch_line(
+        if not has_clear_hunter_line(
             (seeker.position.x, seeker.position.z),
             (runner.position.x, runner.position.z),
             seeker.position.floor.value,
+            session.door_open_states,
         ):
             continue
         dot = (dx / dist) * fwd_x + (dz / dist) * fwd_z
@@ -849,6 +913,7 @@ def advance_secondary_hunter(session: Any, primary_intent: dict) -> dict | None:
             seeker.position.x, seeker.position.z,
             intent["target"]["x"], intent["target"]["z"], step,
             seeker.position.floor.value,
+            door_open_states=session.door_open_states,
         )
         session.position_samples[seeker.player_id] = MovementSample(
             seeker.position.x, seeker.position.z, now,
@@ -975,9 +1040,43 @@ def _timed_hunter_patrol_target(
     }
 
 
+def _limited_hunt_patrol_target(
+    floor: str, x: float, z: float, now: float,
+) -> dict[str, float]:
+    """3층 방송실 출입구를 순찰 루프에서 제외해 문 앞 캠핑을 막는다."""
+    limited = CONTRACT["limitedHunt"]
+    center = limited["antiCampCenter"]
+    radius = float(limited["antiCampRadius"])
+    nodes = [
+        node for node in NAVIGATION_NODES_BY_FLOOR.get(floor, ())
+        if "_ring_" in str(node["id"])
+        and math.hypot(
+            float(node["position"][0]) - float(center["x"]),
+            float(node["position"][1]) - float(center["z"]),
+        ) >= radius
+    ]
+    if not nodes:
+        return _timed_hunter_patrol_target(floor, x, z, now)
+    patrol_index = int(now / 6.0) % len(nodes)
+    node = nodes[patrol_index]
+    for offset in range(len(nodes)):
+        candidate = nodes[(patrol_index + offset) % len(nodes)]
+        if math.hypot(
+            float(candidate["position"][0]) - x,
+            float(candidate["position"][1]) - z,
+        ) > 1.5:
+            node = candidate
+            break
+    return {
+        "x": float(node["position"][0]),
+        "z": float(node["position"][1]),
+    }
+
+
 def _safe_hunter_step(
     x: float, z: float, target_x: float, target_z: float, step: float, floor: str = "F1",
     stop_distance: float = 0.0,
+    door_open_states: dict[str, bool] | None = None,
 ) -> tuple[float, float]:
     """서버 벽 계약을 넘지 않으며 목표 쪽 또는 벽의 측면으로 한 걸음 이동한다."""
     target_x, target_z = next_navigation_waypoint(
@@ -988,8 +1087,12 @@ def _safe_hunter_step(
         return x, z
     nx, nz = (target_x - x) / distance, (target_z - z) / distance
     direct = (x + nx * step, z + nz * step)
-    if has_clear_catch_line((x, z), direct, floor):
+    if has_clear_hunter_line((x, z), direct, floor, door_open_states):
         return direct
+
+    # 닫힌 문은 벽처럼 우회하지 않고 바로 앞에서 멈춰 압박 상태로 이어진다.
+    if blocking_closed_door((x, z), direct, floor, door_open_states) is not None:
+        return x, z
 
     # 목표 벡터의 단순 수직 방향은 목표 주위를 원으로 돌 수 있다. 충돌한 벽의
     # 긴 축을 따라 가까운 끝점으로 이동해야 여러 틱 뒤 실제로 우회할 수 있다.

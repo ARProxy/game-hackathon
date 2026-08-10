@@ -97,7 +97,7 @@ cd ../server
 
 2026-08-10 제출 기준:
 
-- 서버 테스트 393개 통과
+- 서버 테스트 407개 통과
 - TypeScript production build 통과
 - 클라이언트 lint 통과
 - 학교 구조·충돌·AI 내비게이션 계약 통과

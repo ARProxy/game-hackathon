@@ -123,8 +123,8 @@ export default function useSpeech({
       return
     }
     const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (target?.matches('input, textarea, [contenteditable="true"]')) return
+      const target = e.target
+      if (target instanceof Element && target.matches('input, textarea, [contenteditable="true"]')) return
       if (e.code === 'KeyQ' && !e.repeat) {
         startListening()
       }

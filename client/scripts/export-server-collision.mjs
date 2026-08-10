@@ -37,10 +37,24 @@ const walls = COMPACT_SCHOOL.boxes
     role: item.role,
   }))
 
+// 교실 문은 화면의 Rapier 충돌체뿐 아니라 술래의 시야·이동에도 같은 상태로
+// 적용한다. 층간 진행용 방화문은 별도 진행 계약이 관리하므로 제외한다.
+const dynamicDoors = COMPACT_SCHOOL.doors
+  .filter((door) => door.kind === 'room' && !door.permanentlyLocked)
+  .map((door) => ({
+    id: door.id,
+    floor: door.f,
+    center: door.axis === 'x'
+      ? [door.hinge[0] + door.w / 2, door.hinge[2]]
+      : [door.hinge[0], door.hinge[2] + door.w / 2],
+    size: door.axis === 'x' ? [door.w, door.t] : [door.t, door.w],
+  }))
+
 const output = {
-  version: 2,
+  version: 3,
   source: 'compactSchoolData.js',
   walls,
+  dynamicDoors,
   navigationNodes: COMPACT_SCHOOL.navNodes.map((node) => ({
     id: node.id,
     floor: node.floor,

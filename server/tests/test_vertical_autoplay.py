@@ -98,7 +98,7 @@ def _complete_rooftop_through_floor_one(
     assert session.vertical_missions.intercom.ai_arrived
     answer = ", ".join(
         f"{item['color']} {item['shape']}"
-        for item in session.vertical_missions.intercom.sequence
+        for item in session.vertical_missions.intercom.expected_sequence
     )
     assert submit_intercom_answer(session, "human", answer)["success"]
     assert complete_current_stage(session, "human")["next_phase"] == "floor_1"

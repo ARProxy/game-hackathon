@@ -72,7 +72,13 @@ QUESTION_POOL = [
 ]
 
 
-def _ollama_json(prompt: str) -> dict | None:
+def _ollama_json(
+    prompt: str,
+    *,
+    timeout: float | None = None,
+    temperature: float = 0.9,
+    num_predict: int | None = None,
+) -> dict | None:
     """선택적 로컬 Ollama 호출. 실패는 게임 흐름을 막지 않는다."""
     base_url = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
     model = os.getenv("OLLAMA_MODEL", "gemma3:4b")
@@ -83,13 +89,20 @@ def _ollama_json(prompt: str) -> dict | None:
             "prompt": prompt,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0.9},
+            "options": {
+                "temperature": temperature,
+                **({"num_predict": num_predict} if num_predict is not None else {}),
+            },
         }).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=float(os.getenv("OLLAMA_TIMEOUT", "15"))) as response:
+        request_timeout = (
+            timeout if timeout is not None
+            else float(os.getenv("OLLAMA_TIMEOUT", "15"))
+        )
+        with urllib.request.urlopen(request, timeout=request_timeout) as response:
             envelope = json.loads(response.read().decode("utf-8"))
         return json.loads(envelope.get("response", "{}"))
     except Exception as error:

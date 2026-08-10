@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 import random
 import time
 from dataclasses import dataclass, field
@@ -19,6 +20,133 @@ from app.ai.mission import PropPlacement
 from app.ai.partner import PartnerDecision, compare_partner_candidates
 from app.ai.speech import avoid_forbidden_words
 from app.game.map_slots import get_map_slot
+
+
+logger = logging.getLogger(__name__)
+
+INTERCOM_RESPONSE_RULES = {
+    "same": "AI가 본 순서 그대로 전달",
+    "reverse": "AI가 본 순서를 뒤에서부터 거꾸로 전달",
+    "rotate_left": "AI가 본 첫 묶음을 맨 뒤로 옮겨 전달",
+}
+
+
+@dataclass(frozen=True)
+class MissionDirection:
+    """LLM이 고르되 서버의 검증된 미션 문법 안에서만 적용되는 사건 카드."""
+
+    source: str
+    scenario_title: str
+    broadcast_briefing: str
+    intercom_briefing: str
+    security_briefing: str
+    intercom_rule: str
+    companion_lead: str
+
+
+def fallback_mission_direction(seed: int) -> MissionDirection:
+    """Ollama가 없어도 매 판 다른 협동 사건과 변환 규칙을 제공한다."""
+    scenarios = (
+        MissionDirection(
+            source="seeded_fallback",
+            scenario_title="끊어진 비상 방송",
+            broadcast_briefing="방송 기록이 세 증거로 흩어졌다. AI와 특징을 맞춰 비상 해제 도구를 찾아야 한다.",
+            intercom_briefing="잡음 때문에 송신 순서와 수신 입력 규칙이 달라졌다.",
+            security_briefing="CCTV에 안전한 통로가 짧게만 보인다. 인간의 음성 관제가 AI의 이동 경로를 결정한다.",
+            intercom_rule="reverse",
+            companion_lead="잡음 사이로 세 표식이 보여. 내가 본 순서를 잘 들어.",
+        ),
+        MissionDirection(
+            source="seeded_fallback",
+            scenario_title="뒤집힌 야간 당직 기록",
+            broadcast_briefing="가짜 방송 기록 사이에서 실제 설비 증거를 AI와 함께 대조해야 한다.",
+            intercom_briefing="낡은 중계기가 첫 신호를 마지막으로 밀어낸다.",
+            security_briefing="관제실 화면과 원격 복도의 정보가 분리됐다. 말로 길을 만들어 AI를 장치까지 보내야 한다.",
+            intercom_rule="rotate_left",
+            companion_lead="수신기에 표식이 차례로 떴어. 변환 규칙은 네 화면을 확인해.",
+        ),
+    )
+    return scenarios[seed % len(scenarios)]
+
+
+def _validated_generated_text(
+    value: object,
+    fallback: str,
+    minimum: int,
+    maximum: int,
+    *,
+    required_any: tuple[str, ...] = (),
+    forbidden_terms: tuple[str, ...] = (),
+) -> str:
+    text = " ".join(str(value or "").split())
+    if (
+        not minimum <= len(text) <= maximum
+        or (required_any and not any(term in text for term in required_any))
+        or any(term in text for term in forbidden_terms)
+    ):
+        return fallback
+    return text
+
+
+def generate_llm_mission_direction(seed: int) -> MissionDirection | None:
+    """Ollama는 사건의 표현과 허용된 규칙 하나만 제안한다.
+
+    좌표, 장치, 정답과 성공 판정은 이 함수 밖의 서버 템플릿이 소유한다.
+    """
+    from app.ai.onboarding import _ollama_json
+
+    fallback = fallback_mission_direction(seed)
+    prompt = f"""한국어 학교 공포 음성 협동 게임의 한 판 사건 카드를 만들어라.
+라운드 시드: {seed}
+이미 검증된 실제 플레이는 3층에서 인간이 특징을 말하면 AI가 세 물건을 비교하고,
+2층에서 AI가 본 색·도형 세 묶음을 인간이 규칙에 맞게 변환해 말하며,
+1층에서 인간이 CCTV로 AI에게 방향을 안내하는 구조다.
+새 장치, 새 방, 새 정답, 좌표 또는 성공 조건을 만들지 마라.
+intercom_rule은 reverse 또는 rotate_left 중 정확히 하나만 사용한다.
+각 설명은 한 문장 15~55자로 쓰고 정답 색·도형이나 물건 이름을 누설하지 마라.
+JSON만 반환:
+{{"scenario_title":"4~24자 제목","broadcast_briefing":"15~100자",
+"intercom_briefing":"15~100자","security_briefing":"15~100자",
+"intercom_rule":"reverse|rotate_left","companion_lead":"8~70자 AI 한 문장"}}"""
+    generated = _ollama_json(
+        prompt,
+        timeout=12.0,
+        temperature=0.35,
+        num_predict=420,
+    )
+    if not isinstance(generated, dict):
+        return None
+    rule = str(generated.get("intercom_rule", "")).strip()
+    if rule not in {"reverse", "rotate_left"}:
+        logger.info("mission director rejected unsupported intercom rule: %s", rule)
+        return None
+    return MissionDirection(
+        source="ollama",
+        scenario_title=_validated_generated_text(
+            generated.get("scenario_title"), fallback.scenario_title, 4, 24,
+            required_any=("학교", "교내", "야간", "방송", "중계", "당직", "봉쇄", "정전", "관제"),
+        ),
+        broadcast_briefing=_validated_generated_text(
+            generated.get("broadcast_briefing"), fallback.broadcast_briefing, 15, 100,
+            required_any=("방송", "기록", "증거", "수신", "송출"),
+            forbidden_terms=("열쇠", "손전등", "리모컨"),
+        ),
+        intercom_briefing=_validated_generated_text(
+            generated.get("intercom_briefing"), fallback.intercom_briefing, 15, 100,
+            required_any=("인터폰", "중계", "수신", "송신", "표식", "신호", "잡음", "순서"),
+            forbidden_terms=tuple(SHAPE_POOL + COLOR_POOL),
+        ),
+        security_briefing=_validated_generated_text(
+            generated.get("security_briefing"), fallback.security_briefing, 15, 100,
+            required_any=("CCTV", "관제", "통로", "복도", "화면", "경로"),
+        ),
+        intercom_rule=rule,
+        companion_lead=_validated_generated_text(
+            generated.get("companion_lead"), fallback.companion_lead, 8, 70,
+            required_any=("표식", "신호", "수신", "화면", "순서", "기호", "잡음"),
+            forbidden_terms=tuple(SHAPE_POOL + COLOR_POOL),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -183,15 +311,18 @@ class BroadcastInferenceMission:
     attempted_candidate_ids: list[str] = field(default_factory=list)
     pending_candidate_id: str | None = None
     utterance_history: list[str] = field(default_factory=list)
+    scenario_briefing: str = ""
     completed: bool = False
 
     @property
     def prompt(self) -> str:
-        return (
+        mission = (
             "방송 기록의 목표 물건은 ‘은빛 금속’, ‘작고 길쭉함’, "
             "‘잠긴 출입구를 여는 쓰임’입니다. 이름을 직접 말하지 말고 Q로 설명하세요. "
+            "옥상에서 반복한 명사는 이미 위험해졌을 수 있습니다. "
             "AI가 3층의 세 증거대를 비교해 실제 후보를 확인합니다."
         )
+        return f"{self.scenario_briefing} {mission}".strip()
 
     def decide(self, transcript: str) -> PartnerDecision:
         self.utterance_history.append(transcript.strip())
@@ -253,7 +384,31 @@ class IntercomMission:
     ai_arrived: bool = False
     attempts: int = 0
     max_attempts: int = 3
+    response_rule: str = "same"
+    scenario_briefing: str = ""
+    companion_lead: str = "인터폰에 기호가 보여!"
     completed: bool = False
+
+    @property
+    def expected_sequence(self) -> list[dict]:
+        if self.response_rule == "reverse":
+            return list(reversed(self.sequence))
+        if self.response_rule == "rotate_left" and self.sequence:
+            return [*self.sequence[1:], self.sequence[0]]
+        return list(self.sequence)
+
+    @property
+    def response_rule_label(self) -> str:
+        return INTERCOM_RESPONSE_RULES.get(
+            self.response_rule, INTERCOM_RESPONSE_RULES["same"],
+        )
+
+    @property
+    def prompt(self) -> str:
+        return (
+            f"{self.scenario_briefing} AI 동료가 다른 교실에서 원본 표식을 읽습니다. "
+            f"규칙: {self.response_rule_label}. 들은 내용을 변환해 Q로 말하세요."
+        ).strip()
 
     @staticmethod
     def generate_sequence(
@@ -290,7 +445,7 @@ class IntercomMission:
         normalized = transcript.strip().lower()
         matched_items: list[dict] = []
         pair_positions: list[int] = []
-        for item in self.sequence:
+        for item in self.expected_sequence:
             shape_position = normalized.find(item["shape"])
             color_position = normalized.find(item["color"])
             shape_found = shape_position >= 0
@@ -368,6 +523,7 @@ class SimultaneousMission:
         "F1_CCTV_CHECKPOINT_1", "F1_CCTV_CHECKPOINT_2", "F1_DEVICE_B",
     ])
     accepted_commands: int = 0
+    scenario_briefing: str = ""
 
     @property
     def route_completed(self) -> bool:
@@ -604,6 +760,22 @@ class VerticalMissions:
     intercom: IntercomMission = field(default_factory=IntercomMission)
     simultaneous: SimultaneousMission = field(default_factory=SimultaneousMission)
     basement: BasementFinalMission = field(default_factory=BasementFinalMission)
+    director_source: str = "seeded_fallback"
+    scenario_title: str = "야간 학교 봉쇄"
+
+
+def apply_mission_direction(
+    missions: VerticalMissions,
+    direction: MissionDirection,
+) -> None:
+    """검증을 통과한 사건 카드를 기존의 도달 가능한 미션에 입힌다."""
+    missions.director_source = direction.source
+    missions.scenario_title = direction.scenario_title
+    missions.broadcast.scenario_briefing = direction.broadcast_briefing
+    missions.intercom.scenario_briefing = direction.intercom_briefing
+    missions.intercom.response_rule = direction.intercom_rule
+    missions.intercom.companion_lead = direction.companion_lead
+    missions.simultaneous.scenario_briefing = direction.security_briefing
 
 
 def create_vertical_missions(
@@ -623,10 +795,12 @@ def create_vertical_missions(
     random.Random(effective_seed ^ 0x46314354).shuffle(route_commands)
     simultaneous = SimultaneousMission(route_commands=route_commands)
     basement = create_basement_mission(seed=effective_seed)
-    return VerticalMissions(
+    missions = VerticalMissions(
         rooftop=RooftopSignalMission(sequence=rooftop_sequence),
         broadcast=create_broadcast_inference_mission(seed=effective_seed),
         intercom=intercom,
         simultaneous=simultaneous,
         basement=basement,
     )
+    apply_mission_direction(missions, fallback_mission_direction(effective_seed))
+    return missions

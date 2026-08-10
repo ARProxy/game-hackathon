@@ -39,10 +39,13 @@ export default function ThreatFeedback({
     }
 
     const playerPosition = player.getWorldPosition(_playerPosition)
+    const finalPhase = store.verticalProgression?.phase === 'field_final'
+      || store.verticalProgression?.phase === 'basement_final'
+      || store.verticalProgression?.phase === 'escape_open'
     const threats = [
-      { intent: store.hunterIntent, seekerId: 'seeker' },
-      { intent: store.secondaryHunterIntent, seekerId: 'seeker-2' },
-    ].flatMap(({ intent, seekerId }) => {
+      { intent: store.hunterIntent, seekerId: 'seeker', role: 'chaser' },
+      { intent: store.secondaryHunterIntent, seekerId: 'seeker-2', role: 'blocker' },
+    ].flatMap(({ intent, seekerId, role }) => {
       if (!intent || store.players[seekerId]?.position.floor !== playerState.position.floor) return []
       const dx = intent.seekerPosition.x - playerPosition.x
       const dz = intent.seekerPosition.z - playerPosition.z
@@ -52,7 +55,10 @@ export default function ThreatFeedback({
         (intent.state === 'DETECTED' || intent.state === 'CHASE')
         && intent.targetId === store.playerId
       )
-      return [{ intent, dx, dz, distance, intensity: Math.max(proximity, detected ? 0.72 : 0) }]
+      // 차단자는 일반 1층에서 먼 거리의 붉은 화면을 만들지 않는다. 차가운
+      // 탐조등과 정적으로 먼저 드러나며, 가까워졌을 때만 공통 위험 비네트가 켜진다.
+      const detectedFloor = detected && (role === 'chaser' || finalPhase) ? 0.72 : 0
+      return [{ intent, dx, dz, distance, intensity: Math.max(proximity, detectedFloor) }]
     }) as Array<{ intent: HunterIntent; dx: number; dz: number; distance: number; intensity: number }>
     const threat = threats.sort((a, b) => b.intensity - a.intensity)[0]
     if (!threat || threat.intensity <= 0) {

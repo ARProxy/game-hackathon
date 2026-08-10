@@ -329,7 +329,7 @@ class TestVerticalStageInteraction:
             session.vertical_missions.intercom.ai_arrived = True
             answer = ", ".join(
                 f"{item['color']} {item['shape']}"
-                for item in session.vertical_missions.intercom.sequence
+                for item in session.vertical_missions.intercom.expected_sequence
             )
             ws.send_json({
                 "type": "speech",
@@ -421,7 +421,7 @@ class TestVerticalStageInteraction:
             ]
             assert started["voice_key"] == "Q"
             assert started["starts_limited_hunt"] is True
-            assert started["hunt_grace_seconds"] == 4
+            assert started["hunt_grace_seconds"] == 6.5
             assert session.broadcast_hunt_grace_until > time.monotonic()
 
     def test_third_floor_ai_compares_all_candidates_before_acting(self, client):
@@ -465,6 +465,35 @@ class TestVerticalStageInteraction:
                 "vertical_f3_candidate_b",
                 "vertical_f3_candidate_c",
             } for candidate in decision["candidates"])
+
+    def test_third_floor_on_air_closes_open_broadcast_room_door(self, client):
+        from app.game.session import session_manager
+        from app.game.vertical_flow import mission_interaction_position
+
+        with client.websocket_connect("/ws/vertical-third-floor-door/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("vertical-third-floor-door")
+            session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+            player = session.state.get_player("player1")
+            x, y, z = mission_interaction_position(VerticalRoundPhase.FLOOR_3)
+            player.position.x, player.position.y, player.position.z = x, y, z
+            player.position.floor = WorldFloor.F3
+            session.door_open_states["north_room_F3_1"] = True
+
+            ws.send_json({
+                "type": "action",
+                "payload": {"action_type": "interact_stage_mission"},
+            })
+
+            closed = ws.receive_json()
+            assert closed == {
+                "type": "door_state_changed",
+                "door_id": "north_room_F3_1",
+                "open": False,
+                "actor_id": "broadcast_system",
+                "sealed": True,
+            }
+            assert session.door_open_states["north_room_F3_1"] is False
 
     def test_rooftop_contact_cannot_be_submitted_as_seeker_capture(self, client):
         from app.game.session import session_manager

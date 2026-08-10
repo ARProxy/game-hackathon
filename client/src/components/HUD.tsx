@@ -381,8 +381,9 @@ function TextSpeechFallback({ phase, connected, gateArrived, playerStatus }: {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      const isEditable = target?.matches('input, textarea, [contenteditable="true"]')
+      const target = event.target
+      const isEditable = target instanceof Element
+        && target.matches('input, textarea, [contenteditable="true"]')
       if (!open && available && event.key === 'Enter' && !isEditable) {
         event.preventDefault()
         openInput()
@@ -644,7 +645,9 @@ export default function HUD() {
                 fontWeight: 800,
                 letterSpacing: '.06em',
               }}>
-                무작위 미션 #{String(missionGeneration.seed).padStart(6, '0')} · 매 판 새 구성
+                {missionGeneration.source === 'ollama' ? 'OLLAMA AI 미션' : '안전 폴백 미션'}
+                {' '}#{String(missionGeneration.seed).padStart(6, '0')}
+                {missionGeneration.scenarioTitle ? ` · ${missionGeneration.scenarioTitle}` : ' · 매 판 새 구성'}
               </div>
             )}
             <div style={{ lineHeight: 1.45 }}>

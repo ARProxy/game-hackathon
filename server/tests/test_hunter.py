@@ -1,5 +1,6 @@
 """기획 2 능동 술래의 서버 권위 목표 선택 테스트."""
 
+import math
 import time
 
 from app.ai.hunter import (
@@ -18,7 +19,7 @@ from app.ai.hunter import (
 from app.game.session import GameSession
 from app.game.progression import SeekerThreat, VerticalRoundPhase, WorldFloor
 from app.game.state import PlayerRole
-from app.game.authority import WALL_RECTS_BY_FLOOR, segment_intersects_rect
+from app.game.authority import DYNAMIC_DOORS_BY_ID, WALL_RECTS_BY_FLOOR, segment_intersects_rect
 from app.game.map_slots import get_map_slot
 
 
@@ -41,13 +42,77 @@ def test_contract_matches_design_detection_numbers() -> None:
     assert CONTRACT["hearingDistance"] == 18
     assert CONTRACT["doorHearingDistance"] == 10
     assert CONTRACT["limitedHunt"] == {
-        "introGraceSeconds": 4,
+        "introGraceSeconds": 6.5,
         "visionDistance": 9,
         "proximityDetectionDistance": 4.5,
         "hearingDistance": 12,
         "memorySeconds": 3,
         "introPatrolTarget": {"x": -10, "z": -28},
+        "antiCampCenter": {"x": -28, "z": -39.4},
+        "antiCampRadius": 11,
     }
+
+
+def test_local_blackout_reduces_vision_and_strengthens_hearing() -> None:
+    session = make_session("hunter-local-blackout")
+    baseline = vertical_threat_snapshot(session)
+    session.active_world_event = {
+        "event_id": "f2_local_blackout",
+        "event_type": "local_blackout",
+        "ends_at": time.monotonic() + 14.0,
+    }
+
+    blackout = vertical_threat_snapshot(session)
+
+    assert blackout["hearing_multiplier"] == baseline["hearing_multiplier"] * 1.3
+    assert blackout["vision_multiplier"] == baseline["vision_multiplier"] * 0.62
+
+
+def test_expired_blackout_does_not_change_hunter_senses() -> None:
+    session = make_session("hunter-expired-blackout")
+    session.active_world_event = {
+        "event_id": "f2_local_blackout",
+        "event_type": "local_blackout",
+        "ends_at": time.monotonic() - 0.1,
+    }
+
+    snapshot = vertical_threat_snapshot(session)
+    assert snapshot["hearing_multiplier"] == 1.0
+    assert snapshot["vision_multiplier"] == 1.0
+
+
+def test_noise_behind_closed_door_causes_pressure_then_breach() -> None:
+    session = make_session("hunter-door-pressure")
+    seeker = session.state.get_player("seeker")
+    human = session.state.get_player("human")
+    door = DYNAMIC_DOORS_BY_ID["north_room_F2_1"]
+    door_x, door_z = map(float, door["center"])
+    seeker.position.x, seeker.position.z = door_x, door_z + 0.7
+    human.position.x, human.position.z = door_x, door_z - 0.7
+    for actor_id in ("partner", "partner-2"):
+        session.state.get_player(actor_id).position.floor = WorldFloor.F1
+    heard_at = time.monotonic()
+    session.hunter_signal = {
+        "player_id": human.player_id,
+        "position": {"x": human.position.x, "z": human.position.z},
+        "strength": "speech",
+        "floor": "F2",
+        "timestamp": heard_at,
+    }
+    session.hunter_last_tick = heard_at - 0.3
+
+    pressure = advance_hunter(session)
+    assert pressure["reason"] == "door_pressure"
+    assert pressure["mutation_phase"] == "POUND"
+    assert not session.door_open_states.get(door["id"], False)
+
+    session.hunter_door_pressure["started_at"] = heard_at - 3.0
+    session.hunter_signal["timestamp"] = time.monotonic()
+    session.hunter_last_tick = time.monotonic() - 0.3
+    breached = advance_hunter(session)
+    assert breached["door_opened"] == door["id"]
+    assert breached["mutation_phase"] == "LUNGE"
+    assert session.door_open_states[door["id"]] is True
 
 
 def test_hunt_replaces_default_patrol_when_no_information() -> None:
@@ -408,6 +473,29 @@ def test_third_floor_broadcast_opens_limited_patrol_and_visual_chase() -> None:
     human.position.x, human.position.z = -23.0, -38.0
     session.hunter_forward = {"x": 1.0, "z": 0.0}
     assert decide_hunter_intent(session)["state"] == "DETECTED"
+
+
+def test_third_floor_limited_patrol_never_targets_broadcast_door() -> None:
+    session = make_session("hunter-limited-anti-camp")
+    seeker = session.state.get_player("seeker")
+    human = session.state.get_player("human")
+    session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
+    session.broadcast_mission_actor_id = "human"
+    seeker.position.floor = WorldFloor.F3
+    human.position.floor = WorldFloor.F2
+    seeker.position.x, seeker.position.z = -28.0, -39.4
+    center = CONTRACT["limitedHunt"]["antiCampCenter"]
+    radius = float(CONTRACT["limitedHunt"]["antiCampRadius"])
+
+    for _ in range(10):
+        intent = decide_hunter_intent(session)
+        assert intent["reason"] == "limited_patrol"
+        assert math.hypot(
+            intent["target"]["x"] - center["x"],
+            intent["target"]["z"] - center["z"],
+        ) >= radius
+        session.hunter_last_intent = None
+        session.hunter_last_tick = time.monotonic() - 0.3
 
 
 def test_third_floor_broadcast_intro_grace_repositions_and_blocks_capture() -> None:

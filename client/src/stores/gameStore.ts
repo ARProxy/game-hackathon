@@ -151,6 +151,17 @@ export interface MissionGenerationState {
   seed: number
   randomized: boolean
   changes: string[]
+  source?: 'ollama' | 'seeded_fallback' | string
+  scenarioTitle?: string
+}
+
+export interface WorldEventState {
+  eventId: string
+  eventType: 'local_blackout' | 'dual_hunter_breach' | string
+  title: string
+  message: string
+  startedAt: number
+  durationMs: number
 }
 
 export interface ResultAnalysis {
@@ -196,6 +207,9 @@ export interface HunterIntent {
   directorTension: number
   speedMultiplier: number
   stageSpeedMultiplier: number
+  doorId?: string
+  doorPressureSeconds?: number
+  mutationPhase?: 'POUND' | 'LUNGE'
 }
 
 export type CompanionState = 'EXPLORE_ZONE' | 'INSPECT_CANDIDATE' | 'REPORT_FINDING'
@@ -230,6 +244,7 @@ interface GameStore {
   forbiddenProfileSignal: ForbiddenProfileSignal | null
   forbiddenProfileHistory: ForbiddenProfileHistoryEntry[]
   missionGeneration: MissionGenerationState | null
+  activeWorldEvent: WorldEventState | null
   freezeCount: number
   roundStartedAt: number | null
   elapsedSeconds: number | null
@@ -263,6 +278,7 @@ interface GameStore {
   lastSoundEvent: SoundEvent | null
   hunterIntent: HunterIntent | null
   secondaryHunterIntent: HunterIntent | null
+  doorStates: Record<string, boolean>
   companionIntent: CompanionIntent | null
   companionIntents: Record<string, CompanionIntent>
   rescueRequested: boolean
@@ -287,6 +303,7 @@ interface GameStore {
   signalForbiddenProfile: (kind: ForbiddenProfileSignal['kind']) => void
   setForbiddenProfileHistory: (history: ForbiddenProfileHistoryEntry[]) => void
   setMissionGeneration: (missionGeneration: MissionGenerationState | null) => void
+  setActiveWorldEvent: (event: WorldEventState | null) => void
   setRoundData: (props: PropData[], missions: MissionData[], totalClues: number) => void
   setVerticalProgression: (progression: VerticalProgressionState) => void
   setRooftopSignal: (signal: RooftopSignalState) => void
@@ -309,6 +326,7 @@ interface GameStore {
   setLastSoundEvent: (event: SoundEvent) => void
   setHunterIntent: (intent: HunterIntent) => void
   setSecondaryHunterIntent: (intent: HunterIntent | null) => void
+  setDoorState: (doorId: string, open: boolean) => void
   setCompanionIntent: (intent: CompanionIntent) => void
   unfreezePlayer: (playerId: string) => void
   eliminatePlayer: (playerId: string) => void
@@ -339,6 +357,7 @@ const initialState = {
   forbiddenProfileSignal: null as ForbiddenProfileSignal | null,
   forbiddenProfileHistory: [] as ForbiddenProfileHistoryEntry[],
   missionGeneration: null as MissionGenerationState | null,
+  activeWorldEvent: null as WorldEventState | null,
   freezeCount: 0,
   roundStartedAt: null as number | null,
   elapsedSeconds: null as number | null,
@@ -366,6 +385,7 @@ const initialState = {
   lastSoundEvent: null,
   hunterIntent: null as HunterIntent | null,
   secondaryHunterIntent: null as HunterIntent | null,
+  doorStates: {} as Record<string, boolean>,
   companionIntent: null as CompanionIntent | null,
   companionIntents: {} as Record<string, CompanionIntent>,
   rescueRequested: false,
@@ -388,6 +408,9 @@ function sameHunterIntent(left: HunterIntent | null, right: HunterIntent): boole
     && left.reason === right.reason
     && left.directorTension === right.directorTension
     && left.speedMultiplier === right.speedMultiplier
+    && left.doorId === right.doorId
+    && left.doorPressureSeconds === right.doorPressureSeconds
+    && left.mutationPhase === right.mutationPhase
     && samePosition(left.target, right.target)
     && samePosition(left.seekerPosition, right.seekerPosition))
 }
@@ -450,6 +473,8 @@ export const useGameStore = create<GameStore>((set) => ({
   setForbiddenProfileHistory: (forbiddenProfileHistory) => set({ forbiddenProfileHistory }),
 
   setMissionGeneration: (missionGeneration) => set({ missionGeneration }),
+
+  setActiveWorldEvent: (activeWorldEvent) => set({ activeWorldEvent }),
 
   setRoundData: (props, missions, totalClues) =>
     set({
@@ -558,6 +583,9 @@ export const useGameStore = create<GameStore>((set) => ({
     sameHunterIntent(state.hunterIntent, hunterIntent) ? state : { hunterIntent }
   )),
   setSecondaryHunterIntent: (secondaryHunterIntent) => set({ secondaryHunterIntent }),
+  setDoorState: (doorId, open) => set((state) => ({
+    doorStates: { ...state.doorStates, [doorId]: open },
+  })),
 
   setCompanionIntent: (intent) => set((state) => {
     const companionId = intent.companionId ?? 'partner'

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useSound from '../hooks/useSound'
 import {
   useGameStore,
@@ -116,6 +116,7 @@ export default function SoundController() {
   const isPaused = useGameStore((state) => state.isPaused)
   const hunterIntent = useGameStore((state) => state.hunterIntent)
   const secondaryHunterIntent = useGameStore((state) => state.secondaryHunterIntent)
+  const activeWorldEvent = useGameStore((state) => state.activeWorldEvent)
   const companionMessageCount = useGameStore((state) => state.subtitles.filter((item) => item.playerId.startsWith('partner')).length)
   const latestSubtitle = useGameStore((state) => state.subtitles.at(-1) ?? null)
   const forbiddenWords = useGameStore((state) => state.forbiddenWords)
@@ -126,7 +127,9 @@ export default function SoundController() {
   const {
     playFreeze, playRescue, playGateOpen, playVictory, playDefeat,
     playAmbientPulse, playMissionProgress, playCompanionCue,
+    playBlackout, playPincerReveal,
   } = useSound()
+  const [voiceRevision, setVoiceRevision] = useState(0)
   const lastFreezeTimestamp = useRef(0)
   const previousPhase = useRef<GamePhase>(phase)
   const previousVerticalPhase = useRef(verticalPhase)
@@ -136,6 +139,7 @@ export default function SoundController() {
   const lastSpokenTimestamp = useRef(0)
   const musicInstances = useRef<MusicInstance[]>([])
   const musicAnimationFrame = useRef<number | null>(null)
+  const previousWorldEventId = useRef<string | null>(null)
 
   const adaptiveTrack = selectAdaptiveTrack({
     phase,
@@ -229,6 +233,15 @@ export default function SoundController() {
   }, [])
 
   useEffect(() => {
+    if (!("speechSynthesis" in window)) return
+    const refreshVoices = () => setVoiceRevision((revision) => revision + 1)
+    window.speechSynthesis.getVoices()
+    window.speechSynthesis.addEventListener('voiceschanged', refreshVoices)
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', refreshVoices)
+  }, [])
+
+  useEffect(() => {
+    void voiceRevision
     if (!latestSubtitle?.playerId.startsWith('partner')) return
     if (latestSubtitle.timestamp <= lastSpokenTimestamp.current) return
     lastSpokenTimestamp.current = latestSubtitle.timestamp
@@ -255,7 +268,14 @@ export default function SoundController() {
     if (window.speechSynthesis.speaking && !urgent) return
     if (urgent) window.speechSynthesis.cancel()
     if (utterance.volume > 0.001) window.speechSynthesis.speak(utterance)
-  }, [forbiddenWords, latestSubtitle, masterVolume, speechLanguage, voiceVolume])
+  }, [forbiddenWords, latestSubtitle, masterVolume, speechLanguage, voiceRevision, voiceVolume])
+
+  useEffect(() => {
+    if (!activeWorldEvent || previousWorldEventId.current === activeWorldEvent.eventId) return
+    previousWorldEventId.current = activeWorldEvent.eventId
+    if (activeWorldEvent.eventType === 'local_blackout') playBlackout()
+    if (activeWorldEvent.eventType === 'dual_hunter_breach') playPincerReveal()
+  }, [activeWorldEvent, playBlackout, playPincerReveal])
 
   useEffect(() => () => window.speechSynthesis?.cancel(), [])
 

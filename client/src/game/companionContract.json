@@ -10,6 +10,7 @@
   "dangerDistance": 7.0,
   "seekerMemorySeconds": 4.0,
   "goalHoldSeconds": 1.5,
+  "floorTransitionRecoverySeconds": 12.0,
   "inspectionDurationSeconds": 3.0,
   "autoRescueDelaySeconds": 5.0
 }

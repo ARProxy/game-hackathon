@@ -232,8 +232,9 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       if (elapsed < 6.3) return
       const nextSignal = store.rooftopSignal?.nextSignalId
       const target = nextSignal ? ROOF_SIGNALS[nextSignal] : undefined
-      if (nextSignal && target && moveToward(playerRef, target, delta)) {
-        if (now - lastActionAt.current >= 1.4) {
+      if (nextSignal && target) {
+        const arrived = moveToward(playerRef, target, delta)
+        if ((arrived || elapsed >= 12) && now - lastActionAt.current >= 1.4) {
           sendAction('interact_stage_mission', { signal_id: nextSignal })
           lastActionAt.current = now
         }
@@ -256,7 +257,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       }
       const arrived = followPath(roofTransitionPath.current, delta)
       if (openDoorNear({ x: -36, z: -39.7 }, now)) return
-      if (arrived && now - lastActionAt.current >= 1.2) {
+      if ((arrived || elapsed >= 22) && now - lastActionAt.current >= 1.2) {
         sendAction('cross_rooftop_stair_boundary', { direction: 'down' })
         lastActionAt.current = now
       }
@@ -267,7 +268,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       if (now < holdUntil.current) return
       const arrived = followPath(F3_CONSOLE_PATH, delta)
       if (openDoorNear({ x: -28, z: -38.25 }, now)) return
-      if (!arrived) return
+      if (!arrived && elapsed < 14) return
       if (arrivedAt.current === null) arrivedAt.current = now
       const sinceArrival = now - arrivedAt.current
       if (actionStep.current === 0 && sinceArrival >= 0.6) {
@@ -323,7 +324,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       if (now < holdUntil.current) return
       const arrived = followPath(F3_TO_F2_PATH, delta)
       if (openDoorNear({ x: -36, z: -39.7 }, now)) return
-      if (arrived && now - lastActionAt.current >= 1.2) {
+      if ((arrived || elapsed >= 24) && now - lastActionAt.current >= 1.2) {
         sendAction('use_floor_transition', { route: 'west' })
         lastActionAt.current = now
       }
@@ -334,7 +335,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       if (now < holdUntil.current) return
       const arrived = followPath(F2_INTERCOM_PATH, delta)
       if (openDoorNear({ x: -40, z: -32 }, now)) return
-      if (!arrived) return
+      if (!arrived && elapsed < 14) return
       if (arrivedAt.current === null) arrivedAt.current = now
       const sinceArrival = now - arrivedAt.current
       if (actionStep.current === 0 && sinceArrival >= 0.6) {
@@ -354,7 +355,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       if (now < holdUntil.current) return
       const arrived = followPath(F2_TO_F1_PATH, delta)
       if (openDoorNear({ x: -36, z: -39.7 }, now)) return
-      if (arrived && now - lastActionAt.current >= 1.2) {
+      if ((arrived || elapsed >= 24) && now - lastActionAt.current >= 1.2) {
         sendAction('use_floor_transition', { route: 'west' })
         lastActionAt.current = now
       }
@@ -365,7 +366,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       if (now < holdUntil.current) return
       const arrived = followPath(F1_SECURITY_PATH, delta)
       if (openDoorNear({ x: -8, z: -32 }, now)) return
-      if (!arrived) return
+      if (!arrived && elapsed < 14) return
       if (arrivedAt.current === null) arrivedAt.current = now
       const sinceArrival = now - arrivedAt.current
       if (actionStep.current === 0 && sinceArrival >= 0.7) {
@@ -389,7 +390,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     }
 
     if (progression.phase === 'field_final' && player.position.floor === 'F1') {
-      if (followPath(F1_TO_FIELD_PATH, delta) && now - lastActionAt.current >= 1.2) {
+      if ((followPath(F1_TO_FIELD_PATH, delta) || elapsed >= 24) && now - lastActionAt.current >= 1.2) {
         sendAction('use_floor_transition', { route: 'field' })
         lastActionAt.current = now
       }
@@ -401,7 +402,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       && store.phase === 'playing'
       && player.position.floor !== 'F1'
     ) {
-      if (!followPath(FIELD_STATION_PATH, delta)) return
+      if (!followPath(FIELD_STATION_PATH, delta) && elapsed < 14) return
       if (arrivedAt.current === null) arrivedAt.current = now
       if (now - arrivedAt.current >= 0.7 && now - lastActionAt.current >= 2.2) {
         sendAction('interact_stage_mission')

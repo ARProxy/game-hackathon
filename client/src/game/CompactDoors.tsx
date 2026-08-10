@@ -19,6 +19,7 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
   playerRef: React.RefObject<PlayerHandle | null>
 }) {
   const accessibleFloors = useGameStore((state) => state.verticalProgression?.accessible_floors ?? NO_ACCESSIBLE_FLOORS)
+  const doorStates = useGameStore((state) => state.doorStates)
   const visible = useMemo(() => new Set(visibleFloors), [visibleFloors])
   const bodies = useRef(new Map<string, RapierRigidBody>())
   const openness = useRef(new Map<string, number>())
@@ -32,6 +33,14 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
     if (isStageDoor(door)) return stageDoorUnlocked(door, accessibleFloors)
     return true
   }, [accessibleFloors])
+
+  useEffect(() => {
+    for (const [doorId, open] of Object.entries(doorStates)) {
+      if (targets.current.get(doorId) === open) continue
+      targets.current.set(doorId, open)
+      activeDoorIds.current.add(doorId)
+    }
+  }, [doorStates])
 
   useEffect(() => {
     for (const door of COMPACT_SCHOOL.doors) {
@@ -49,8 +58,6 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
       if (event.code !== 'KeyE' || event.repeat || !door || isStageDoor(door)) return
       if (!isUnlocked(door)) return
       event.preventDefault()
-      targets.current.set(door.id, !targets.current.get(door.id))
-      activeDoorIds.current.add(door.id)
       sendGameMessage({
         type: 'action',
         payload: { action_type: 'door_interaction', door_id: door.id },
@@ -117,7 +124,7 @@ export default function CompactDoors({ visibleFloors, playerRef }: {
         }}>
           {isStageDoor(nearby)
             ? nearbyUnlocked ? '층간 이동 경로 개방' : '현재 미션 완료 전 잠김'
-            : nearbyUnlocked ? `E · ${targets.current.get(nearby.id) ? '문 닫기' : '문 열기'}` : '잠긴 문'}
+            : nearbyUnlocked ? `E · ${doorStates[nearby.id] ? '문 닫기' : '문 열기'}` : '잠긴 문'}
         </div>
       </Html>
     )}

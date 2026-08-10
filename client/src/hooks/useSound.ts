@@ -3,6 +3,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 
 type ToneShape = OscillatorType
 type SoundCategory = 'effects' | 'ambience'
+export type SeekerSoundRole = 'chaser' | 'blocker'
 
 // 플레이어·술래·HUD가 서로 다른 AudioContext를 만들면 브라우저의 사용자
 // 제스처 잠금 상태가 갈라진다. 게임 전체가 하나의 엔진과 마스터 게인을 공유한다.
@@ -127,9 +128,21 @@ export default function useSound() {
     tone(180, 0.3, 0.65, 0.11, 55, 'triangle')
   }, [tone])
 
-  const playSeekerProximity = useCallback((intensity: number, pan = 0) => {
+  const playSeekerProximity = useCallback((intensity: number, pan = 0, role: SeekerSoundRole = 'chaser') => {
     const proximity = Math.min(1, Math.max(0, intensity))
     if (proximity <= 0) return
+
+    if (role === 'blocker') {
+      // 차단자는 심장박동이나 사이렌 대신, 형광등 간섭과 금속을 긁는 듯한
+      // 고역 정적으로 접근한다. 눈으로 숨지 않으면 잡히는 역할을 귀로 구분한다.
+      noise(0, 0.34, 0.012 + proximity * 0.04, 1900 - proximity * 520, pan)
+      tone(238 + proximity * 46, 0.035, 0.36, 0.008 + proximity * 0.018,
+        176 + proximity * 20, 'sine', pan)
+      if (proximity >= 0.62) {
+        noise(0.17, 0.18, 0.018 + proximity * 0.028, 3200, -pan)
+      }
+      return
+    }
 
     // 심장박동 아래에 불규칙한 마찰음과 저주파 호흡을 겹쳐, 화면보다
     // 먼저 '같은 층에 무언가 있다'는 감각을 준다.
@@ -144,16 +157,32 @@ export default function useSound() {
     }
   }, [noise, tone])
 
-  const playSeekerDetected = useCallback(() => {
-    noise(0, 0.5, 0.15, 1050)
-    tone(96, 0, 0.52, 0.17, 38, 'sawtooth')
-    tone(740, 0.04, 0.18, 0.12, 420, 'square')
-    tone(420, 0.2, 0.28, 0.11, 920, 'sawtooth')
+  const playSeekerDetected = useCallback((role: SeekerSoundRole = 'chaser', pan = 0) => {
+    if (role === 'blocker') {
+      // 차단자의 발견음은 경보가 아니라 순간적으로 주변 전기가 빨려나가는
+      // 듯한 정적이다. 추격자와 같은 비명을 재사용하지 않는다.
+      noise(0, 0.62, 0.11, 2450, pan)
+      tone(980, 0.015, 0.44, 0.06, 170, 'sine', pan)
+      tone(136, 0.08, 0.58, 0.08, 72, 'triangle', -pan)
+      return
+    }
+    // 짧은 알림음이 아니라 낮은 포효, 비명성 마찰과 충격을 겹친 발견 스팅.
+    noise(0, 0.68, 0.18, 820, pan)
+    tone(118, 0, 0.7, 0.19, 34, 'sawtooth', pan)
+    tone(82, 0.035, 0.58, 0.15, 29, 'square', pan)
+    tone(910, 0.025, 0.24, 0.13, 310, 'sawtooth', pan)
+    tone(390, 0.2, 0.42, 0.12, 1180, 'sawtooth', -pan)
   }, [noise, tone])
 
-  const playSeekerFootstep = useCallback((intensity: number, pan: number, running: boolean) => {
+  const playSeekerFootstep = useCallback((intensity: number, pan: number, running: boolean, role: SeekerSoundRole = 'chaser') => {
     const proximity = Math.min(1, Math.max(0, intensity))
     if (proximity <= 0) return
+    if (role === 'blocker') {
+      const volume = (running ? 0.044 : 0.025) * proximity
+      noise(0, 0.13, volume, 980, pan)
+      tone(running ? 126 : 104, 0.012, 0.12, volume * 0.72, 58, 'triangle', pan)
+      return
+    }
     const volume = (running ? 0.065 : 0.038) * proximity
     tone(running ? 82 : 68, 0, 0.1, volume, 42, 'triangle', pan)
     noise(0.015, 0.09, volume * 0.52, 190, pan)
@@ -165,6 +194,39 @@ export default function useSound() {
     tone(610, 0, 0.24, volume, 880, 'sawtooth', pan)
     tone(880, 0.25, 0.24, volume, 610, 'sawtooth', pan)
   }, [tone])
+
+  const playSeekerLunge = useCallback((intensity: number, pan: number, role: SeekerSoundRole = 'chaser') => {
+    const proximity = Math.min(1, Math.max(0.15, intensity))
+    if (role === 'blocker') {
+      noise(0, 0.3, 0.055 * proximity, 2800, pan)
+      tone(760, 0, 0.24, 0.045 * proximity, 94, 'sine', pan)
+      return
+    }
+    noise(0, 0.34, 0.12 * proximity, 540, pan)
+    tone(148, 0, 0.4, 0.15 * proximity, 31, 'sawtooth', pan)
+    tone(620, 0.025, 0.22, 0.09 * proximity, 170, 'square', pan)
+  }, [noise, tone])
+
+  const playSeekerDoorPound = useCallback((pan = 0) => {
+    // 발걸음 재사용을 없애고 문짝·문틀·저역 충격을 분리한다.
+    tone(62, 0, 0.24, 0.18, 31, 'triangle', pan)
+    noise(0.008, 0.21, 0.105, 240, pan)
+    tone(118, 0.028, 0.16, 0.08, 48, 'square', -pan * 0.4)
+  }, [noise, tone])
+
+  const playBlackout = useCallback(() => {
+    tone(58, 0, 1.2, 0.12, 28, 'sawtooth', 0, 'ambience')
+    noise(0.02, 0.18, 0.11, 2600, -0.35, 'ambience')
+    noise(0.23, 0.11, 0.08, 2100, 0.4, 'ambience')
+    tone(1640, 0.42, 0.7, 0.025, 120, 'sine', 0, 'ambience')
+  }, [noise, tone])
+
+  const playPincerReveal = useCallback(() => {
+    playSeekerDoorPound(-0.5)
+    playSeekerDoorPound(0.5)
+    tone(74, 0.42, 1.1, 0.15, 32, 'sawtooth')
+    noise(0.48, 0.72, 0.09, 1900)
+  }, [noise, playSeekerDoorPound, tone])
 
   const playPlayerFootstep = useCallback((rightFoot: boolean, intensity: number) => {
     const strength = Math.min(1, Math.max(0, intensity))
@@ -222,6 +284,10 @@ export default function useSound() {
     playSeekerDetected,
     playSeekerFootstep,
     playSeekerSiren,
+    playSeekerLunge,
+    playSeekerDoorPound,
+    playBlackout,
+    playPincerReveal,
     playPlayerFootstep,
     playAmbientPulse,
     playRooftopSignal,

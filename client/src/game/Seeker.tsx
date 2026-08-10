@@ -75,22 +75,35 @@ function sampleTraversal(path: HunterTraversal, progress: number, output: THREE.
 export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requestsThink = true }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const moveToward = useCollisionAwarePlanarMotion()
-  const { playSeekerProximity, playSeekerDetected, playSeekerFootstep, playSeekerSiren } = useSound()
+  const {
+    playSeekerProximity, playSeekerDetected, playSeekerFootstep, playSeekerSiren,
+    playSeekerLunge, playSeekerDoorPound,
+  } = useSound()
   // 이동 좌표는 useFrame에서 읽고, React 렌더는 경광등 상태 전환만 구독한다.
   const dangerLightActive = useGameStore((store) => {
     const intent = seekerId === 'seeker' ? store.hunterIntent : store.secondaryHunterIntent
-    return intent?.state === 'DETECTED' || intent?.state === 'CHASE'
+    const detected = intent?.state === 'DETECTED' || intent?.state === 'CHASE'
+    const finalPhase = store.verticalProgression?.phase === 'field_final'
+      || store.verticalProgression?.phase === 'basement_final'
+      || store.verticalProgression?.phase === 'escape_open'
+    return detected && (seekerId === 'seeker' || finalPhase)
   })
   const redLightRef = useRef<THREE.PointLight>(null)
   const presenceRef = useRef<THREE.Group>(null)
+  const mutationRef = useRef<THREE.Group>(null)
+  const headJerkRef = useRef<THREE.Group>(null)
+  const leftArmRef = useRef<THREE.Mesh>(null)
+  const rightArmRef = useRef<THREE.Mesh>(null)
   const blockerLightRef = useRef<THREE.SpotLight>(null)
   const blockerAimRef = useRef<THREE.Object3D>(null)
   const previousState = useRef<HunterState | null>(null)
+  const previousMutationPhase = useRef<string | null>(null)
   const lastThink = useRef(-Infinity)
   const lastCatchAttempt = useRef(-Infinity)
   const lastProximitySound = useRef(-Infinity)
   const lastFootstepSound = useRef(-Infinity)
   const lastSirenSound = useRef(-Infinity)
+  const lastPoundSound = useRef(-Infinity)
   const lastPos = useRef(new THREE.Vector3(...spawn))
   const movementRef = useRef(0)
   const previousFloorRef = useRef<string | null>(null)
@@ -181,7 +194,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       if (sharesHumanFloor && intent.targetId === store.playerId
         && (intent.state === 'DETECTED' || intent.state === 'CHASE')
         && previousState.current !== 'DETECTED' && previousState.current !== 'CHASE') {
-        playSeekerDetected()
+        playSeekerDetected(seekerId === 'seeker-2' ? 'blocker' : 'chaser')
       }
       previousState.current = intent.state
       const dx = intent.target.x - pos.x
@@ -241,7 +254,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         const pan = threatDistance > 0.001
           ? THREE.MathUtils.clamp((threatX * rightX + threatZ * rightZ) / threatDistance, -1, 1)
           : 0
-        playSeekerProximity(proximity, pan)
+        playSeekerProximity(proximity, pan, seekerId === 'seeker-2' ? 'blocker' : 'chaser')
         lastProximitySound.current = clock.elapsedTime
       }
 
@@ -249,7 +262,9 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         (intent?.state === 'DETECTED' || intent?.state === 'CHASE')
         && intent.targetId === store.playerId
       )
-      if (detected && clock.elapsedTime - lastSirenSound.current >= 1.15) {
+      // 차단자는 손전등과 정적으로 발견을 알린다. 일반 구간에서 추격자와
+      // 같은 사이렌을 울리면 두 역할의 대응법이 사라진다.
+      if (seekerId === 'seeker' && detected && clock.elapsedTime - lastSirenSound.current >= 1.15) {
         const rightX = Math.cos(playerRef.current?.rotation.y ?? 0)
         const rightZ = -Math.sin(playerRef.current?.rotation.y ?? 0)
         const pan = threatDistance > 0.001
@@ -276,7 +291,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         const pan = distance > 0.001
           ? THREE.MathUtils.clamp((threatX * rightX + threatZ * rightZ) / distance, -1, 1)
           : 0
-        playSeekerFootstep(proximity, pan, running)
+        playSeekerFootstep(proximity, pan, running, seekerId === 'seeker-2' ? 'blocker' : 'chaser')
         lastFootstepSound.current = clock.elapsedTime
       }
     }
@@ -288,6 +303,59 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
       const pulse = 1 + Math.sin(clock.elapsedTime * 2.1 + (seekerId === 'seeker-2' ? 1.4 : 0)) * 0.09
       presenceRef.current.scale.set(pulse, 1 + (pulse - 1) * 1.7, pulse)
       presenceRef.current.rotation.y = Math.sin(clock.elapsedTime * 0.73) * 0.08
+    }
+    const mutation = mutationRef.current
+    const head = headJerkRef.current
+    const leftArm = leftArmRef.current
+    const rightArm = rightArmRef.current
+    if (mutation && head && leftArm && rightArm) {
+      const pounding = intent?.reason === 'door_pressure'
+      const transformed = pounding || intent?.state === 'DETECTED'
+        || intent?.state === 'CHASE' || intent?.state === 'RUSH_GATE'
+      const chaseClock = clock.elapsedTime * (pounding ? 9.5 : 6.8)
+      const snap = Math.sin(Math.floor(clock.elapsedTime * 7.5) * 2.31)
+      const chaseCycle = clock.elapsedTime % 2.15
+      const fakeStop = intent?.state === 'CHASE' && chaseCycle > 1.52 && chaseCycle < 1.72
+      const lunge = intent?.mutationPhase === 'LUNGE'
+        || (intent?.state === 'CHASE' && chaseCycle >= 1.72)
+      const sideways = transformed ? Math.sin(chaseClock * 0.71) * (pounding ? 0.05 : 0.13) : 0
+      const forwardJolt = pounding
+        ? Math.max(0, Math.sin(chaseClock)) * 0.22
+        : lunge ? 0.18 : fakeStop ? -0.1 : 0
+      mutation.position.x = THREE.MathUtils.damp(mutation.position.x, sideways, 13, delta)
+      mutation.position.z = THREE.MathUtils.damp(mutation.position.z, forwardJolt, 16, delta)
+      mutation.position.y = THREE.MathUtils.damp(
+        mutation.position.y,
+        transformed ? -0.07 + Math.abs(Math.sin(chaseClock * 0.5)) * 0.06 : 0,
+        12, delta,
+      )
+      mutation.rotation.x = THREE.MathUtils.damp(
+        mutation.rotation.x, transformed ? (pounding ? -0.22 : -0.13) : 0, 11, delta,
+      )
+      mutation.rotation.z = THREE.MathUtils.damp(
+        mutation.rotation.z, transformed ? snap * 0.09 + Math.sin(chaseClock) * 0.055 : 0, 16, delta,
+      )
+      mutation.scale.x = THREE.MathUtils.damp(mutation.scale.x, transformed ? 0.91 : 1, 9, delta)
+      mutation.scale.y = THREE.MathUtils.damp(mutation.scale.y, transformed ? 1.09 : 1, 9, delta)
+      mutation.scale.z = THREE.MathUtils.damp(mutation.scale.z, transformed ? 0.94 : 1, 9, delta)
+      head.rotation.z = THREE.MathUtils.damp(head.rotation.z, transformed ? snap * 0.34 : 0, 18, delta)
+      head.rotation.y = THREE.MathUtils.damp(
+        head.rotation.y, transformed ? Math.sin(Math.floor(clock.elapsedTime * 4.2) * 1.9) * 0.5 : 0, 18, delta,
+      )
+      leftArm.rotation.x = transformed ? Math.sin(chaseClock) * 0.72 - 0.22 : 0
+      rightArm.rotation.x = transformed ? Math.sin(chaseClock + 2.1) * 1.05 - 0.35 : 0
+      leftArm.rotation.z = transformed ? -0.2 - Math.abs(snap) * 0.22 : -0.08
+      rightArm.rotation.z = transformed ? 0.28 + Math.abs(snap) * 0.18 : 0.08
+
+      if (sharesHumanFloor && lunge && previousMutationPhase.current !== 'LUNGE') {
+        playSeekerLunge(0.9, snap, seekerId === 'seeker-2' ? 'blocker' : 'chaser')
+      }
+      previousMutationPhase.current = lunge ? 'LUNGE' : intent?.mutationPhase ?? null
+
+      if (pounding && sharesHumanFloor && clock.elapsedTime - lastPoundSound.current >= 0.52) {
+        playSeekerDoorPound(snap)
+        lastPoundSound.current = clock.elapsedTime
+      }
     }
     if (blockerLightRef.current && blockerAimRef.current) {
       blockerLightRef.current.target = blockerAimRef.current
@@ -314,7 +382,23 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
           <meshBasicMaterial color={seekerId === 'seeker-2' ? '#D9F1FF' : '#FF123D'} toneMapped={false} />
         </mesh>
       </group>
-      <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} movementRef={movementRef} />
+      <group ref={mutationRef}>
+        <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} movementRef={movementRef} />
+        <group ref={headJerkRef} position={[0, 1.62, 0.02]}>
+          <mesh scale={[0.44, 0.56, 0.42]}>
+            <sphereGeometry args={[0.34, 10, 8]} />
+            <meshStandardMaterial color="#100A10" roughness={0.9} transparent opacity={0.38} />
+          </mesh>
+        </group>
+        <mesh ref={leftArmRef} position={[-0.43, 1.0, 0.02]} scale={[0.11, 0.78, 0.11]}>
+          <capsuleGeometry args={[0.5, 1, 4, 7]} />
+          <meshStandardMaterial color="#110810" roughness={0.95} transparent opacity={0.62} />
+        </mesh>
+        <mesh ref={rightArmRef} position={[0.43, 0.92, 0.05]} scale={[0.1, 0.91, 0.1]}>
+          <capsuleGeometry args={[0.5, 1, 4, 7]} />
+          <meshStandardMaterial color="#0B060C" roughness={0.95} transparent opacity={0.62} />
+        </mesh>
+      </group>
       {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />
       )}

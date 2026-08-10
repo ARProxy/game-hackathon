@@ -10,8 +10,8 @@ export default function useKeyboard() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (target?.matches('input, textarea, [contenteditable="true"]')) {
+      const target = e.target
+      if (target instanceof Element && target.matches('input, textarea, [contenteditable="true"]')) {
         keys.current.clear()
         return
       }

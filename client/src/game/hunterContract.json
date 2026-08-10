@@ -12,13 +12,20 @@
   "chaseSpeed": 3.6,
   "rushSpeed": 5.2,
   "catchDistance": 1.1,
+  "doorPressure": {
+    "approachDistance": 1.45,
+    "warningSeconds": 2.4,
+    "floor3CanBreach": false
+  },
   "limitedHunt": {
-    "introGraceSeconds": 4,
+    "introGraceSeconds": 6.5,
     "visionDistance": 9,
     "proximityDetectionDistance": 4.5,
     "hearingDistance": 12,
     "memorySeconds": 3,
-    "introPatrolTarget": { "x": -10, "z": -28 }
+    "introPatrolTarget": { "x": -10, "z": -28 },
+    "antiCampCenter": { "x": -28, "z": -39.4 },
+    "antiCampRadius": 11
   },
   "director": {
     "targetRoundSeconds": 180,

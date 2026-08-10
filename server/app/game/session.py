@@ -116,12 +116,16 @@ class GameSession:
         self.hunter_last_tick = 0.0
         self.hunter_last_intent: dict | None = None
         self.hunter_transit_until: dict[str, float] = {}
+        self.door_open_states: dict[str, bool] = {}
+        self.hunter_door_pressure: dict | None = None
         self.elevator_calls: dict[str, dict] = {}
         self.secondary_hunter_signal: dict | None = None
         self.blocker_forward = {"x": 0.0, "z": -1.0}
         self.blocker_zone_share: dict | None = None
         self.blocker_guard_start: float | None = None
         self.blocker_guard_target_id: str | None = None
+        self.active_world_event: dict | None = None
+        self.triggered_world_events: set[str] = set()
         self.companion_states = {
             actor_id: CompanionRuntime() for actor_id in DEFAULT_AI_PARTNER_IDS
         }
@@ -154,6 +158,10 @@ class GameSession:
             self.hunter_transit_until[seeker_id] += paused_for
         if self.broadcast_hunt_grace_until > time.monotonic():
             self.broadcast_hunt_grace_until += paused_for
+        if self.hunter_door_pressure:
+            self.hunter_door_pressure["started_at"] += paused_for
+        if self.active_world_event and self.active_world_event.get("ends_at", 0.0) > time.monotonic():
+            self.active_world_event["ends_at"] += paused_for
         self.paused_at = None
         now = time.monotonic()
         self.hunter_last_tick = now
@@ -196,12 +204,16 @@ class GameSession:
         self.hunter_last_tick = time.monotonic()
         self.hunter_last_intent = None
         self.hunter_transit_until.clear()
+        self.door_open_states.clear()
+        self.hunter_door_pressure = None
         self.elevator_calls.clear()
         self.secondary_hunter_signal = None
         self.blocker_forward = {"x": 0.0, "z": -1.0}
         self.blocker_zone_share = None
         self.blocker_guard_start = None
         self.blocker_guard_target_id = None
+        self.active_world_event = None
+        self.triggered_world_events.clear()
         companion_now = time.monotonic()
         for runtime in self.companion_states.values():
             runtime.reset(companion_now)
@@ -295,8 +307,33 @@ class GameSession:
             "mission_generation": {
                 "seed": self.mission_seed,
                 "randomized": True,
-                "changes": ["옥상 신호", "3층 증거 위치", "2층 기호", "1층 관제 경로", "파이널 경로"],
+                "source": (
+                    self.vertical_missions.director_source
+                    if self.vertical_missions is not None else "seeded_fallback"
+                ),
+                "scenario_title": (
+                    self.vertical_missions.scenario_title
+                    if self.vertical_missions is not None else "야간 학교 봉쇄"
+                ),
+                "changes": [
+                    "옥상 신호", "3층 사건·증거 위치", "2층 AI 변환 규칙",
+                    "1층 음성 관제 경로", "파이널 경로",
+                ],
             },
+            "door_states": dict(self.door_open_states),
+            "active_world_event": self.public_world_event(),
+        }
+
+    def public_world_event(self) -> dict | None:
+        event = self.active_world_event
+        if not event or float(event.get("ends_at", 0.0)) <= time.monotonic():
+            return None
+        return {
+            "event_id": event["event_id"],
+            "event_type": event["event_type"],
+            "title": event["title"],
+            "message": event["message"],
+            "remaining_seconds": round(float(event["ends_at"]) - time.monotonic(), 2),
         }
 
     def vertical_progression_payload(self) -> dict:

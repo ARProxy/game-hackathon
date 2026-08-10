@@ -7,6 +7,7 @@ import math
 import os
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 from fastapi import WebSocket, WebSocketException, status
 
@@ -39,11 +40,17 @@ from app.ai.speech import (
     classify_voice_command,
 )
 from app.ai.spell import check_spell
+from app.ai.vertical_missions import (
+    apply_mission_direction,
+    generate_llm_mission_direction,
+)
 from app.game.authority import (
     ACTOR_MAX_SPEED,
+    DYNAMIC_DOORS_BY_ID,
     HUMAN_MAX_SPEED,
     MovementSample,
     has_clear_catch_line,
+    has_clear_hunter_line,
     movement_is_plausible,
 )
 from app.game.session import (
@@ -76,6 +83,7 @@ from app.game.vertical_flow import (
     start_security_guidance,
     submit_intercom_answer,
     submit_security_direction,
+    TRANSITION_SLOTS_BY_PHASE,
     use_open_floor_transition,
     use_elevator,
     validate_current_stage_interaction,
@@ -99,6 +107,7 @@ class ConnectionManager:
         self._hunter_tasks: dict[str, asyncio.Task[None]] = {}
         self._companion_tasks: dict[str, asyncio.Task[None]] = {}
         self._forbidden_tasks: dict[str, asyncio.Task[None]] = {}
+        self._mission_director_tasks: dict[str, asyncio.Task[None]] = {}
 
     async def connect(
         self, room_id: str, player_id: str, websocket: WebSocket
@@ -156,6 +165,9 @@ class ConnectionManager:
                 forbidden_task = self._forbidden_tasks.pop(room_id, None)
                 if forbidden_task:
                     forbidden_task.cancel()
+                mission_task = self._mission_director_tasks.pop(room_id, None)
+                if mission_task:
+                    mission_task.cancel()
                 del self.rooms[room_id]
                 session_manager.remove(room_id)
         logger.info("disconnected: room=%s player=%s", room_id, player_id)
@@ -668,6 +680,40 @@ class ConnectionManager:
             },
         })
 
+    async def _publish_floor_entry_event(
+        self,
+        room_id: str,
+        session: Any,
+        transition: dict,
+    ) -> None:
+        """인간이 실제 층 경계를 넘은 순간 한 번만 환경 사건을 시작한다."""
+        floor = str(transition.get("position", {}).get("floor", ""))
+        event_by_floor = {
+            "F2": {
+                "event_id": "f2_local_blackout",
+                "event_type": "local_blackout",
+                "title": "국지 정전",
+                "message": "복도 형광등이 꺼졌습니다. 술래는 덜 보지만 작은 소리까지 더 멀리 듣습니다.",
+                "duration_seconds": 14.0,
+            },
+            "F1": {
+                "event_id": "f1_dual_hunter_breach",
+                "event_type": "dual_hunter_breach",
+                "title": "두 번째 실루엣",
+                "message": "지하 방화문이 깨졌습니다. 붉은 추격자와 차가운 탐조등을 따로 경계하세요.",
+                "duration_seconds": 6.5,
+            },
+        }
+        event = event_by_floor.get(floor)
+        if event is None or event["event_id"] in session.triggered_world_events:
+            return
+        session.triggered_world_events.add(event["event_id"])
+        session.active_world_event = {
+            **event,
+            "ends_at": time.monotonic() + float(event["duration_seconds"]),
+        }
+        await self.broadcast(room_id, {"type": "world_event_started", **event})
+
     async def _handle_action(
         self, room_id: str, player_id: str, payload: dict
     ) -> None:
@@ -716,6 +762,22 @@ class ConnectionManager:
         elif action_type == "door_interaction":
             if not player or player.status != PlayerStatus.ALIVE:
                 return
+            door_id = str(payload.get("door_id", ""))
+            door = DYNAMIC_DOORS_BY_ID.get(door_id)
+            if (
+                not door or door["floor"] != player.position.floor.value
+                or math.hypot(
+                    float(door["center"][0]) - player.position.x,
+                    float(door["center"][1]) - player.position.z,
+                ) > 2.1
+            ):
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected", "action_type": "door_interaction",
+                    "reason": "invalid_door_interaction",
+                })
+                return
+            is_open = not session.door_open_states.get(door_id, False)
+            session.door_open_states[door_id] = is_open
             signal_position = {"x": player.position.x, "z": player.position.z}
             delivered = record_hunter_signal(
                 session, player_id, signal_position, "door",
@@ -725,8 +787,12 @@ class ConnectionManager:
                 "player_id": player_id,
                 "position": signal_position,
                 "source": "door",
-                "door_id": str(payload.get("door_id", "")),
+                "door_id": door_id,
                 "heard_by_seeker": delivered,
+            })
+            await self.broadcast(room_id, {
+                "type": "door_state_changed", "door_id": door_id,
+                "open": is_open, "actor_id": player_id,
             })
 
         elif action_type == "actor_move":
@@ -736,6 +802,31 @@ class ConnectionManager:
             })
 
         elif action_type == "interact_stage_mission":
+            # 녹화 환경의 software WebGL에서 캡슐이 문틀·AI에 오래 끼어도
+            # 쇼케이스가 멈추지 않게 상호작용 직전에 권위 좌표를 복구한다.
+            # 개발 환경 플래그와 full 모드가 모두 있어야만 동작한다.
+            if (
+                getattr(session, "recording_showcase_mode", None) == "full"
+                and player is not None
+                and player.role == PlayerRole.HUMAN
+            ):
+                if session.vertical_round.phase == VerticalRoundPhase.ROOFTOP_INTRO:
+                    signal_id = str(payload.get("signal_id", "")).upper()
+                    if signal_id in {"CENTER", "EAST", "WEST"}:
+                        slot = get_map_slot(f"ROOF_SIGNAL_{signal_id}")
+                        sx, sy, sz = slot.get("interactionPosition") or slot["position"]
+                        player.position.x, player.position.y, player.position.z = sx, sy, sz
+                elif session.vertical_round.phase in {
+                    VerticalRoundPhase.FLOOR_3,
+                    VerticalRoundPhase.FLOOR_2,
+                    VerticalRoundPhase.FLOOR_1,
+                }:
+                    from app.game.vertical_flow import mission_interaction_position
+                    sx, sy, sz = mission_interaction_position(session.vertical_round.phase)
+                    player.position.x, player.position.y, player.position.z = sx, sy, sz
+                elif session.vertical_round.phase == VerticalRoundPhase.FIELD_FINAL:
+                    sx, sy, sz = final_station_position(player_id)
+                    player.position.x, player.position.y, player.position.z = sx, sy, sz
             if session.vertical_round.phase == VerticalRoundPhase.ROOFTOP_INTRO:
                 try:
                     signal = activate_rooftop_signal(
@@ -821,6 +912,22 @@ class ConnectionManager:
                     )
                     session.hunter_signal = None
                     session.hunter_last_seen = None
+                    # 플레이어가 방송실에 들어오기 위해 열었던 문을 ON AIR와
+                    # 동시에 닫는다. 3층에서는 술래가 문을 강제 돌파하지 않으므로
+                    # 첫 필수 발화가 즉사로 이어지지 않고 문 두드림 연출이 된다.
+                    broadcast_door_id = "north_room_F3_1"
+                    broadcast_door_was_open = session.door_open_states.get(
+                        broadcast_door_id, False,
+                    )
+                    session.door_open_states[broadcast_door_id] = False
+                    if broadcast_door_was_open:
+                        await self.broadcast(room_id, {
+                            "type": "door_state_changed",
+                            "door_id": broadcast_door_id,
+                            "open": False,
+                            "actor_id": "broadcast_system",
+                            "sealed": True,
+                        })
                 session.hunter_last_intent = None
                 await self.broadcast(room_id, {
                     "type": "vertical_threat_changed",
@@ -859,7 +966,10 @@ class ConnectionManager:
                     await self._broadcast_companion_speech(room_id, {
                         "type": "companion_report",
                         "companion_id": session.vertical_missions.intercom.ai_companion_id,
-                        "message": f"인터폰에 기호가 보여! {description}",
+                        "message": (
+                            f"{session.vertical_missions.intercom.companion_lead} "
+                            f"{description}"
+                        ),
                         "phase": VerticalRoundPhase.FLOOR_2.value,
                         "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
                         "speech_mode": SpeechMode.INTERCOM.value,
@@ -917,13 +1027,19 @@ class ConnectionManager:
             requested_route = str(payload.get("route", "west"))
             if (
                 getattr(session, "recording_showcase_mode", None) == "full"
-                and requested_route == "field"
                 and player is not None
-                and player.position.floor == WorldFloor.F1
             ):
-                crossing = get_map_slot("F1_FIELD_OUTSIDE_CROSSING")["position"]
-                player.position.x = float(crossing[0])
-                player.position.z = float(crossing[2])
+                routes = TRANSITION_SLOTS_BY_PHASE.get(session.vertical_round.phase, {})
+                slot_ids = routes.get(requested_route)
+                if slot_ids:
+                    first = get_map_slot(slot_ids[0])
+                    second = get_map_slot(slot_ids[1])
+                    destination = (
+                        second if player.position.floor.value == first["floor"] else first
+                    )
+                    crossing = destination["position"]
+                    player.position.x = float(crossing[0])
+                    player.position.z = float(crossing[2])
             try:
                 event = use_open_floor_transition(
                     session, player_id, requested_route,
@@ -937,6 +1053,7 @@ class ConnectionManager:
                 return
             await self.broadcast(room_id, {"type": "actor_floor_changed", **event})
             if player and player.role == PlayerRole.HUMAN:
+                await self._publish_floor_entry_event(room_id, session, event)
                 self._sync_full_recording_companions(session, event)
                 # AI에게 플레이어 층 이동 이벤트 알림 (강제 이동 아님)
                 # AI는 자신의 현재 목표에 따라 독립적으로 층 이동을 판단한다.
@@ -954,6 +1071,18 @@ class ConnectionManager:
                         }
 
         elif action_type == "cross_rooftop_stair_boundary":
+            if (
+                getattr(session, "recording_showcase_mode", None) == "full"
+                and player is not None
+            ):
+                direction = str(payload.get("direction", "down"))
+                slot_id = (
+                    "ROOF_TO_F3_STAIR_BOTTOM_CROSSING"
+                    if direction == "down" else "F3_TO_ROOF_STAIR_TOP_CROSSING"
+                )
+                crossing = get_map_slot(slot_id)["position"]
+                player.position.x = float(crossing[0])
+                player.position.z = float(crossing[2])
             try:
                 event = cross_rooftop_stair_boundary(
                     session, player_id, str(payload.get("direction", "down")),
@@ -1040,6 +1169,7 @@ class ConnectionManager:
                 "progression": session.vertical_progression_payload(),
             })
             if player and player.role == PlayerRole.HUMAN:
+                await self._publish_floor_entry_event(room_id, session, event)
                 for companion_id in DEFAULT_AI_PARTNER_IDS:
                     runtime = session.companion_states.get(companion_id)
                     if runtime:
@@ -1344,10 +1474,11 @@ class ConnectionManager:
                 and seeker.status == PlayerStatus.ALIVE
                 and seeker_can_capture(session, seeker_id)
                 and self._players_within(seeker, target, 1.5)
-                and has_clear_catch_line(
+                and has_clear_hunter_line(
                     (seeker.position.x, seeker.position.z),
                     (target.position.x, target.position.z),
                     seeker.position.floor.value,
+                    session.door_open_states,
                 )
             )
             if not valid_catch:
@@ -1401,7 +1532,7 @@ class ConnectionManager:
             rescuer = session.state.get_player(assigned_id)
             rescuer.position.x = player.position.x
             rescuer.position.y = player.position.y
-            rescuer.position.z = player.position.z + 0.8
+            rescuer.position.z = player.position.z
             rescuer.position.floor = player.position.floor
             rescuer.position.zone = player.position.zone
             session.position_samples[assigned_id] = MovementSample(
@@ -1421,9 +1552,34 @@ class ConnectionManager:
         player = session.state.get_player(player_id) if session else None
         if not session or not player or not player.is_frozen:
             return
-        self._assign_nearest_companion_rescue(
+        assigned_id = self._assign_nearest_companion_rescue(
             session, player, sync_for_recording=True,
         )
+        if not assigned_id:
+            assigned_id = next((
+                companion_id for companion_id in DEFAULT_AI_PARTNER_IDS
+                if (
+                    (companion := session.state.get_player(companion_id))
+                    and companion.status == PlayerStatus.ALIVE
+                )
+            ), None)
+            if assigned_id:
+                rescuer = session.state.get_player(assigned_id)
+                rescuer.position.x = player.position.x
+                rescuer.position.y = player.position.y
+                rescuer.position.z = player.position.z
+                rescuer.position.floor = player.position.floor
+                rescuer.position.zone = player.position.zone
+                request_companion_rescue(session, player.player_id, assigned_id)
+        if assigned_id and player.is_frozen:
+            # 실제 게임에서는 companion tick이 근거리·시야 구조를 판정한다.
+            # 녹화 전용 모드만 3초 빙결 연출 뒤 같은 rescued 이벤트를 확정해
+            # software WebGL의 느린 tick으로 30초 제한을 넘기지 않게 한다.
+            player.unfreeze()
+            self._cancel_freeze_timeout(room_id, player_id)
+            await self.broadcast(room_id, {
+                "type": "rescued", "rescuer_id": assigned_id, "target_id": player_id,
+            })
 
     @staticmethod
     def _accept_position_update(
@@ -2285,6 +2441,7 @@ class ConnectionManager:
                     {"shape": "원", "color": "파란"},
                     {"shape": "별", "color": "노란"},
                 ]
+                session.vertical_missions.intercom.response_rule = "same"
             elif showcase_mode == "f3":
                 session.vertical_round.phase = VerticalRoundPhase.FLOOR_3
                 session.vertical_round.closing_pending_floor = WorldFloor.ROOF
@@ -2325,6 +2482,67 @@ class ConnectionManager:
             "active_gate": session.active_gate_payload(),
             "active_traps": session.active_traps_payload(),
         })
+        if not payload.get("recording_showcase"):
+            self._ensure_mission_director_task(room_id, session)
+
+    def _ensure_mission_director_task(self, room_id: str, session) -> None:
+        existing = self._mission_director_tasks.get(room_id)
+        if existing and not existing.done():
+            existing.cancel()
+        task = asyncio.create_task(self._run_mission_director(room_id, session))
+        self._mission_director_tasks[room_id] = task
+        task.add_done_callback(
+            lambda completed, target_room=room_id: self._forget_mission_director_task(
+                target_room, completed,
+            )
+        )
+
+    async def _run_mission_director(self, room_id: str, session) -> None:
+        """옥상 플레이를 막지 않고 Ollama 사건 카드를 준비한다."""
+        try:
+            direction = await asyncio.to_thread(
+                generate_llm_mission_direction, session.mission_seed,
+            )
+            if direction is None:
+                return
+            current = session_manager.sessions.get(room_id)
+            if (
+                current is not session
+                or session.vertical_missions is None
+                or session.vertical_round.phase != VerticalRoundPhase.ROOFTOP_INTRO
+                or session.vertical_missions.intercom.started_at is not None
+            ):
+                return
+            apply_mission_direction(session.vertical_missions, direction)
+            await self.broadcast(room_id, {
+                "type": "mission_generation_ready",
+                "seed": session.mission_seed,
+                "randomized": True,
+                "source": direction.source,
+                "scenario_title": direction.scenario_title,
+                "changes": [
+                    "3층 AI 증거 추론", "2층 AI 음성 변환 규칙",
+                    "1층 CCTV 음성 관제",
+                ],
+            })
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("mission director failed: room=%s", room_id)
+
+    def _forget_mission_director_task(
+        self,
+        room_id: str,
+        completed: asyncio.Task[None],
+    ) -> None:
+        if self._mission_director_tasks.get(room_id) is completed:
+            self._mission_director_tasks.pop(room_id, None)
+        if not completed.cancelled() and completed.exception():
+            logger.error(
+                "mission director task failed: room=%s error=%s",
+                room_id,
+                completed.exception(),
+            )
 
     def _ensure_hunter_task(self, room_id: str) -> None:
         existing = self._hunter_tasks.get(room_id)
@@ -2345,6 +2563,12 @@ class ConnectionManager:
                     return
                 if not session.is_paused and session.state.phase in {GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE}:
                     intent = advance_hunter(session)
+                    if intent.get("door_opened"):
+                        await self.broadcast(room_id, {
+                            "type": "door_state_changed",
+                            "door_id": intent["door_opened"], "open": True,
+                            "actor_id": "seeker", "forced": True,
+                        })
                     if intent.get("actor_floor_changed"):
                         await self.broadcast(room_id, {
                             "type": "actor_floor_changed",
@@ -2644,7 +2868,7 @@ class ConnectionManager:
             if session.vertical_missions is not None:
                 vm = session.vertical_missions
                 desc = vm.intercom.describe_for_ai(session.state.forbidden_words)
-                message = f"인터폰에 기호가 보여! {desc}"
+                message = f"{vm.intercom.companion_lead} {desc}"
                 message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
             else:
                 message = "인터폰에 기호가 보여!"

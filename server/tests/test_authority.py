@@ -6,10 +6,12 @@ import pytest
 
 from app.ai.hunter import _safe_hunter_step
 from app.game.authority import (
+    DYNAMIC_DOORS_BY_ID,
     MovementSample,
     NAVIGATION_NODES_BY_FLOOR,
     WALL_RECTS_BY_FLOOR,
     has_clear_catch_line,
+    has_clear_hunter_line,
     movement_is_plausible,
 )
 from app.game.map_slots import get_map_slot
@@ -45,6 +47,15 @@ def test_outdoor_wall_blocks_short_rescue_or_catch_line() -> None:
 def test_low_outdoor_props_do_not_block_open_line() -> None:
     # 낮은 벤치와 화분은 시야 계약에 넣지 않아 열린 구조선으로 취급한다.
     assert has_clear_catch_line((-24.0, 8.0), (-24.0, 9.0), "OUT")
+
+
+def test_closed_room_door_blocks_hunter_but_open_door_restores_line() -> None:
+    door = DYNAMIC_DOORS_BY_ID["north_room_F1_1"]
+    x, z = map(float, door["center"])
+    start, end = (x, z - 0.6), (x, z + 0.6)
+    assert has_clear_catch_line(start, end, "F1")
+    assert not has_clear_hunter_line(start, end, "F1", {})
+    assert has_clear_hunter_line(start, end, "F1", {door["id"]: True})
 
 
 def test_navigation_graph_links_only_use_clear_authored_openings() -> None:

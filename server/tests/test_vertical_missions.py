@@ -1,6 +1,7 @@
 """옥상 기억 신호와 층별 협동 미션 테스트."""
 
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -14,6 +15,8 @@ from app.ai.vertical_missions import (
     create_basement_mission,
     create_broadcast_inference_mission,
     create_vertical_missions,
+    fallback_mission_direction,
+    generate_llm_mission_direction,
 )
 from app.game.progression import FinalRoute, InvalidProgression, VerticalRoundPhase, WorldFloor
 from app.game.session import GameSession
@@ -249,6 +252,68 @@ class TestIntercomMission:
         assert isinstance(desc, str)
         assert len(desc) > 0
 
+    def test_reverse_rule_requires_human_to_transform_ai_report(self) -> None:
+        mission = IntercomMission(
+            sequence=[
+                {"shape": "삼각형", "color": "빨간"},
+                {"shape": "원", "color": "파란"},
+                {"shape": "네모", "color": "초록"},
+            ],
+            response_rule="reverse",
+        )
+
+        assert not mission.check_answer("빨간 삼각형, 파란 원, 초록 네모")["success"]
+        assert mission.check_answer("초록 네모, 파란 원, 빨간 삼각형")["success"]
+
+    def test_rotate_rule_moves_first_observation_to_the_end(self) -> None:
+        mission = IntercomMission(
+            sequence=[
+                {"shape": "삼각형", "color": "빨간"},
+                {"shape": "원", "color": "파란"},
+                {"shape": "네모", "color": "초록"},
+            ],
+            response_rule="rotate_left",
+        )
+
+        assert mission.expected_sequence == [
+            {"shape": "원", "color": "파란"},
+            {"shape": "네모", "color": "초록"},
+            {"shape": "삼각형", "color": "빨간"},
+        ]
+        assert mission.check_answer("파란 원, 초록 네모, 빨간 삼각형")["success"]
+
+
+class TestMissionDirector:
+    def test_seeded_fallback_always_uses_a_cooperative_transform(self) -> None:
+        plans = [fallback_mission_direction(seed) for seed in range(6)]
+
+        assert {plan.intercom_rule for plan in plans} == {"reverse", "rotate_left"}
+        assert all(plan.source == "seeded_fallback" for plan in plans)
+
+    def test_ollama_can_write_story_but_only_choose_an_allowed_rule(self) -> None:
+        generated = {
+            "scenario_title": "심야 방송 기록",
+            "broadcast_briefing": "누군가 비상 방송의 증거 순서를 바꾸어 놓았다.",
+            "intercom_briefing": "낡은 중계기가 송신 순서를 뒤집어 전달한다.",
+            "security_briefing": "관제실 화면만 안전한 복도 방향을 보여 준다.",
+            "intercom_rule": "reverse",
+            "companion_lead": "표식이 세 번 떴어. 내가 본 순서를 말할게.",
+        }
+        with patch("app.ai.onboarding._ollama_json", return_value=generated):
+            plan = generate_llm_mission_direction(77)
+
+        assert plan is not None
+        assert plan.source == "ollama"
+        assert plan.scenario_title == "심야 방송 기록"
+        assert plan.intercom_rule == "reverse"
+
+    def test_ollama_cannot_invent_an_unimplemented_rule(self) -> None:
+        with patch(
+            "app.ai.onboarding._ollama_json",
+            return_value={"intercom_rule": "teleport_everyone"},
+        ):
+            assert generate_llm_mission_direction(77) is None
+
 
 # ---------------------------------------------------------------------------
 # SimultaneousMission 단위 테스트
@@ -420,7 +485,10 @@ class TestIntercomFlow:
         start_intercom_mission(session)
         vm.intercom.ai_arrived = True
         # 시퀀스를 알고 있으므로 정확히 입력
-        text_parts = [f"{item['color']} {item['shape']}" for item in vm.intercom.sequence]
+        text_parts = [
+            f"{item['color']} {item['shape']}"
+            for item in vm.intercom.expected_sequence
+        ]
         transcript = ", ".join(text_parts)
         result = submit_intercom_answer(session, "human", transcript)
         assert result["success"]

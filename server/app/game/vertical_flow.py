@@ -304,11 +304,13 @@ def start_intercom_mission(session: Any) -> dict:
     human_slot = get_map_slot(intercom.human_position_slot)
     return {
         "mission": "floor_2_intercom",
-        "prompt": "AI 동료가 다른 교실의 기호를 읽으면, 들은 색과 도형을 순서대로 말하세요.",
+        "prompt": intercom.prompt,
         "ai_position": ai_slot["position"],
         "human_position": human_slot["position"],
         "ai_companion_id": intercom.ai_companion_id,
         "sequence_count": len(intercom.sequence),
+        "response_rule": intercom.response_rule,
+        "response_rule_label": intercom.response_rule_label,
     }
 
 
@@ -384,9 +386,10 @@ def start_security_guidance(session: Any, actor_id: str) -> dict:
     return {
         "mission": "floor_1_security_guidance",
         "prompt": (
+            f"{mission.scenario_briefing} "
             "CCTV의 안전 표식을 보고 Q로 AI에게 방향을 알려 주세요. "
             f"첫 표식: {state['expected_command']}"
-        ),
+        ).strip(),
         **state,
     }
 

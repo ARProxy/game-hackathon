@@ -37,10 +37,11 @@ function resolveWebSocketBaseUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const hostname = window.location.hostname.replace(/^\[|\]$/g, '')
   const localHostname = hostname.includes(':') ? `[${hostname}]` : hostname
-  // Vite 개발 서버는 LAN에서도 5173, API 서버는 8000을 사용한다.
+  // Vite 개발 서버는 LAN에서도 5173, 게임 서버는 다른 로컬 서비스와
+  // 충돌하지 않는 전용 8001 포트를 사용한다.
   // 같은 origin을 쓰면 5173의 Vite에 WebSocket을 요청한 뒤 구형 데모로
   // 조용히 폴백해 서버의 옥상 스폰/수직 진행 계약이 전부 사라진다.
-  const host = import.meta.env.DEV ? `${localHostname}:8000` : window.location.host
+  const host = import.meta.env.DEV ? `${localHostname}:8001` : window.location.host
   return `${protocol}//${host}/ws`
 }
 
@@ -173,6 +174,11 @@ export default function useWebSocket() {
         useGameStore.getState().setForbiddenProfile(data.state.forbidden_profile ?? null)
         setPhase('playing')
         if (data.state.players) hydratePlayers(data.state.players)
+        if (data.state.door_states) {
+          for (const [doorId, open] of Object.entries(data.state.door_states)) {
+            useGameStore.getState().setDoorState(doorId, Boolean(open))
+          }
+        }
         if (data.state.vertical_progression) {
           useGameStore.getState().setVerticalProgression(data.state.vertical_progression)
         }
@@ -201,6 +207,10 @@ export default function useWebSocket() {
           useGameStore.getState().setMissionGeneration({
             seed,
             randomized: true,
+            source: String(data.state.mission_generation.source ?? 'seeded_fallback'),
+            scenarioTitle: data.state.mission_generation.scenario_title
+              ? String(data.state.mission_generation.scenario_title)
+              : undefined,
             changes: Array.isArray(data.state.mission_generation.changes)
               ? data.state.mission_generation.changes
               : [],
@@ -210,6 +220,30 @@ export default function useWebSocket() {
             `이번 판 미션 #${String(seed).padStart(6, '0')} 구성 완료 · 신호, 증거 위치, 기호와 경로가 새로 배치되었습니다.`,
           )
         }
+        if (data.state.active_world_event) {
+          useGameStore.getState().setActiveWorldEvent({
+            eventId: String(data.state.active_world_event.event_id),
+            eventType: String(data.state.active_world_event.event_type),
+            title: String(data.state.active_world_event.title ?? '학교 이상 현상'),
+            message: String(data.state.active_world_event.message ?? ''),
+            startedAt: Date.now(),
+            durationMs: Number(data.state.active_world_event.remaining_seconds ?? 0) * 1000,
+          })
+        }
+        break
+
+      case 'mission_generation_ready':
+        useGameStore.getState().setMissionGeneration({
+          seed: Number(data.seed ?? 0),
+          randomized: Boolean(data.randomized),
+          source: String(data.source ?? 'ollama'),
+          scenarioTitle: data.scenario_title ? String(data.scenario_title) : undefined,
+          changes: Array.isArray(data.changes) ? data.changes : [],
+        })
+        addSubtitle(
+          'system',
+          `OLLAMA 사건 생성 완료 — ${String(data.scenario_title ?? '야간 학교 봉쇄')}. AI와 말로 풀어야 하는 층별 규칙이 정해졌습니다.`,
+        )
         break
 
       case 'forbidden_profile_shifted':
@@ -280,6 +314,18 @@ export default function useWebSocket() {
 
       case 'seeker_phase_event':
         addSubtitle('system', data.message ?? '학교 안에서 술래의 움직임이 달라졌습니다.')
+        break
+
+      case 'world_event_started':
+        useGameStore.getState().setActiveWorldEvent({
+          eventId: String(data.event_id),
+          eventType: String(data.event_type),
+          title: String(data.title ?? '학교 이상 현상'),
+          message: String(data.message ?? ''),
+          startedAt: Date.now(),
+          durationMs: Number(data.duration_seconds ?? 0) * 1000,
+        })
+        addSubtitle('system', `${String(data.title ?? '학교 이상 현상')} — ${String(data.message ?? '')}`)
         break
 
       case 'vertical_mission_feedback':
@@ -493,6 +539,12 @@ export default function useWebSocket() {
         })
         break
 
+      case 'door_state_changed':
+        useGameStore.getState().setDoorState(String(data.door_id), Boolean(data.open))
+        if (data.sealed) addSubtitle('system', 'ON AIR — 방송실 방화문이 닫혔습니다. 술래가 떠날 때까지 말소리를 멈추세요.')
+        else if (data.forced) addSubtitle('system', '쾅! 술래가 소리를 따라 문을 강제로 열었습니다.')
+        break
+
       case 'seeker_intent':
         setHunterIntent({
           state: data.state,
@@ -503,6 +555,9 @@ export default function useWebSocket() {
           directorTension: data.director_tension ?? 0,
           speedMultiplier: data.speed_multiplier ?? 1,
           stageSpeedMultiplier: data.stage_speed_multiplier ?? 1,
+          doorId: data.door_id,
+          doorPressureSeconds: data.door_pressure_seconds,
+          mutationPhase: data.mutation_phase,
         })
         useGameStore.getState().setSecondaryHunterIntent(data.secondary ? {
           state: data.secondary.state,
@@ -513,6 +568,9 @@ export default function useWebSocket() {
           directorTension: data.director_tension ?? 0,
           speedMultiplier: data.secondary.speed_multiplier ?? 1,
           stageSpeedMultiplier: data.secondary.stage_speed_multiplier ?? 1,
+          doorId: data.secondary.door_id,
+          doorPressureSeconds: data.secondary.door_pressure_seconds,
+          mutationPhase: data.secondary.mutation_phase,
         } : null)
         break
 
