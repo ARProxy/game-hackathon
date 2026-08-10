@@ -13,7 +13,7 @@ import hunter from './hunterContract.json'
 import verticalMapContract from './verticalMapContract.json'
 
 const CATCH_RETRY_SECONDS = 0.35
-const PROXIMITY_SOUND_RANGE = 18
+const PROXIMITY_SOUND_RANGE = 10
 const ACTOR_CORRECTION_SPEED = 7
 const _playerPosition = new THREE.Vector3()
 const _displayTarget = { x: 0, z: 0 }
@@ -82,6 +82,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     return intent?.state === 'DETECTED' || intent?.state === 'CHASE'
   })
   const redLightRef = useRef<THREE.PointLight>(null)
+  const presenceRef = useRef<THREE.Group>(null)
   const blockerLightRef = useRef<THREE.SpotLight>(null)
   const blockerAimRef = useRef<THREE.Object3D>(null)
   const previousState = useRef<HunterState | null>(null)
@@ -102,7 +103,9 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     if (store.isPaused) return
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
     const seekerState = store.players[seekerId]
+    const humanState = store.players[store.playerId]
     const currentFloor = seekerState?.position.floor ?? null
+    const sharesHumanFloor = Boolean(currentFloor && currentFloor === humanState?.position.floor)
     const previousFloor = previousFloorRef.current
     if (!previousFloor) previousFloorRef.current = currentFloor
     else if (currentFloor && currentFloor !== previousFloor) {
@@ -175,7 +178,8 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
 
     const intent = seekerId === 'seeker' ? store.hunterIntent : store.secondaryHunterIntent
     if (intent) {
-      if ((intent.state === 'DETECTED' || intent.state === 'CHASE')
+      if (sharesHumanFloor && intent.targetId === store.playerId
+        && (intent.state === 'DETECTED' || intent.state === 'CHASE')
         && previousState.current !== 'DETECTED' && previousState.current !== 'CHASE') {
         playSeekerDetected()
       }
@@ -225,7 +229,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     }
 
     const playerPos = playerRef.current?.getWorldPosition(_playerPosition)
-    if (playerPos) {
+    if (playerPos && sharesHumanFloor) {
       const threatX = pos.x - playerPos.x
       const threatZ = pos.z - playerPos.z
       const threatDistance = Math.hypot(threatX, threatZ)
@@ -241,7 +245,10 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         lastProximitySound.current = clock.elapsedTime
       }
 
-      const detected = intent?.state === 'DETECTED' || intent?.state === 'CHASE'
+      const detected = (
+        (intent?.state === 'DETECTED' || intent?.state === 'CHASE')
+        && intent.targetId === store.playerId
+      )
       if (detected && clock.elapsedTime - lastSirenSound.current >= 1.15) {
         const rightX = Math.cos(playerRef.current?.rotation.y ?? 0)
         const rightZ = -Math.sin(playerRef.current?.rotation.y ?? 0)
@@ -257,7 +264,7 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     movementRef.current = THREE.MathUtils.damp(movementRef.current, moved ? 1 : 0, moved ? 9 : 14, delta)
     lastPos.current.set(pos.x, actorBaseY, pos.z)
     const running = intent?.state === 'CHASE' || intent?.state === 'RUSH_GATE'
-    if (moved && playerPos) {
+    if (moved && playerPos && sharesHumanFloor) {
       const threatX = pos.x - playerPos.x
       const threatZ = pos.z - playerPos.z
       const distance = Math.hypot(threatX, threatZ)
@@ -277,6 +284,11 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
     if (redLightRef.current) {
       redLightRef.current.intensity = 32 + Math.sin(clock.elapsedTime * 12) * 22
     }
+    if (presenceRef.current) {
+      const pulse = 1 + Math.sin(clock.elapsedTime * 2.1 + (seekerId === 'seeker-2' ? 1.4 : 0)) * 0.09
+      presenceRef.current.scale.set(pulse, 1 + (pulse - 1) * 1.7, pulse)
+      presenceRef.current.rotation.y = Math.sin(clock.elapsedTime * 0.73) * 0.08
+    }
     if (blockerLightRef.current && blockerAimRef.current) {
       blockerLightRef.current.target = blockerAimRef.current
     }
@@ -284,6 +296,24 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
 
   return (
     <group ref={groupRef} position={spawn}>
+      <group ref={presenceRef}>
+        <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.25, seekerId === 'seeker-2' ? 1.05 : 1.3, 24]} />
+          <meshBasicMaterial color="#09020B" transparent opacity={0.42} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, 1.22, -0.2]} scale={[0.68, 1.35, 0.42]}>
+          <sphereGeometry args={[0.72, 10, 8]} />
+          <meshBasicMaterial color="#050108" transparent opacity={0.28} depthWrite={false} />
+        </mesh>
+        <mesh position={[-0.14, 1.58, 0.43]}>
+          <sphereGeometry args={[0.035, 8, 6]} />
+          <meshBasicMaterial color={seekerId === 'seeker-2' ? '#D9F1FF' : '#FF123D'} toneMapped={false} />
+        </mesh>
+        <mesh position={[0.14, 1.58, 0.43]}>
+          <sphereGeometry args={[0.035, 8, 6]} />
+          <meshBasicMaterial color={seekerId === 'seeker-2' ? '#D9F1FF' : '#FF123D'} toneMapped={false} />
+        </mesh>
+      </group>
       <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} movementRef={movementRef} />
       {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />

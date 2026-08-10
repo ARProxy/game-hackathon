@@ -3,10 +3,10 @@
 import { useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { useGameStore } from '../stores/gameStore'
+import { useGameStore, type HunterIntent } from '../stores/gameStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
-const THREAT_RANGE = 18
+const NEAR_THREAT_RANGE = 8.5
 const rootStyle = document.documentElement.style
 const _playerPosition = new THREE.Vector3()
 
@@ -31,20 +31,35 @@ export default function ThreatFeedback({
   useFrame(() => {
     const player = playerRef.current
     const store = useGameStore.getState()
-    const intent = store.hunterIntent
+    const playerState = store.players[store.playerId]
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
-    if (!enabled || !active || !player || !intent) {
+    if (!enabled || !active || !player || !playerState) {
       clearThreatFeedback()
       return
     }
 
     const playerPosition = player.getWorldPosition(_playerPosition)
-    const dx = intent.seekerPosition.x - playerPosition.x
-    const dz = intent.seekerPosition.z - playerPosition.z
-    const distance = Math.hypot(dx, dz)
-    const proximity = THREE.MathUtils.clamp(1 - distance / THREAT_RANGE, 0, 1)
-    const detected = intent.state === 'DETECTED' || intent.state === 'CHASE'
-    const intensity = Math.max(proximity, detected ? 0.62 : 0)
+    const threats = [
+      { intent: store.hunterIntent, seekerId: 'seeker' },
+      { intent: store.secondaryHunterIntent, seekerId: 'seeker-2' },
+    ].flatMap(({ intent, seekerId }) => {
+      if (!intent || store.players[seekerId]?.position.floor !== playerState.position.floor) return []
+      const dx = intent.seekerPosition.x - playerPosition.x
+      const dz = intent.seekerPosition.z - playerPosition.z
+      const distance = Math.hypot(dx, dz)
+      const proximity = THREE.MathUtils.clamp(1 - distance / NEAR_THREAT_RANGE, 0, 1)
+      const detected = (
+        (intent.state === 'DETECTED' || intent.state === 'CHASE')
+        && intent.targetId === store.playerId
+      )
+      return [{ intent, dx, dz, distance, intensity: Math.max(proximity, detected ? 0.72 : 0) }]
+    }) as Array<{ intent: HunterIntent; dx: number; dz: number; distance: number; intensity: number }>
+    const threat = threats.sort((a, b) => b.intensity - a.intensity)[0]
+    if (!threat || threat.intensity <= 0) {
+      clearThreatFeedback()
+      return
+    }
+    const { dx, dz, distance, intensity } = threat
     const rightX = Math.cos(player.rotation.y)
     const rightZ = -Math.sin(player.rotation.y)
     const pan = distance > 0.001

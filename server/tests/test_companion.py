@@ -177,6 +177,23 @@ def test_frozen_teammate_becomes_assigned_rescue_goal() -> None:
     assert intent["target_id"] == human.player_id
 
 
+def test_player_requested_rescue_overrides_nearby_seeker_avoidance() -> None:
+    session = make_session("companion-rescue-under-pressure")
+    human = session.state.get_player("human")
+    partner = session.state.get_player("partner")
+    seeker = session.state.get_player("seeker")
+    human.position.x, human.position.z = 12.0, 0.0
+    partner.position.x, partner.position.z = 12.5, 0.0
+    seeker.position.x, seeker.position.z = 15.0, 0.0
+    human.freeze()
+    request_companion_rescue(session, human.player_id)
+
+    intent = decide_companion_intent(session)
+
+    assert intent["state"] == "RESCUE_TEAMMATE"
+    assert intent["reason"] == "player_requested_rescue"
+
+
 def test_visible_nearby_seeker_interrupts_exploration() -> None:
     session = make_session("companion-avoid")
     partner = session.state.get_player("partner")

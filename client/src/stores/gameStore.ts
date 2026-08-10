@@ -542,7 +542,12 @@ export const useGameStore = create<GameStore>((set) => ({
         [event.playerId]: {
           ...state.players[event.playerId],
           status: 'frozen',
-          position: event.position,
+          // 빙결 이벤트는 x/z만 공개한다. 기존 층·높이·구역을 보존하지 않으면
+          // 구조 직후 플레이어의 floor가 사라져 미션 진행과 같은 층 위협 판정이 멈춘다.
+          position: {
+            ...state.players[event.playerId]?.position,
+            ...event.position,
+          },
         },
       },
     })),

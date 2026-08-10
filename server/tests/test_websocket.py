@@ -987,7 +987,7 @@ class TestGameOver:
             assert freeze_msg["type"] == "freeze"
             assert freeze_msg["player_id"] == "player1"
             assert freeze_msg["forbidden_word_violations"] == 1
-            assert freeze_msg["fw_rage_tier"] == "calm"
+            assert freeze_msg["fw_rage_tier"] == "warning"
 
             # 서버 상태에 AI 동료와 술래가 등록됐는지 새 연결의 시작 응답으로 확인한다.
             # 추가 game_over 메시지가 없어야 하므로 블로킹 receive 대신 세션 상태를 검사한다.

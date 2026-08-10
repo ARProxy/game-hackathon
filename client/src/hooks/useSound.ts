@@ -131,22 +131,25 @@ export default function useSound() {
     const proximity = Math.min(1, Math.max(0, intensity))
     if (proximity <= 0) return
 
-    // 가까울수록 묵직한 두 박자가 커지고, 짧은 휘파람 배음이 선명해진다.
-    const volume = 0.025 + proximity * 0.065
-    const baseFrequency = 58 + proximity * 20
-    tone(baseFrequency, 0, 0.13, volume, baseFrequency * 0.82, 'triangle', pan)
-    tone(baseFrequency * 0.9, 0.16, 0.11, volume * 0.72, baseFrequency * 0.72, 'sine', pan)
+    // 심장박동 아래에 불규칙한 마찰음과 저주파 호흡을 겹쳐, 화면보다
+    // 먼저 '같은 층에 무언가 있다'는 감각을 준다.
+    const volume = 0.035 + proximity * 0.085
+    const baseFrequency = 46 + proximity * 18
+    tone(baseFrequency, 0, 0.17, volume, baseFrequency * 0.68, 'triangle', pan)
+    tone(baseFrequency * 0.82, 0.19, 0.14, volume * 0.78, baseFrequency * 0.55, 'sine', pan)
+    noise(0.025, 0.22, 0.018 + proximity * 0.035, 760 - proximity * 360, pan)
     if (proximity >= 0.45) {
-      tone(520 + proximity * 150, 0.03, 0.19, 0.012 + proximity * 0.016,
-        430 + proximity * 110, 'sine', pan)
+      tone(280 + proximity * 90, 0.04, 0.32, 0.012 + proximity * 0.022,
+        170 + proximity * 45, 'sawtooth', pan)
     }
-  }, [tone])
+  }, [noise, tone])
 
   const playSeekerDetected = useCallback(() => {
-    tone(720, 0, 0.22, 0.11, 540, 'sawtooth')
-    tone(520, 0.22, 0.22, 0.11, 760, 'sawtooth')
-    tone(760, 0.44, 0.28, 0.1, 500, 'square')
-  }, [tone])
+    noise(0, 0.5, 0.15, 1050)
+    tone(96, 0, 0.52, 0.17, 38, 'sawtooth')
+    tone(740, 0.04, 0.18, 0.12, 420, 'square')
+    tone(420, 0.2, 0.28, 0.11, 920, 'sawtooth')
+  }, [noise, tone])
 
   const playSeekerFootstep = useCallback((intensity: number, pan: number, running: boolean) => {
     const proximity = Math.min(1, Math.max(0, intensity))
@@ -173,9 +176,11 @@ export default function useSound() {
   }, [noise, tone])
 
   const playAmbientPulse = useCallback(() => {
-    tone(48, 0, 2.8, 0.075, 42, 'sine', 0, 'ambience')
-    tone(96, 0.18, 2.1, 0.025, 82, 'triangle', -0.18, 'ambience')
-    noise(0.05, 1.4, 0.018, 120, 0.22, 'ambience')
+    tone(48, 0, 3.2, 0.07, 42, 'sine', 0, 'ambience')
+    tone(60, 0.05, 3.4, 0.018, 59, 'sine', -0.24, 'ambience')
+    tone(120, 0.12, 2.7, 0.012, 119, 'triangle', 0.28, 'ambience')
+    noise(0.05, 1.8, 0.022, 135, 0.22, 'ambience')
+    noise(2.15, 0.13, 0.032, 1500, -0.35, 'ambience')
   }, [noise, tone])
 
   const playRooftopSignal = useCallback((step: number) => {

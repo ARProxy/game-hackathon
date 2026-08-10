@@ -58,6 +58,12 @@ for (const door of COMPACT_SCHOOL.doors) {
 }
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'furniture').length >= 100, '축소 맵에서 실내 구조 밀도가 다시 빠졌다')
 assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roofEquipment').length >= 11, '옥상이 비어 보이지 않도록 설비 구조가 필요하다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'windowSill').length >= 60, '외벽 창대가 빠져 큰 벽면이 평면으로 돌아갔다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'facadePier').length >= 48, '중정 입면의 반복 수직 피어가 부족하다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'corridorBeam').length >= 42, '복도 천장 구조 리듬이 부족하다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'wallBumper').length >= 40, '학교 복도 보호대가 문 개구부 사이에 유지되어야 한다')
+assert.equal(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'entryPortal').length, 3, '정문 포털은 좌우 측벽과 상부 인방으로 구성되어야 한다')
+assert.ok(COMPACT_SCHOOL.boxes.filter((item) => item.role === 'roofCanopy').length === 1, '옥상 계단실 캐노피가 필요하다')
 for (const room of COMPACT_SCHOOL.rooms) {
   assert.ok(
     COMPACT_SCHOOL.boxes.some((item) => item.f === room.floor && item.role === 'furniture' && item.id.startsWith(`${room.id}_`)),

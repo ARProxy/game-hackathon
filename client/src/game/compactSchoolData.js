@@ -41,6 +41,9 @@ export const COMPACT_PALETTE = {
   darkGlass: '#5f8190',
   signBlue: '#3f607d',
   concreteLight: '#a7a39a',
+  facadeTrim: '#9aa3a7',
+  corridorBumper: '#536d7d',
+  entryStone: '#8b908f',
 }
 
 const FY = FLOOR_Y
@@ -702,6 +705,198 @@ function addSchoolLifeDetails() {
   }
 }
 
+/**
+ * 건물의 큰 면을 학교 건축의 반복 단위로 분절한다.
+ * 외벽과 복도 골조에 매립되는 비충돌 장식만 사용해 서버 벽·AI 경로는
+ * 그대로 유지하면서 창호, 층선, 기둥, 천장 보와 현관의 위계를 읽게 한다.
+ */
+function addArchitecturalCharacter() {
+  const addTrimBox = (id, floor, p, s, material, role) => addBox({
+    id, floor, p, s, material, role, collider: false,
+  })
+
+  const addWallProtectionRun = ({ floor, axis, fixed, start, end, openings, inward, prefix }) => {
+    const y = FY[floor]
+    const sorted = openings.slice().sort((a, b) => a.center - b.center)
+    const segments = []
+    let cursor = start
+    for (const opening of sorted) {
+      const edge = opening.center - opening.width / 2 - 0.08
+      if (edge - cursor > 0.35) segments.push([cursor, edge])
+      cursor = opening.center + opening.width / 2 + 0.08
+    }
+    if (end - cursor > 0.35) segments.push([cursor, end])
+
+    for (const [index, [segmentStart, segmentEnd]] of segments.entries()) {
+      const center = (segmentStart + segmentEnd) / 2
+      const length = segmentEnd - segmentStart
+      const p = axis === 'x'
+        ? [center, y + 0.94, fixed + inward * 0.145]
+        : [fixed + inward * 0.145, y + 0.94, center]
+      addTrimBox(
+        `${floor}_${prefix}_bumper_${index + 1}`,
+        floor,
+        p,
+        axis === 'x' ? [length, 0.11, 0.11] : [0.11, 0.11, length],
+        'corridorBumper',
+        'wallBumper',
+      )
+      addTrimBox(
+        `${floor}_${prefix}_skirting_${index + 1}`,
+        floor,
+        axis === 'x'
+          ? [center, y + 0.09, fixed + inward * 0.125]
+          : [fixed + inward * 0.125, y + 0.09, center],
+        axis === 'x' ? [length, 0.18, 0.08] : [0.08, 0.18, length],
+        'extFrame',
+        'baseboard',
+      )
+    }
+  }
+
+  for (const floor of ['F1', 'F2', 'F3']) {
+    const y = FY[floor]
+    const outerSill = floor === 'F1' ? 1.0 : 0.9
+
+    // 네 면의 층선과 창별 돌출 창대·얕은 차양이 큰 외벽을 교실 베이로 나눈다.
+    for (const [side, fixed] of [['north', B.z0 - 0.15], ['south', B.z1 + 0.15]]) {
+      const outward = side === 'north' ? -1 : 1
+      addTrimBox(
+        `${floor}_${side}_upper_cornice`, floor,
+        [-24, y + 3.13, fixed], [48.45, 0.18, 0.34],
+        'facadeTrim', 'facadeCornice',
+      )
+      for (const [index, x] of WINDOW_CENTERS_X.entries()) {
+        addTrimBox(
+          `${floor}_${side}_window_sill_${index + 1}`, floor,
+          [x, y + outerSill - 0.025, fixed + outward * 0.09], [3.94, 0.11, 0.43],
+          'concreteLight', 'windowSill',
+        )
+        addTrimBox(
+          `${floor}_${side}_window_hood_${index + 1}`, floor,
+          [x, y + 2.66, fixed + outward * 0.13], [3.94, 0.16, 0.5],
+          'facadeTrim', 'windowHood',
+        )
+      }
+    }
+    for (const [side, fixed] of [['west', B.x0 - 0.15], ['east', B.x1 + 0.15]]) {
+      const outward = side === 'west' ? -1 : 1
+      addTrimBox(
+        `${floor}_${side}_lower_band`, floor,
+        [fixed, y + 0.15, -28], [0.34, 0.22, 40.3],
+        'extBand', 'facadeBand',
+      )
+      addTrimBox(
+        `${floor}_${side}_upper_cornice`, floor,
+        [fixed, y + 3.13, -28], [0.34, 0.18, 40.45],
+        'facadeTrim', 'facadeCornice',
+      )
+      for (const [index, z] of WINDOW_CENTERS_Z.entries()) {
+        addTrimBox(
+          `${floor}_${side}_window_sill_${index + 1}`, floor,
+          [fixed + outward * 0.09, y + outerSill - 0.025, z], [0.43, 0.11, 3.94],
+          'concreteLight', 'windowSill',
+        )
+        addTrimBox(
+          `${floor}_${side}_window_hood_${index + 1}`, floor,
+          [fixed + outward * 0.13, y + 2.66, z], [0.5, 0.16, 3.94],
+          'facadeTrim', 'windowHood',
+        )
+      }
+    }
+
+    // 중정은 수직 피어와 연속 창대가 반복되는 학교 안뜰 입면으로 만든다.
+    for (const [side, fixed, inward] of [
+      ['north', C.z0, 1], ['south', C.z1, -1],
+    ]) {
+      addTrimBox(
+        `${floor}_court_${side}_sill_band`, floor,
+        [-24, y + 0.91, fixed + inward * 0.15], [23.75, 0.12, 0.34],
+        'concreteLight', 'courtyardBand',
+      )
+      addTrimBox(
+        `${floor}_court_${side}_lintel_band`, floor,
+        [-24, y + 2.62, fixed + inward * 0.17], [23.75, 0.16, 0.4],
+        'facadeTrim', 'courtyardBand',
+      )
+      for (const [index, x] of [C.x0, -28, -20, C.x1].entries()) addTrimBox(
+        `${floor}_court_${side}_pier_${index + 1}`, floor,
+        [x, y + 1.58, fixed + inward * 0.16], [0.3, 3.16, 0.42],
+        'extFrame', 'facadePier',
+      )
+    }
+    for (const [side, fixed, inward] of [
+      ['west', C.x0, 1], ['east', C.x1, -1],
+    ]) {
+      addTrimBox(
+        `${floor}_court_${side}_sill_band`, floor,
+        [fixed + inward * 0.15, y + 0.91, -28], [0.34, 0.12, 15.55],
+        'concreteLight', 'courtyardBand',
+      )
+      addTrimBox(
+        `${floor}_court_${side}_lintel_band`, floor,
+        [fixed + inward * 0.17, y + 2.62, -28], [0.4, 0.16, 15.55],
+        'facadeTrim', 'courtyardBand',
+      )
+      for (const [index, z] of [C.z0, -30, -26, C.z1].entries()) addTrimBox(
+        `${floor}_court_${side}_pier_${index + 1}`, floor,
+        [fixed + inward * 0.16, y + 1.58, z], [0.42, 3.16, 0.3],
+        'extFrame', 'facadePier',
+      )
+    }
+
+    // 복도 보호대·걸레받이는 문 개구부를 정확히 비우고, 천장 보는 8m 베이를 읽게 한다.
+    const northOpenings = [
+      { center: -36, width: STAIR_FIRE_DOOR_WIDTH }, { center: -28, width: 1.05 },
+      { center: -20, width: 1.5 }, { center: -12, width: 1.5 },
+    ]
+    const southOpenings = [
+      { center: -36, width: 1.05 }, { center: -28, width: 1.05 },
+      { center: -20, width: 1.05 }, { center: -12, width: STAIR_FIRE_DOOR_WIDTH },
+    ]
+    const sideOpenings = [{ center: -32, width: 1.05 }, { center: -24, width: 1.05 }]
+    addWallProtectionRun({ floor, axis: 'x', fixed: -40, start: -40, end: -8, openings: northOpenings, inward: 1, prefix: 'north_corridor' })
+    addWallProtectionRun({ floor, axis: 'x', fixed: -16, start: -40, end: -8, openings: southOpenings, inward: -1, prefix: 'south_corridor' })
+    addWallProtectionRun({ floor, axis: 'z', fixed: -40, start: C.z0, end: C.z1, openings: sideOpenings, inward: 1, prefix: 'west_corridor' })
+    addWallProtectionRun({ floor, axis: 'z', fixed: -8, start: C.z0, end: C.z1, openings: sideOpenings, inward: -1, prefix: 'east_corridor' })
+
+    for (const x of [-36, -28, -20, -12]) {
+      for (const [side, z] of [['north', -37.9], ['south', -18.1]]) addTrimBox(
+        `${floor}_${side}_ceiling_beam_${x}`, floor,
+        [x, y + 3.11, z], [0.18, 0.18, 4.0],
+        'facadeTrim', 'corridorBeam',
+      )
+    }
+    for (const z of [-32, -28, -24]) {
+      for (const [side, x] of [['west', -37.9], ['east', -10.1]]) addTrimBox(
+        `${floor}_${side}_ceiling_beam_${z}`, floor,
+        [x, y + 3.11, z], [4.0, 0.18, 0.18],
+        'facadeTrim', 'corridorBeam',
+      )
+    }
+  }
+
+  // 1층 정문은 얇은 문 하나가 아니라 기단·측벽·캐노피가 있는 학교 주출입구로 읽게 한다.
+  addTrimBox('main_entry_threshold', 'OUT', [-24, 0.06, B.z1 + 0.48], [4.4, 0.12, 1.2], 'entryStone', 'entryThreshold')
+  for (const [suffix, x] of [['west', -26.05], ['east', -21.95]]) addTrimBox(
+    `main_entry_portal_${suffix}`, 'OUT', [x, 1.4, B.z1 + 0.12], [0.42, 2.8, 0.58],
+    'extFrame', 'entryPortal',
+  )
+  addTrimBox('main_entry_portal_header', 'OUT', [-24, 2.72, B.z1 + 0.12], [4.5, 0.36, 0.58], 'extFrame', 'entryPortal')
+  addTrimBox('main_entry_canopy_underside', 'OUT', [-24, 2.63, B.z1 + 1.38], [8.0, 0.12, 2.75], 'white', 'entryCanopyDetail')
+  addTrimBox('main_entry_canopy_fascia', 'OUT', [-24, 2.78, B.z1 + 2.75], [8.2, 0.32, 0.24], 'schoolBlue', 'entryCanopyDetail')
+
+  // 옥상 계단실은 문 위 캐노피와 벽부등으로 미션 출구의 위계를 준다.
+  addTrimBox('roof_stair_canopy', 'ROOF', [-36, FY.ROOF + 2.58, -39.18], [3.35, 0.16, 0.92], 'facadeTrim', 'roofCanopy')
+  for (const [suffix, x] of [['left', -37.25], ['right', -34.75]]) addTrimBox(
+    `roof_stair_canopy_bracket_${suffix}`, 'ROOF', [x, FY.ROOF + 2.3, -39.58], [0.12, 0.6, 0.12],
+    'extFrame', 'roofCanopyBracket',
+  )
+  addTrimBox('roof_stair_wall_light', 'ROOF', [-36, FY.ROOF + 2.45, -39.04], [0.52, 0.22, 0.06], 'safetyYellow', 'emissive')
+  boxes[boxes.length - 1].emissive = true
+  addFixture('ROOF', [-36, FY.ROOF + 2.25, -38.85], 'amber')
+}
+
 function addElevatorShafts() {
   for (const elevator of COMPACT_ELEVATORS) {
     for (const floor of elevator.servedFloors) {
@@ -1321,6 +1516,9 @@ addRoof()
 addBasementShell()
 addBroadcastRoom()
 addNavigation()
+// 기존 자동 ID를 사용하는 서버 충돌 계약을 흔들지 않도록 모든 비충돌
+// 건축 장식은 구조·내비게이션 생성이 끝난 뒤 마지막에 추가한다.
+addArchitecturalCharacter()
 
 export const COMPACT_SCHOOL = Object.freeze({
   boxes,

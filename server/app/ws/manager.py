@@ -272,6 +272,12 @@ class ConnectionManager:
         if result.is_forbidden and player and player.role == PlayerRole.HUMAN:
             rage_policy = session.vertical_round.record_human_forbidden_word_violation()
             player.freeze()
+            if getattr(session, "recording_showcase_mode", None) == "full":
+                asyncio.create_task(self._assign_showcase_rescue_after_hold(
+                    room_id, player.player_id, 3.0,
+                ))
+            else:
+                self._assign_nearest_companion_rescue(session, player)
             record_hunter_signal(
                 session, player_id,
                 {"x": player.position.x, "z": player.position.z}, "freeze",
@@ -428,10 +434,7 @@ class ConnectionManager:
                     await self._broadcast_companion_speech(room_id, {
                         "type": "companion_report",
                         "companion_id": session.vertical_missions.intercom.ai_companion_id,
-                        "message": (
-                            f"{position_label}을 다시 확인해 줘. {issue}. "
-                            "다른 표현으로 말하면 내가 다시 대조할게."
-                        ),
+                        "message": f"{position_label}이 달라. {issue}. 색과 모양만 다시 말해 줘.",
                         "phase": VerticalRoundPhase.FLOOR_2.value,
                         "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
                         "speech_mode": SpeechMode.INTERCOM.value,
@@ -476,7 +479,7 @@ class ConnectionManager:
                     await self._broadcast_companion_speech(room_id, {
                         "type": "companion_report",
                         "companion_id": session.vertical_missions.simultaneous.ai_companion_id,
-                        "message": "원격 봉쇄 장치에 도착했어! 경비실 A 장치에서 E를 누르면 내가 B를 동시에 작동할게.",
+                        "message": "B에 도착했어. 네가 A를 누르면 나도 바로 누를게.",
                         "phase": VerticalRoundPhase.FLOOR_1.value,
                         "speech_intent": SpeechIntent.DECLARE_ACTION.value,
                         "speech_mode": SpeechMode.RADIO.value,
@@ -485,7 +488,7 @@ class ConnectionManager:
                     await self._broadcast_companion_speech(room_id, {
                         "type": "companion_report",
                         "companion_id": session.vertical_missions.simultaneous.ai_companion_id,
-                        "message": "그 방향은 막혀 보여. CCTV 표식의 방향을 다른 말로 다시 알려 줘.",
+                        "message": "길이 막혔어. CCTV 방향 다시 알려 줘.",
                         "phase": VerticalRoundPhase.FLOOR_1.value,
                         "speech_intent": SpeechIntent.ASK_CLARIFICATION.value,
                         "speech_mode": SpeechMode.RADIO.value,
@@ -887,7 +890,7 @@ class ConnectionManager:
                     await self._broadcast_companion_speech(room_id, {
                         "type": "companion_report",
                         "companion_id": session.vertical_missions.simultaneous.ai_companion_id,
-                        "message": "관제 화면은 네가 보고 있어. 방향을 말해 주면 교차로마다 멈춰 확인할게.",
+                        "message": "나는 아래로 갈게. CCTV에 뜬 방향만 짧게 말해 줘.",
                         "phase": VerticalRoundPhase.FLOOR_1.value,
                         "speech_intent": SpeechIntent.DECLARE_ACTION.value,
                         "speech_mode": SpeechMode.RADIO.value,
@@ -1223,11 +1226,14 @@ class ConnectionManager:
             })
 
         elif action_type == "rescue_request" and player and player.is_frozen:
-            for companion_id in DEFAULT_AI_PARTNER_IDS:
-                request_companion_rescue(session, player.player_id, companion_id)
+            assigned_id = self._assign_nearest_companion_rescue(
+                session, player,
+                sync_for_recording=getattr(session, "recording_showcase_mode", None) == "full",
+            )
             await self.broadcast(room_id, {
                 "type": "companion_assignment", "state": "RESCUE_TEAMMATE",
-                "target_id": player.player_id, "reason": "player_requested",
+                "target_id": player.player_id, "companion_id": assigned_id,
+                "reason": "player_requested",
             })
 
         elif action_type == "rescue":
@@ -1362,6 +1368,62 @@ class ConnectionManager:
             (first.position.x - second.position.x) ** 2
             + (first.position.z - second.position.z) ** 2
         ) <= radius ** 2
+
+    @staticmethod
+    def _assign_nearest_companion_rescue(
+        session: Any,
+        player: Player,
+        *,
+        sync_for_recording: bool = False,
+    ) -> str | None:
+        available = [
+            companion_id for companion_id in DEFAULT_AI_PARTNER_IDS
+            if (
+                (companion := session.state.get_player(companion_id))
+                and companion.status == PlayerStatus.ALIVE
+                and companion.position.floor == player.position.floor
+            )
+        ]
+        assigned_id = min(
+            available,
+            key=lambda companion_id: math.hypot(
+                session.state.get_player(companion_id).position.x - player.position.x,
+                session.state.get_player(companion_id).position.z - player.position.z,
+            ),
+            default=None,
+        )
+        if not assigned_id:
+            return None
+        request_companion_rescue(session, player.player_id, assigned_id)
+        if sync_for_recording:
+            # 촬영 동선은 플레이어가 콘솔까지 먼저 달리므로 AI가 문 밖에
+            # 남을 수 있다. 같은 방으로 합류한 뒤 실제 rescue 판정을 거친다.
+            rescuer = session.state.get_player(assigned_id)
+            rescuer.position.x = player.position.x
+            rescuer.position.y = player.position.y
+            rescuer.position.z = player.position.z + 0.8
+            rescuer.position.floor = player.position.floor
+            rescuer.position.zone = player.position.zone
+            session.position_samples[assigned_id] = MovementSample(
+                rescuer.position.x, rescuer.position.z, time.monotonic(),
+            )
+        return assigned_id
+
+    async def _assign_showcase_rescue_after_hold(
+        self,
+        room_id: str,
+        player_id: str,
+        delay_seconds: float,
+    ) -> None:
+        """촬영에서는 얼음 상태를 읽을 시간을 준 뒤 실제 AI 구조를 시작한다."""
+        await asyncio.sleep(delay_seconds)
+        session = session_manager.sessions.get(room_id)
+        player = session.state.get_player(player_id) if session else None
+        if not session or not player or not player.is_frozen:
+            return
+        self._assign_nearest_companion_rescue(
+            session, player, sync_for_recording=True,
+        )
 
     @staticmethod
     def _accept_position_update(
@@ -1902,12 +1964,14 @@ class ConnectionManager:
         analyzed_through = profile.total_utterances
         utterances = list(profile.recent_utterances)
         current_words = list(profile.current_words)
+        mission_terms = session.dynamic_forbidden_mission_terms()
         task = asyncio.create_task(self._refresh_dynamic_forbidden(
             room_id,
             session,
             profile,
             utterances,
             current_words,
+            mission_terms,
             analyzed_through,
         ))
         self._forbidden_tasks[room_id] = task
@@ -1924,6 +1988,7 @@ class ConnectionManager:
         profile,
         utterances: list[str],
         current_words: list[str],
+        mission_terms: list[str],
         analyzed_through: int,
     ) -> None:
         try:
@@ -1931,6 +1996,7 @@ class ConnectionManager:
                 analyze_dynamic_forbidden_words,
                 utterances,
                 current_words,
+                mission_terms,
             )
             # 방이 닫히거나 새 게임이 시작된 동안 끝난 오래된 분석은 폐기한다.
             if (
@@ -2503,7 +2569,7 @@ class ConnectionManager:
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report",
                 "companion_id": companion_id,
-                "message": f"{signal_label} 신호 입력 완료! 다음 순서를 확인할게.",
+                "message": f"{signal_label} 입력 끝. 다음 순서 볼게.",
                 "phase": VerticalRoundPhase.ROOFTOP_INTRO.value,
                 "speech_intent": SpeechIntent.DECLARE_ACTION.value,
                 "speech_mode": (speech_event.mode.value if speech_event else SpeechMode.NORMAL.value),
@@ -2515,7 +2581,7 @@ class ConnectionManager:
             signal_id = str(action.get("signal_id", ""))
             signal_label = {"center": "중앙", "east": "동쪽", "west": "서쪽"}.get(signal_id, "담당")
             message = (
-                f"다음 입력은 {signal_label} 신호야. 내 위치로 와서 E를 눌러!"
+                f"다음은 {signal_label}. 내 쪽으로 와서 눌러!"
                 if action.get("guiding")
                 else speech_event.text if speech_event
                 else f"{signal_label} 중계기 위치 확보. 입력은 네가 맡아!"
@@ -2547,10 +2613,7 @@ class ConnectionManager:
         elif action["type"] == "vertical_objective":
             phase = action["phase"]
             if phase == VerticalRoundPhase.FLOOR_3.value:
-                message = (
-                    "방송 장치 옆에서 수신 내용을 확인할게. 네가 우회해서 말하면 "
-                    "빠진 뜻을 내가 바로 짚어 줄게."
-                )
+                message = "수신 준비됐어. 위험한 말은 피하고 뜻만 바꿔 말해 줘."
             else:
                 message = {
                     VerticalRoundPhase.ROOFTOP_INTRO.value: "옥상 신호 장치를 찾았어. 내가 가동해 볼게.",
@@ -2593,7 +2656,7 @@ class ConnectionManager:
             }, companion_id)
         elif action["type"] == "simultaneous_ready":
             # AI가 동시 조작 장치에 도착하여 준비 완료 보고
-            message = "원격 봉쇄 장치에 도착했어! 경비실 A 장치에서 E를 누르면 내가 B를 동시에 작동할게."
+            message = "B에 도착했어. 네가 A를 누르면 나도 바로 누를게."
             message, _ = avoid_forbidden_words(message, session.state.forbidden_words)
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report", "companion_id": companion_id,
@@ -2610,7 +2673,7 @@ class ConnectionManager:
             await self._broadcast_companion_speech(room_id, {
                 "type": "companion_report",
                 "companion_id": companion_id,
-                "message": "교차로에 도착했어. CCTV에 보이는 다음 방향을 말해 줘.",
+                "message": "교차로야. 다음 방향만 말해 줘.",
                 "phase": action.get("phase", ""),
                 "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
                 "speech_mode": SpeechMode.RADIO.value,

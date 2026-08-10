@@ -56,7 +56,7 @@ def test_public_state_never_contains_words() -> None:
     assert "words" not in payload
 
 
-def test_mission_and_final_exact_words_never_become_candidates() -> None:
+def test_exact_answer_words_remain_protected_but_mission_nouns_can_be_risky() -> None:
     candidates = extract_observed_candidates([
         "빨간 삼각형 파란 네모를 보고 달빛 교정 탈출 순서로 외쳐",
         "주황 다이아몬드와 보라 십자를 다시 확인해",
@@ -68,5 +68,21 @@ def test_mission_and_final_exact_words_never_become_candidates() -> None:
         "빨간", "삼각형", "파란", "네모", "달빛", "교정", "탈출",
         "주황", "다이아몬드", "보라", "십자",
         "직진", "왼쪽", "오른쪽", "배전반", "밸브", "발전기", "작동",
-        "은빛", "금속", "물건", "원통", "도구", "출입구", "쓰임",
     })
+    assert {"금속", "물건", "원통", "도구", "출입구", "쓰임"} <= words
+
+
+def test_observed_mission_term_is_forced_into_profile() -> None:
+    utterances = [
+        "옥상 신호 순서를 확인해",
+        "신호 다음 표시로 가자",
+        "학교 아래 장치를 찾아보자",
+    ]
+    with patch("app.ai.dynamic_forbidden._ollama_json", return_value={"words": ["학교", "확인", "다음"]}):
+        words, reason = analyze_dynamic_forbidden_words(
+            utterances,
+            [],
+            ["옥상", "신호", "순서", "표시", "장치"],
+        )
+    assert words[0] == "신호"
+    assert reason == "initial_mission_weighted_profile"

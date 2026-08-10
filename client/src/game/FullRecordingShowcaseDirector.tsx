@@ -148,6 +148,8 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
   const lastActionAt = useRef(-Infinity)
   const holdUntil = useRef(0)
   const roofTransitionPath = useRef<Point[]>([])
+  const frozenSeenAt = useRef<number | null>(null)
+  const rescuedAt = useRef<number | null>(null)
 
   const resetStage = (key: string, now: number) => {
     stageKey.current = key
@@ -159,6 +161,8 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     lastActionAt.current = -Infinity
     holdUntil.current = 0
     roofTransitionPath.current = []
+    frozenSeenAt.current = null
+    rescuedAt.current = null
   }
 
   const followPath = (path: Point[], delta: number): boolean => {
@@ -195,6 +199,11 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
       ;(window as Window & { __fullRecordingShowcase?: unknown }).__fullRecordingShowcase = {
         key,
         waypointIndex: waypointIndex.current,
+        actionStep: actionStep.current,
+        speechStep: speechStep.current,
+        playerStatus: player.status,
+        frozenSeenAt: frozenSeenAt.current,
+        rescuedAt: rescuedAt.current,
         position: { x: _position.x, y: _position.y, z: _position.z },
       }
       document.body.dataset.fullRecordingShowcase = JSON.stringify({
@@ -209,8 +218,8 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     if (progression.phase === 'rooftop_intro') {
       const openingLines = [
         '옥상 신호 순서를 같이 확인하자',
-        '먼저 가운데 표시를 보고 다음 위치를 알려줘',
-        '학교 아래로 내려갈 길을 함께 찾자',
+        '가운데 신호 다음 위치를 알려 줘',
+        '마지막 신호까지 같이 맞추자',
       ]
       const speechTimes = [1.2, 3.1, 5.0]
       if (speechStep.current < openingLines.length && elapsed >= speechTimes[speechStep.current]) {
@@ -268,13 +277,42 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
         sendGameMessage({
           type: 'speech',
           payload: {
-            transcript: '반짝이는 작은 은빛 금속 물건으로 잠긴 출입구를 열어',
+            // 옥상에서 반복해 프로필에 들어간 미션 단어를 일부러 말한다.
+            // 영상은 여기서 빙결 → AI 구조 → 우회 표현 성공을 보여 준다.
+            transcript: '방송 신호를 그대로 읽어 볼게',
             is_final: true,
           },
         })
         actionStep.current = 2
         lastActionAt.current = now
-      } else if (actionStep.current >= 2 && sinceArrival >= 14 && now - lastActionAt.current >= 4) {
+      }
+      if (player.status === 'frozen') {
+        if (frozenSeenAt.current === null) {
+          frozenSeenAt.current = now
+        }
+        return
+      }
+      if (actionStep.current === 2 && frozenSeenAt.current !== null) {
+        rescuedAt.current ??= now
+        if (now - rescuedAt.current >= 1.25) {
+          sendGameMessage({
+            type: 'speech',
+            payload: {
+              transcript: '은빛 금속의 작고 긴 물건으로 잠긴 곳을 개방해',
+              is_final: true,
+            },
+          })
+          actionStep.current = 3
+          lastActionAt.current = now
+        }
+      } else if (actionStep.current === 2 && sinceArrival >= 5.5 && now - lastActionAt.current >= 2.5) {
+        // 분석 응답이 늦었을 때도 금기어 장면을 한 번 더 시도한다.
+        sendGameMessage({
+          type: 'speech',
+          payload: { transcript: '그 신호부터 다시 확인해', is_final: true },
+        })
+        lastActionAt.current = now
+      } else if (actionStep.current >= 3 && sinceArrival >= 16 && now - lastActionAt.current >= 4) {
         sendAction('interact_stage_mission')
         lastActionAt.current = now
       }
@@ -373,7 +411,7 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     }
 
     if (store.phase === 'final_spell') {
-      if (elapsed >= 2 && now - lastActionAt.current >= 3) {
+      if (elapsed >= 3.5 && now - lastActionAt.current >= 3) {
         sendGameMessage({
           type: 'spell',
           payload: { spell_text: '달빛 교정 탈출' },
@@ -384,6 +422,8 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     }
 
     if (progression.phase === 'escape_open' && store.phase === 'escape') {
+      // 주문 성공 직후 바로 화면을 끝내지 않고, 열린 출구와 추격을 보여 준다.
+      if (elapsed < 5.5) return
       if (!followPath(FIELD_ESCAPE_PATH, delta)) return
       if (arrivedAt.current === null) arrivedAt.current = now
       if (now - arrivedAt.current >= 0.7 && now - lastActionAt.current >= 2) {

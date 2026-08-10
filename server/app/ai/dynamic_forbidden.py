@@ -32,16 +32,14 @@ PROTECTED_WORDS = {
     # 판정 큐이므로 플레이어가 안전한 표현을 잃지 않게 전부 보호한다.
     "직진", "앞으로", "곧장", "복도", "왼쪽", "좌회전", "서쪽",
     "오른쪽", "우회전", "북쪽",
-    # 지하 파이널은 장치명과 작동 행동을 함께 말해야 진행된다.
+    # 지하 파이널의 고정 장치명과 작동 행동은 그대로 말할 수 있어야 한다.
     "배전반", "전기판", "전원판", "밸브", "급수", "발전기", "비상",
-    "전원", "장치", "작동", "가동", "시작",
+    "전원", "작동", "가동", "시작",
     # AI 발화 모드를 제어하는 음성 명령도 게임 입력이므로 보호한다.
     "조용", "보고", "무전", "인터폰", "방송",
-    # 3층은 세 물리 후보를 설명하고 교정하는 말 자체가 입력이다. 정답 후보뿐
-    # 아니라 오답 후보의 구별 단서도 보호해야 플레이어가 안전하게 오해를
-    # 설명하고 다시 교정할 수 있다.
-    "은빛", "금속", "출입구", "자물쇠", "도구", "물건", "쓰임", "재질",
-    "원통", "손잡이", "빛", "버튼", "기계", "조작",
+    # 미션의 의미를 설명하는 일반 명사는 더 이상 전부 보호하지 않는다.
+    # 플레이어가 실제로 말한 미션 연관 표현이 금기어가 되어야 우회 표현과
+    # 협동 구조가 생긴다. 단, 정답이 한 표면형뿐인 고정 입력은 위에서 보호한다.
 }
 
 _kiwi = Kiwi()
@@ -153,7 +151,10 @@ class DynamicForbiddenProfile:
         ]
 
 
-def extract_observed_candidates(utterances: list[str]) -> list[dict]:
+def extract_observed_candidates(
+    utterances: list[str],
+    mission_terms: list[str] | None = None,
+) -> list[dict]:
     """실제 인간 발화에서 서버가 허용할 명사 후보만 추출한다."""
     occurrences: list[str] = []
     last_seen: dict[str, int] = {}
@@ -171,10 +172,15 @@ def extract_observed_candidates(utterances: list[str]) -> list[dict]:
 
     frequency = Counter(occurrences)
     denominator = max(1, len(utterances) - 1)
+    relevant = set(mission_terms or [])
     ranked = sorted(
         frequency,
         key=lambda word: (
-            -(frequency[word] * 2.0 + last_seen[word] / denominator),
+            -(
+                frequency[word] * 2.0
+                + last_seen[word] / denominator
+                + (4.0 if word in relevant else 0.0)
+            ),
             word,
         ),
     )
@@ -183,6 +189,7 @@ def extract_observed_candidates(utterances: list[str]) -> list[dict]:
             "word": word,
             "frequency": frequency[word],
             "last_seen": last_seen[word],
+            "mission_relevant": word in relevant,
         }
         for word in ranked
     ]
@@ -191,27 +198,42 @@ def extract_observed_candidates(utterances: list[str]) -> list[dict]:
 def analyze_dynamic_forbidden_words(
     utterances: list[str],
     current_words: list[str],
+    mission_terms: list[str] | None = None,
 ) -> tuple[list[str], str]:
     """Ollama 추천을 검증하고 실패하면 로컬 순위를 사용한다."""
-    candidates = extract_observed_candidates(utterances)
+    candidates = extract_observed_candidates(utterances, mission_terms)
     allowed = [item["word"] for item in candidates]
     if not allowed:
         return list(current_words), "insufficient_observed_candidates"
 
+    relevant_allowed = [
+        item["word"] for item in candidates if item["mission_relevant"]
+    ]
     prompt = f"""한국어 음성 협동 게임에서 플레이어가 실제로 자주 쓰며 다시 말할 가능성이 높은 표현을 골라라.
 최근 인간 발화: {json.dumps(utterances[-12:], ensure_ascii=False)}
 현재 비공개 금기어: {json.dumps(current_words, ensure_ascii=False)}
+현재 학교 미션과 연관된 관찰 후보: {json.dumps(relevant_allowed, ensure_ascii=False)}
 선택 가능한 관찰 후보: {json.dumps(candidates, ensure_ascii=False)}
-관찰 후보 밖의 단어를 만들지 마라. 정확히 JSON만 반환: {{"words":["단어1","단어2","단어3"]}}"""
+미션 연관 후보가 있으면 반드시 하나 이상 포함하고, 관찰 후보 밖의 단어를 만들지 마라.
+정확히 JSON만 반환: {{"words":["단어1","단어2","단어3"]}}"""
     generated = _ollama_json(prompt)
     proposed = generated.get("words", []) if isinstance(generated, dict) else []
     validated = _unique_valid_words([
         str(word).strip() for word in proposed if str(word).strip() in allowed
     ])
-    ranked = validated + [word for word in allowed if word not in validated]
+    # 모델 응답과 무관하게 현재 미션에 얽힌 관찰어를 첫 슬롯에 보장한다.
+    ranked = (
+        relevant_allowed[:1]
+        + [word for word in validated if word not in relevant_allowed[:1]]
+        + [word for word in allowed if word not in validated and word not in relevant_allowed[:1]]
+    )
 
     if not current_words:
-        return ranked[:MAX_WORDS], "initial_conversation_profile"
+        reason = (
+            "initial_mission_weighted_profile"
+            if relevant_allowed else "initial_conversation_profile"
+        )
+        return ranked[:MAX_WORDS], reason
 
     # 전부 바뀌는 불공정성을 막기 위해 이전 세대에서 최소 한 단어를 유지한다.
     retained = next((word for word in current_words if word in allowed), current_words[0])
@@ -222,7 +244,11 @@ def analyze_dynamic_forbidden_words(
             word for word in current_words
             if word not in next_words
         )
-    return next_words[:MAX_WORDS], "periodic_conversation_shift"
+    reason = (
+        "periodic_mission_weighted_shift"
+        if relevant_allowed else "periodic_conversation_shift"
+    )
+    return next_words[:MAX_WORDS], reason
 
 
 def _unique_valid_words(words: list[str]) -> list[str]:

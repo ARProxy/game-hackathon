@@ -137,9 +137,9 @@ def test_result_can_end_the_round_from_danger_state() -> None:
     ("violations", "tier", "speed", "hearing", "vision", "recent_position"),
     [
         (0, ForbiddenRageTier.CALM, 1.0, False, False, False),
-        (3, ForbiddenRageTier.WARNING, 1.1, False, False, False),
-        (5, ForbiddenRageTier.ENRAGED, 1.25, True, False, False),
-        (7, ForbiddenRageTier.EXTREME, 1.35, True, True, True),
+        (1, ForbiddenRageTier.WARNING, 1.1, False, False, False),
+        (2, ForbiddenRageTier.ENRAGED, 1.25, True, False, False),
+        (3, ForbiddenRageTier.EXTREME, 1.35, True, True, True),
     ],
 )
 def test_forbidden_violation_thresholds_are_monotonic(
@@ -173,7 +173,7 @@ def test_forbidden_rage_never_decreases() -> None:
 
 
 def test_final_freezes_effective_rage_but_keeps_counting_result_data() -> None:
-    state = VerticalRoundState(forbidden_word_violations=5)
+    state = VerticalRoundState(forbidden_word_violations=2)
     for _ in range(4):
         complete_and_advance(state)
     state.advance(final_route=FinalRoute.FIELD)
@@ -182,6 +182,6 @@ def test_final_freezes_effective_rage_but_keeps_counting_result_data() -> None:
     state.record_human_forbidden_word_violation()
     state.record_human_forbidden_word_violation()
 
-    assert state.forbidden_word_violations == 7
+    assert state.forbidden_word_violations == 4
     assert state.forbidden_rage_policy.tier == ForbiddenRageTier.ENRAGED
     assert state.to_dict()["fw_rage_tier"] == "enraged"

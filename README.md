@@ -97,7 +97,7 @@ cd ../server
 
 2026-08-10 제출 기준:
 
-- 서버 테스트 391개 통과
+- 서버 테스트 393개 통과
 - TypeScript production build 통과
 - 클라이언트 lint 통과
 - 학교 구조·충돌·AI 내비게이션 계약 통과
@@ -125,7 +125,7 @@ python3 scripts/build_submission_pdfs.py
 ```text
 client/  React + TypeScript + React Three Fiber + Rapier + Zustand
 server/  FastAPI + WebSocket + 서버 권위 게임 상태와 AI
-docs/    기획 1~5, 구현 계약, QA와 제출 문서
+docs/    기획 1~6, 구현 계약, QA와 제출 문서
 ```
 
 서버가 문, 층 진행, 인간·AI·술래 위치, 금기어, 빙결, 구조, 미션, 주문과 탈출을 최종 판정합니다. LLM은 관찰된 후보의 추천과 표현만 담당하며 월드 사실이나 성공 여부를 결정하지 않습니다.
@@ -139,6 +139,7 @@ docs/    기획 1~5, 구현 계약, QA와 제출 문서
 3. `docs/game-design-v3.md`
 4. `docs/game-design-v4.md`
 5. `docs/game-design-v5.md`
-6. `docs/design-thinking-journey.md`
+6. `docs/game-design-v6.md`
+7. `docs/design-thinking-journey.md`
 
-최신 금기어 규칙은 기획 5가 이전 문서를 명시적으로 개정하며, 제출용 정본은 `docs/submission/final-game-design.md`와 `docs/submission/final-ai-technology.md`입니다.
+최신 플레이 규칙은 기획 6이 미션 연관 금기어·즉시 위험·협동 구조·술래 피드백을 명시적으로 개정하며, 제출용 정본은 `docs/submission/final-game-design.md`와 `docs/submission/final-ai-technology.md`입니다.

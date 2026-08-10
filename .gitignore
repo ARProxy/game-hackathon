@@ -10,6 +10,9 @@ build/
 tmp/
 output/video/ice-ddaeng-gameplay-highlight.mp4
 output/video/ice-ddaeng-gameplay-highlight-v2.mp4
+# 편집 중간본. 제출 정본은 ice-ddaeng-gameplay-highlight-final.mp4 하나다.
+output/video/ice-ddaeng-gameplay-highlight-final-clean.mp4
+output/video/ice-ddaeng-gameplay-highlight-v6.mp4
 
 # IDE
 .vscode/

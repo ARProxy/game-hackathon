@@ -20,7 +20,14 @@ from app.ai.mission import Mission, RoundData
 from app.ai.speech import SpeechHistory
 from app.game.authority import MovementSample
 from app.game.map_slots import VERTICAL_MAP_CONTRACT, actor_spawn_slots, runner_spawn_slots
-from app.game.progression import FinalRoute, FORBIDDEN_RAGE_POLICIES, ForbiddenRageTier, VerticalRoundState, WorldFloor
+from app.game.progression import (
+    FinalRoute,
+    FORBIDDEN_RAGE_POLICIES,
+    ForbiddenRageTier,
+    VerticalRoundPhase,
+    VerticalRoundState,
+    WorldFloor,
+)
 from app.game.state import GamePhase, GameState, PlayerRole
 
 logger = logging.getLogger(__name__)
@@ -384,6 +391,24 @@ class GameSession:
         ):
             return None
         return self.round_data.missions[self.current_mission_index]
+
+    def dynamic_forbidden_mission_terms(self) -> list[str]:
+        """현재 층에서 반복될 가능성이 높은, 우회 가능한 학교 미션 표현."""
+        by_phase = {
+            VerticalRoundPhase.ROOFTOP_INTRO: [
+                "옥상", "신호", "순서", "표시", "장치",
+            ],
+            VerticalRoundPhase.FLOOR_3: [
+                "방송실", "열쇠", "출입구", "금속", "자물쇠",
+            ],
+            VerticalRoundPhase.FLOOR_2: [
+                "인터폰", "도형", "색깔", "순서", "기호",
+            ],
+            VerticalRoundPhase.FLOOR_1: [
+                "경비실", "CCTV", "방향", "통로", "장치",
+            ],
+        }
+        return by_phase.get(self.vertical_round.phase, [])
 
     def active_gate_payload(self) -> dict:
         return {

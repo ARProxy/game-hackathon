@@ -66,13 +66,13 @@ class ForbiddenRagePolicy:
 
 FORBIDDEN_RAGE_POLICIES: tuple[ForbiddenRagePolicy, ...] = (
     ForbiddenRagePolicy(ForbiddenRageTier.CALM, 0, 1.0),
-    ForbiddenRagePolicy(ForbiddenRageTier.WARNING, 3, 1.1),
+    ForbiddenRagePolicy(ForbiddenRageTier.WARNING, 1, 1.1),
     ForbiddenRagePolicy(
-        ForbiddenRageTier.ENRAGED, 5, 1.25, hearing_expanded=True,
+        ForbiddenRageTier.ENRAGED, 2, 1.25, hearing_expanded=True,
     ),
     ForbiddenRagePolicy(
         ForbiddenRageTier.EXTREME,
-        7,
+        3,
         1.35,
         hearing_expanded=True,
         vision_expanded=True,

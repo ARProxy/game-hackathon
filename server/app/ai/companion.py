@@ -59,6 +59,26 @@ def decide_companion_intent(session: Any, companion_id: str = "partner") -> dict
     if not partner or partner.status != PlayerStatus.ALIVE:
         return _intent("INCAPACITATED", None, partner, "partner_unavailable")
 
+    # 플레이어가 직접 구조 신호를 보냈고 같은 층에 있다면 위험 회피보다
+    # 구조를 우선한다. 한 명은 얼어붙은 팀원을 살리고 다른 한 명은 계속
+    # 움직일 수 있어야 협동 플레이가 실제로 성립한다.
+    assigned_target = (
+        session.state.get_player(runtime.rescue_request)
+        if runtime.rescue_request else None
+    )
+    if (
+        assigned_target
+        and assigned_target.status == PlayerStatus.FROZEN
+        and assigned_target.position.floor == partner.position.floor
+        and _distance(partner, assigned_target) <= CONTRACT["rescueDistance"] + 0.9
+    ):
+        return _intent(
+            "RESCUE_TEAMMATE",
+            assigned_target.player_id,
+            assigned_target,
+            "player_requested_rescue",
+        )
+
     if seeker and _distance(partner, seeker) <= CONTRACT["dangerDistance"] and has_clear_catch_line(
         (partner.position.x, partner.position.z), (seeker.position.x, seeker.position.z),
         partner.position.floor.value,
@@ -670,9 +690,9 @@ def _intent(state: str, target_id: str | None, target: Any, reason: str) -> dict
 # action type → (speech intent, 메시지 템플릿)
 _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "report": (SpeechIntent.REPORT_OBSERVATION, "{zone} 구역에서 {color} {mesh} 후보를 발견했어."),
-    "seeker_report": (SpeechIntent.REPORT_OBSERVATION, "술래를 봤어! 조심해!"),
+    "seeker_report": (SpeechIntent.REPORT_OBSERVATION, "술래야. 뛰어!"),
     "inspect": (SpeechIntent.DECLARE_ACTION, "이 후보를 조사할게."),
-    "rescue": (SpeechIntent.DECLARE_ACTION, "내가 구조하러 갈게!"),
+    "rescue": (SpeechIntent.DECLARE_ACTION, "버텨. 지금 땡 하러 갈게!"),
     "escape": (SpeechIntent.DECLARE_ACTION, "탈출구로 달려갈게!"),
     "trap": (SpeechIntent.REPORT_OBSERVATION, "트랩에 걸렸어!"),
     "vertical_objective": (SpeechIntent.REPORT_OBSERVATION, "장치를 찾았어."),
@@ -682,7 +702,7 @@ _ACTION_SPEECH_MAP: dict[str, tuple[SpeechIntent, str]] = {
     "floor_transition": (SpeechIntent.DECLARE_ACTION, "다음 층으로 이동할게!"),
     "intercom_report": (SpeechIntent.REPORT_OBSERVATION, "인터폰에서 기호가 보여!"),
     "simultaneous_ready": (SpeechIntent.DECLARE_ACTION, "준비됐어! 동시에 작동하자!"),
-    "security_checkpoint_ready": (SpeechIntent.REPORT_OBSERVATION, "교차로에 도착했어. 다음 방향을 알려 줘."),
+    "security_checkpoint_ready": (SpeechIntent.REPORT_OBSERVATION, "교차로야. 다음 방향만 말해 줘."),
     "basement_device_report": (SpeechIntent.REPORT_OBSERVATION, "장치 상태를 확인했어!"),
     "basement_device_activate": (SpeechIntent.DECLARE_ACTION, "지시 확인. 담당 장치를 작동할게!"),
 }
