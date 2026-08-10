@@ -97,7 +97,7 @@ cd ../server
 
 2026-08-10 제출 기준:
 
-- 서버 테스트 407개 통과
+- 서버 테스트 408개 통과
 - TypeScript production build 통과
 - 클라이언트 lint 통과
 - 학교 구조·충돌·AI 내비게이션 계약 통과
@@ -106,8 +106,10 @@ cd ../server
 
 ## 제출 자료
 
+- 최종 통합 제출본(기획·AI 아키텍처·프롬프트·애자일 과정): `output/pdf/ice-ddaeng-final-submission.pdf`
 - 최종 게임 소개서: `output/pdf/ice-ddaeng-final-game-design.pdf`
 - 최종 AI 활용 기술 문서: `output/pdf/ice-ddaeng-final-ai-technology.pdf`
+- 실제 Chrome 60fps 1분 영상: `output/video/ice-ddaeng-final-submission-60s.mp4`
 - 30~60초 하이라이트: `output/video/ice-ddaeng-gameplay-highlight-final.mp4`
 - 옥상~파이널 확인용 플레이스루: `output/video/ice-ddaeng-rooftop-to-final-playthrough.mp4`
 - 최종 구현·검증 기록: `docs/submission/final-implementation-report.md`
@@ -142,4 +144,4 @@ docs/    기획 1~6, 구현 계약, QA와 제출 문서
 6. `docs/game-design-v6.md`
 7. `docs/design-thinking-journey.md`
 
-최신 플레이 규칙은 기획 6이 미션 연관 금기어·즉시 위험·협동 구조·술래 피드백을 명시적으로 개정하며, 제출용 정본은 `docs/submission/final-game-design.md`와 `docs/submission/final-ai-technology.md`입니다.
+최신 플레이 규칙은 기획 6이 미션 연관 금기어·즉시 위험·협동 구조·술래 피드백을 명시적으로 개정합니다. 이후 사용자 확정 사항인 단일 BGM, 금기어 변경 시네마틱, 빙결 균열·AI 구조, 동료 탈락과 변이 사냥개 술래까지 합친 제출용 정본은 `docs/submission/final-submission.md`입니다.

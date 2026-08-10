@@ -128,17 +128,6 @@ function CameraRelativeMoon() {
       ref={lightRef}
       intensity={1.05}
       color="#a8c6e4"
-      castShadow
-      shadow-mapSize-width={2048}
-      shadow-mapSize-height={2048}
-      shadow-camera-left={-90}
-      shadow-camera-right={90}
-      shadow-camera-top={90}
-      shadow-camera-bottom={-90}
-      shadow-camera-near={20}
-      shadow-camera-far={320}
-      shadow-bias={-0.0009}
-      shadow-normalBias={0.035}
     />
     <object3D ref={targetRef} />
   </>
@@ -539,7 +528,7 @@ function GameApp() {
   const graphicsQuality = useSettingsStore((state) => state.graphicsQuality)
   const shadowsEnabled = useSettingsStore((state) => state.shadowsEnabled)
   const renderScale = useSettingsStore((state) => state.renderScale)
-  const canvasDpr = renderScale * (graphicsQuality === 'low' ? 0.7 : graphicsQuality === 'medium' ? 0.9 : 1)
+  const canvasDpr = Math.min(1, renderScale * (graphicsQuality === 'low' ? 0.7 : graphicsQuality === 'medium' ? 0.9 : 1))
   // 접근 가능 층은 서버의 문·이동 권한 계약이고 렌더 가시성 계약이 아니다.
   // 게임에서는 전체 학교 외형을 유지하고, 개발용 원본 비교 모드에서만 층을 숨긴다.
   const renderedFloors = DEV_TOOLS_ENABLED && cameraMode === 'reference' ? visibleFloors : undefined

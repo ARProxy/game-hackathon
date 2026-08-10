@@ -515,6 +515,9 @@ export default function useWebSocket() {
 
       case 'eliminated':
         eliminatePlayer(data.player_id)
+        if (String(data.player_id).startsWith('partner')) {
+          addSubtitle('system', `${data.player_id === 'partner-2' ? 'AI 동료 2' : 'AI 동료 1'}의 팀 연결이 끊겼습니다.`)
+        }
         break
 
       case 'runner_escaped':

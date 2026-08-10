@@ -47,8 +47,8 @@ export default function PlayerLight({ targetRef }: PlayerLightProps) {
         color="#d9ecff"
         decay={1.5}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
         shadow-bias={-0.0012}
         shadow-normalBias={0.03}
       />

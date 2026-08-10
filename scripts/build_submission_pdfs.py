@@ -197,11 +197,12 @@ def make_styles():
 
 
 def cover_story(title: str, kind: str, styles: dict) -> list:
-    subtitle = (
-        "게임이 내 말을 배운다.<br/>나는 게임이 무엇을 배웠는지 모른다."
-        if "게임 기획서" in title
-        else "생성 모델은 추천하고, 서버 규칙은 판정한다."
-    )
+    if "최종 제출본" in title:
+        subtitle = "게임이 내 말을 배운다.<br/>나는 게임이 무엇을 배웠는지 모른다."
+    elif "게임 기획서" in title:
+        subtitle = "게임이 내 말을 배운다.<br/>나는 게임이 무엇을 배웠는지 모른다."
+    else:
+        subtitle = "생성 모델은 추천하고, 서버 규칙은 판정한다."
     story = [
         Spacer(1, 21 * mm),
         Paragraph("NAN 2026 · GAME AI SUBMISSION", styles["cover_kicker"]),
@@ -274,7 +275,10 @@ def table_from_lines(lines: list[str], styles: dict, available_width: float):
 def markdown_story(source: Path, styles: dict, available_width: float) -> tuple[str, list]:
     lines = source.read_text(encoding="utf-8").splitlines()
     title = next(line[2:].strip() for line in lines if line.startswith("# "))
-    kind = "FINAL GAME DESIGN" if "게임 기획서" in title else "FINAL AI TECHNOLOGY"
+    if "최종 제출본" in title:
+        kind = "FINAL GAME & AI SUBMISSION"
+    else:
+        kind = "FINAL GAME DESIGN" if "게임 기획서" in title else "FINAL AI TECHNOLOGY"
     story = cover_story(title, kind, styles)
     title_seen = False
     i = 0
@@ -429,6 +433,10 @@ def main() -> None:
     register_fonts()
     OUTPUT.mkdir(parents=True, exist_ok=True)
     targets = [
+        (
+            ROOT / "docs" / "submission" / "final-submission.md",
+            OUTPUT / "ice-ddaeng-final-submission.pdf",
+        ),
         (
             ROOT / "docs" / "submission" / "final-game-design.md",
             OUTPUT / "ice-ddaeng-final-game-design.pdf",

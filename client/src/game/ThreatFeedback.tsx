@@ -1,6 +1,6 @@
 /** 실제 월드 좌표를 화면 가장자리 위협 피드백으로 변환한다. */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useGameStore, type HunterIntent } from '../stores/gameStore'
@@ -26,15 +26,22 @@ export default function ThreatFeedback({
   enabled: boolean
 }) {
   const reducedFlashes = useSettingsStore((state) => state.reducedFlashes)
+  const lastUpdate = useRef(-Infinity)
+  const cleared = useRef(false)
   useEffect(() => clearThreatFeedback, [])
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
+    // DOM 스타일 갱신은 WebGL 렌더와 별도의 레이아웃/합성을 유발한다.
+    // 시각적으로 충분한 20Hz로 제한해 카메라 프레임과 분리한다.
+    if (clock.elapsedTime - lastUpdate.current < 0.05) return
+    lastUpdate.current = clock.elapsedTime
     const player = playerRef.current
     const store = useGameStore.getState()
     const playerState = store.players[store.playerId]
     const active = store.phase === 'playing' || store.phase === 'final_spell' || store.phase === 'escape'
     if (!enabled || !active || !player || !playerState) {
-      clearThreatFeedback()
+      if (!cleared.current) clearThreatFeedback()
+      cleared.current = true
       return
     }
 
@@ -62,9 +69,11 @@ export default function ThreatFeedback({
     }) as Array<{ intent: HunterIntent; dx: number; dz: number; distance: number; intensity: number }>
     const threat = threats.sort((a, b) => b.intensity - a.intensity)[0]
     if (!threat || threat.intensity <= 0) {
-      clearThreatFeedback()
+      if (!cleared.current) clearThreatFeedback()
+      cleared.current = true
       return
     }
+    cleared.current = false
     const { dx, dz, distance, intensity } = threat
     const rightX = Math.cos(player.rotation.y)
     const rightZ = -Math.sin(player.rotation.y)

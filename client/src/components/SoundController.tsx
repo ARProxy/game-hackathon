@@ -3,14 +3,11 @@ import useSound from '../hooks/useSound'
 import {
   useGameStore,
   type GamePhase,
-  type HunterIntent,
-  type MapFloor,
-  type PlayerState,
   type PlayerStatus,
 } from '../stores/gameStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
-type AdaptiveTrackId = 'exploration' | 'broadcast' | 'danger' | 'final'
+type AdaptiveTrackId = 'rooftop'
 
 interface AdaptiveTrack {
   src: string
@@ -24,59 +21,14 @@ interface MusicInstance {
 }
 
 const ADAPTIVE_TRACKS: Record<AdaptiveTrackId, AdaptiveTrack> = {
-  exploration: { src: '/audio/music/exploration-dark-ambient.mp3', gain: 0.28 },
-  broadcast: { src: '/audio/music/broadcast-haunted-music-box.mp3', gain: 0.25 },
-  danger: { src: '/audio/music/seeker-danger-ambience.mp3', gain: 0.36 },
-  final: { src: '/audio/music/final-suspense-horror.mp3', gain: 0.34 },
+  rooftop: { src: '/audio/music/exploration-dark-ambient.mp3', gain: 0.28 },
 }
 
 const MUSIC_CROSSFADE_MS = 3_000
-const BROADCAST_ZONE_PATTERN = /(broadcast|control|security|cctv|방송|관제|경비)/i
 
-function humanPlayer(players: Record<string, PlayerState>, playerId: string) {
-  return players[playerId] ?? Object.values(players).find((player) => player.role === 'human') ?? null
-}
-
-function intentTargetsHuman(intent: HunterIntent | null, playerId: string) {
-  return Boolean(intent
-    && ['DETECTED', 'CHASE', 'RUSH_GATE'].includes(intent.state)
-    && intent.targetId === playerId)
-}
-
-function hasNearbySeeker(players: Record<string, PlayerState>, human: PlayerState | null) {
-  if (!human?.position.floor) return false
-  return Object.values(players).some((player) => {
-    if (player.role !== 'seeker' || player.status === 'eliminated') return false
-    if (player.position.floor !== human.position.floor) return false
-    return Math.hypot(
-      player.position.x - human.position.x,
-      player.position.z - human.position.z,
-    ) <= 11
-  })
-}
-
-function selectAdaptiveTrack(options: {
-  phase: GamePhase
-  floor: MapFloor
-  isPaused: boolean
-  playerId: string
-  players: Record<string, PlayerState>
-  primaryIntent: HunterIntent | null
-  secondaryIntent: HunterIntent | null
-}): AdaptiveTrackId | null {
-  const { phase, floor, isPaused, playerId, players, primaryIntent, secondaryIntent } = options
+function selectUnifiedTrack(phase: GamePhase, isPaused: boolean): AdaptiveTrackId | null {
   if (isPaused || !['playing', 'final_spell', 'escape'].includes(phase)) return null
-  if (phase === 'final_spell' || phase === 'escape' || floor === 'FIELD' || floor === 'B1') return 'final'
-
-  const human = humanPlayer(players, playerId)
-  const effectivePlayerId = human?.playerId ?? playerId
-  if (human?.status === 'frozen'
-    || hasNearbySeeker(players, human)
-    || intentTargetsHuman(primaryIntent, effectivePlayerId)
-    || intentTargetsHuman(secondaryIntent, effectivePlayerId)) return 'danger'
-
-  if (floor === 'ROOF' || BROADCAST_ZONE_PATTERN.test(human?.position.zone ?? '')) return 'broadcast'
-  return 'exploration'
+  return 'rooftop'
 }
 
 function safeCompanionSpeech(text: string, forbiddenWords: string[]): string {
@@ -111,12 +63,9 @@ export default function SoundController() {
   const lastFreezeEvent = useGameStore((state) => state.lastFreezeEvent)
   const rooftopProgress = useGameStore((state) => state.rooftopSignal?.progress ?? 0)
   const verticalPhase = useGameStore((state) => state.verticalProgression?.phase ?? null)
-  const playerId = useGameStore((state) => state.playerId)
-  const currentFloor = useGameStore((state) => state.currentFloor)
   const isPaused = useGameStore((state) => state.isPaused)
-  const hunterIntent = useGameStore((state) => state.hunterIntent)
-  const secondaryHunterIntent = useGameStore((state) => state.secondaryHunterIntent)
   const activeWorldEvent = useGameStore((state) => state.activeWorldEvent)
+  const forbiddenProfileSignal = useGameStore((state) => state.forbiddenProfileSignal)
   const companionMessageCount = useGameStore((state) => state.subtitles.filter((item) => item.playerId.startsWith('partner')).length)
   const latestSubtitle = useGameStore((state) => state.subtitles.at(-1) ?? null)
   const forbiddenWords = useGameStore((state) => state.forbiddenWords)
@@ -127,7 +76,7 @@ export default function SoundController() {
   const {
     playFreeze, playRescue, playGateOpen, playVictory, playDefeat,
     playAmbientPulse, playMissionProgress, playCompanionCue,
-    playBlackout, playPincerReveal,
+    playBlackout, playPincerReveal, playForbiddenShift, playCompanionLost,
   } = useSound()
   const [voiceRevision, setVoiceRevision] = useState(0)
   const lastFreezeTimestamp = useRef(0)
@@ -140,16 +89,9 @@ export default function SoundController() {
   const musicInstances = useRef<MusicInstance[]>([])
   const musicAnimationFrame = useRef<number | null>(null)
   const previousWorldEventId = useRef<string | null>(null)
+  const previousForbiddenSignalId = useRef<number | null>(null)
 
-  const adaptiveTrack = selectAdaptiveTrack({
-    phase,
-    floor: currentFloor,
-    isPaused,
-    playerId,
-    players,
-    primaryIntent: hunterIntent,
-    secondaryIntent: secondaryHunterIntent,
-  })
+  const adaptiveTrack = selectUnifiedTrack(phase, isPaused)
 
   useEffect(() => {
     const targetId = adaptiveTrack
@@ -277,6 +219,14 @@ export default function SoundController() {
     if (activeWorldEvent.eventType === 'dual_hunter_breach') playPincerReveal()
   }, [activeWorldEvent, playBlackout, playPincerReveal])
 
+  useEffect(() => {
+    if (!forbiddenProfileSignal
+      || forbiddenProfileSignal.kind !== 'shifted'
+      || previousForbiddenSignalId.current === forbiddenProfileSignal.id) return
+    previousForbiddenSignalId.current = forbiddenProfileSignal.id
+    playForbiddenShift()
+  }, [forbiddenProfileSignal, playForbiddenShift])
+
   useEffect(() => () => window.speechSynthesis?.cancel(), [])
 
   useEffect(() => {
@@ -323,13 +273,18 @@ export default function SoundController() {
   useEffect(() => {
     const nextStatuses: Record<string, PlayerStatus> = {}
     let rescued = false
+    let companionLost = false
     for (const [playerId, player] of Object.entries(players)) {
       nextStatuses[playerId] = player.status
       if (previousStatuses.current[playerId] === 'frozen' && player.status === 'alive') rescued = true
+      if (playerId.startsWith('partner')
+        && previousStatuses.current[playerId] === 'alive'
+        && player.status === 'eliminated') companionLost = true
     }
     previousStatuses.current = nextStatuses
     if (rescued) playRescue()
-  }, [players, playRescue])
+    if (companionLost) playCompanionLost()
+  }, [players, playCompanionLost, playRescue])
 
   return null
 }

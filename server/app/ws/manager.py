@@ -1402,6 +1402,11 @@ class ConnectionManager:
             })
 
         elif action_type == "trap" and player and not player.is_frozen:
+            # 전체 촬영은 3층의 의도된 금기어 빙결만 보여 준다. 자동 이동
+            # 경로가 우연히 트랩 슬롯을 밟아 같은 자리에서 반복 빙결되는
+            # 비결정성을 제거하되 일반 게임의 트랩 규칙은 그대로 둔다.
+            if getattr(session, "recording_showcase_mode", None) == "full":
+                return
             if session.state.phase not in {
                 GamePhase.PLAYING, GamePhase.FINAL_SPELL, GamePhase.ESCAPE,
             }:
@@ -1456,6 +1461,58 @@ class ConnectionManager:
 
         elif action_type == "gate_arrived":
             await self._handle_gate_arrived(room_id, player_id, player, payload)
+
+        elif action_type == "showcase_partner_caught":
+            # 제출 영상 전용이지만 결과는 실제 서버 actor 상태를 사용한다.
+            # 일반 플레이에서는 이 액션을 절대 허용하지 않는다.
+            target_id = str(payload.get("target_id", "partner-2"))
+            target = session.state.get_player(target_id)
+            if (
+                getattr(session, "recording_showcase_mode", None) != "full"
+                or not player or player.role != PlayerRole.HUMAN
+                or target_id not in DEFAULT_AI_PARTNER_IDS
+                or target is None or target.status != PlayerStatus.ALIVE
+                or target.position.floor != WorldFloor.F1
+            ):
+                await self.send_to(room_id, player_id, {
+                    "type": "action_rejected",
+                    "action_type": action_type,
+                    "reason": "showcase_only",
+                })
+                return
+            seeker = session.state.get_player("seeker")
+            if seeker is not None:
+                seeker.position.x = target.position.x + 0.75
+                seeker.position.y = target.position.y
+                seeker.position.z = target.position.z - 2.25
+                seeker.position.floor = target.position.floor
+                seeker.position.zone = target.position.zone
+                await self.broadcast(room_id, {
+                    "type": "player_moved",
+                    "player_id": seeker.player_id,
+                    "position": {
+                        "x": seeker.position.x,
+                        "y": seeker.position.y,
+                        "z": seeker.position.z,
+                        "floor": seeker.position.floor.value,
+                        "zone": seeker.position.zone,
+                    },
+                })
+            await self._broadcast_companion_speech(room_id, {
+                "type": "companion_report",
+                "companion_id": target_id,
+                "message": "먼저 가. 뒤는 내가 막을게!",
+                "phase": VerticalRoundPhase.FIELD_FINAL.value,
+                "speech_intent": SpeechIntent.REPORT_OBSERVATION.value,
+                "speech_mode": SpeechMode.SHOUT.value,
+            }, target_id)
+            await asyncio.sleep(1.15)
+            target.eliminate()
+            await self.broadcast(room_id, {
+                "type": "eliminated",
+                "player_id": target_id,
+                "reason": "caught_by_seeker",
+            })
 
         elif action_type == "seeker_catch":
             seeker_id = str(payload.get("seeker_id", "seeker"))
@@ -2992,6 +3049,10 @@ class ConnectionManager:
 
     async def _freeze_companion_from_trap(self, room_id: str, trap_id: str, companion_id: str = "partner") -> None:
         session = session_manager.get_or_create(room_id)
+        # 자동 촬영 동선에서는 동료가 카메라 밖의 트랩을 밟아 파이널
+        # 희생 장면 전에 사라지지 않도록 한다. 실제 라운드는 영향 없음.
+        if getattr(session, "recording_showcase_mode", None) == "full":
+            return
         partner = session.state.get_player(companion_id)
         runtime = session.companion_states[companion_id]
         trap = next((item for item in TRAP_CONTRACT["traps"] if item["id"] == trap_id), None)

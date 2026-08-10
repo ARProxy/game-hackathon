@@ -904,6 +904,41 @@ class TestActions:
             assert frozen["trap_id"] == trap["id"]
             assert frozen["position"] == {"x": trap_x, "z": trap_z}
 
+    def test_full_showcase_partner_catch_keeps_socket_alive_and_eliminates_partner(self, client):
+        """촬영용 희생 연출이 잘못된 음성 intent로 WebSocket을 닫지 않는다."""
+        from app.game.session import session_manager
+
+        with client.websocket_connect("/ws/showcase-partner-catch/player1") as ws:
+            self._start_game(ws)
+            session = session_manager.get_or_create("showcase-partner-catch")
+            session.recording_showcase_mode = "full"
+            session.vertical_round.phase = VerticalRoundPhase.FIELD_FINAL
+            partner = session.state.get_player("partner-2")
+            assert partner is not None
+            partner.position.floor = WorldFloor.F1
+            partner.position.zone = "f1_security_corridor"
+
+            ws.send_json({
+                "type": "action",
+                "payload": {
+                    "action_type": "showcase_partner_caught",
+                    "target_id": "partner-2",
+                },
+            })
+
+            eliminated = None
+            for _ in range(8):
+                item = ws.receive_json()
+                if item["type"] == "eliminated":
+                    eliminated = item
+                    break
+            assert eliminated == {
+                "type": "eliminated",
+                "player_id": "partner-2",
+                "reason": "caught_by_seeker",
+            }
+            assert partner.status.value == "eliminated"
+
     def test_seeker_catch_eliminates_human_and_ends_game(self, client):
         from app.game.session import session_manager
 

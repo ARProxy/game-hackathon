@@ -9,6 +9,7 @@ export type SeekerSoundRole = 'chaser' | 'blocker'
 // 제스처 잠금 상태가 갈라진다. 게임 전체가 하나의 엔진과 마스터 게인을 공유한다.
 let sharedContext: AudioContext | null = null
 let sharedMaster: GainNode | null = null
+let sharedNoiseBuffer: AudioBuffer | null = null
 
 export default function useSound() {
   const masterVolume = useSettingsStore((state) => state.masterVolume)
@@ -80,15 +81,19 @@ export default function useSound() {
     const master = sharedMaster
     if (!context || context.state !== 'running' || !master) return
     const start = context.currentTime + delay
-    const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate)
-    const samples = buffer.getChannelData(0)
-    for (let index = 0; index < samples.length; index++) {
-      samples[index] = (Math.random() * 2 - 1) * (1 - index / samples.length)
+    // 술래가 가까울 때마다 수천 개의 난수를 다시 만들면 메인 스레드 GC가
+    // 프레임을 멈춘다. 2초짜리 노이즈를 한 번만 만들어 모든 효과가 공유한다.
+    if (!sharedNoiseBuffer || sharedNoiseBuffer.sampleRate !== context.sampleRate) {
+      sharedNoiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate)
+      const samples = sharedNoiseBuffer.getChannelData(0)
+      for (let index = 0; index < samples.length; index++) {
+        samples[index] = Math.random() * 2 - 1
+      }
     }
     const source = context.createBufferSource()
     const filter = context.createBiquadFilter()
     const gain = context.createGain()
-    source.buffer = buffer
+    source.buffer = sharedNoiseBuffer
     filter.type = 'highpass'
     filter.frequency.value = highpass
     const categoryVolume = category === 'ambience' ? ambienceVolume : effectsVolume
@@ -97,7 +102,9 @@ export default function useSound() {
     const panner = context.createStereoPanner()
     panner.pan.value = Math.min(1, Math.max(-1, pan))
     source.connect(filter).connect(gain).connect(panner).connect(master)
-    source.start(start)
+    const maxOffset = Math.max(0, sharedNoiseBuffer.duration - duration)
+    source.start(start, Math.random() * maxOffset, duration)
+    source.stop(start + duration + 0.02)
   }, [ambienceVolume, effectsVolume])
 
   const playFreeze = useCallback(() => {
@@ -228,6 +235,19 @@ export default function useSound() {
     noise(0.48, 0.72, 0.09, 1900)
   }, [noise, playSeekerDoorPound, tone])
 
+  const playForbiddenShift = useCallback(() => {
+    noise(0, 0.42, 0.11, 1500)
+    tone(1320, 0.02, 0.34, 0.075, 74, 'sawtooth')
+    tone(58, 0.12, 1.15, 0.14, 31, 'triangle')
+    noise(0.34, 0.62, 0.065, 260)
+  }, [noise, tone])
+
+  const playCompanionLost = useCallback(() => {
+    noise(0, 0.18, 0.12, 2100, -0.25)
+    noise(0.16, 0.24, 0.1, 1500, 0.3)
+    tone(230, 0.08, 0.9, 0.12, 42, 'sawtooth')
+  }, [noise, tone])
+
   const playPlayerFootstep = useCallback((rightFoot: boolean, intensity: number) => {
     const strength = Math.min(1, Math.max(0, intensity))
     if (strength <= 0) return
@@ -288,6 +308,8 @@ export default function useSound() {
     playSeekerDoorPound,
     playBlackout,
     playPincerReveal,
+    playForbiddenShift,
+    playCompanionLost,
     playPlayerFootstep,
     playAmbientPulse,
     playRooftopSignal,

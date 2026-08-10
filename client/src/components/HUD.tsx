@@ -151,6 +151,19 @@ function ForbiddenProfileAlert() {
 
   const firstActivation = signal.kind === 'activated'
 
+  if (!firstActivation) {
+    return (
+      <div key={signal.id} className="forbidden-shift-cinematic" role="status" aria-live="assertive">
+        <i className="forbidden-shift-line" aria-hidden="true" />
+        <section>
+          <small>SCHOOL RULE OVERRIDE</small>
+          <strong>금기어 변경</strong>
+          <span>새 금기어는 공개되지 않습니다</span>
+        </section>
+      </div>
+    )
+  }
+
   return (
     <div
       key={signal.id}
@@ -198,15 +211,13 @@ function ForbiddenProfileAlert() {
           letterSpacing: '.2em',
           marginBottom: 5,
         }}>
-          {firstActivation ? '언어 감시 시작' : '언어 감시 변동 감지'}
+          언어 감시 시작
         </div>
         <div style={{ fontSize: 19, fontWeight: 900, letterSpacing: '-.02em' }}>
-          {firstActivation ? '학교가 당신의 말버릇을 학습했습니다' : '금지어 규칙이 바뀌었습니다'}
+          학교가 당신의 말버릇을 학습했습니다
         </div>
         <div style={{ marginTop: 5, color: 'rgba(255,255,255,.7)', fontSize: 12, lineHeight: 1.45 }}>
-          {firstActivation
-            ? '무엇이 위험한지는 알려주지 않습니다. 말의 결과를 관찰하세요.'
-            : '방금까지 안전했던 표현도 다시 의심하세요. 변경 내용은 비공개입니다.'}
+          무엇이 위험한지는 알려주지 않습니다. 말의 결과를 관찰하세요.
         </div>
       </div>
       <div data-forbidden-profile-scan style={{
@@ -216,6 +227,54 @@ function ForbiddenProfileAlert() {
         background: 'linear-gradient(90deg, transparent, rgba(255,120,160,.18), transparent)',
         animation: 'forbidden-profile-scan 1.05s ease-out 2',
       }} />
+    </div>
+  )
+}
+
+function FreezeScreenEffect() {
+  const playerId = useGameStore((s) => s.playerId)
+  const frozen = useGameStore((s) => s.players[s.playerId]?.status === 'frozen')
+  if (!frozen) return null
+  return (
+    <div className="freeze-screen-effect" aria-hidden="true" data-player-id={playerId}>
+      <i className="freeze-screen-frost" />
+      <i className="freeze-screen-crack crack-a" />
+      <i className="freeze-screen-crack crack-b" />
+      <i className="freeze-screen-crack crack-c" />
+      <i className="freeze-screen-crack crack-d" />
+    </div>
+  )
+}
+
+function CompanionEliminationAlert() {
+  const players = useGameStore((s) => s.players)
+  const previousStatuses = useRef<Record<string, PlayerStatus>>({})
+  const [eliminatedId, setEliminatedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    for (const [id, player] of Object.entries(players)) {
+      if (id.startsWith('partner')
+        && previousStatuses.current[id]
+        && previousStatuses.current[id] !== 'eliminated'
+        && player.status === 'eliminated') {
+        setEliminatedId(id)
+      }
+      previousStatuses.current[id] = player.status
+    }
+  }, [players])
+
+  useEffect(() => {
+    if (!eliminatedId) return
+    const timer = window.setTimeout(() => setEliminatedId(null), 4_800)
+    return () => window.clearTimeout(timer)
+  }, [eliminatedId])
+
+  if (!eliminatedId) return null
+  return (
+    <div className="companion-eliminated-alert" role="alert" aria-live="assertive">
+      <small>TEAM LINK LOST</small>
+      <strong>{eliminatedId === 'partner-2' ? 'AI 동료 2' : 'AI 동료 1'} · 제거됨</strong>
+      <span>해당 역할이 상실되었습니다 · 남은 인원이 임무를 대체합니다</span>
     </div>
   )
 }
@@ -768,6 +827,7 @@ export default function HUD() {
       <PartnerFrozenAlert />
 
       <ForbiddenProfileAlert />
+      <CompanionEliminationAlert />
 
       {phase === 'playing' && partnerDecision && (
         <div style={{
@@ -873,6 +933,7 @@ export default function HUD() {
           playerStatus={playerStatus} />
       </div>
 
+      <FreezeScreenEffect />
       <FrozenCountdown />
     </div>
   )

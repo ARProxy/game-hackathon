@@ -87,6 +87,8 @@ export default function Partner({
   const moveToward = useCollisionAwarePlanarMotion()
   const lastThink = useRef(-Infinity)
   const lastRescueAttempt = useRef(0)
+  const previousStatus = useRef<string | null>(null)
+  const eliminatedAt = useRef<number | null>(null)
   const partnerFrozen = useGameStore((state) => state.players[playerId]?.status === 'frozen')
   const guidanceActive = useGameStore((state) => (
     state.companionIntents[playerId]
@@ -129,12 +131,26 @@ export default function Partner({
       lastThink.current = clock.elapsedTime
     }
     const partnerState = store.players[playerId]
-    if (partnerState?.status === 'eliminated' || partnerState?.status === 'escaped') {
+    if (partnerState?.status === 'eliminated') {
+      if (previousStatus.current !== 'eliminated') eliminatedAt.current = clock.elapsedTime
+      previousStatus.current = 'eliminated'
+      movementRef.current = 0
+      const elapsed = clock.elapsedTime - (eliminatedAt.current ?? clock.elapsedTime)
+      group.visible = elapsed < 1.65
+      group.scale.setScalar(Math.max(0.02, 1 - elapsed / 1.65))
+      group.rotation.z = THREE.MathUtils.lerp(group.rotation.z, -1.42, 1 - Math.exp(-5 * delta))
+      group.position.y -= delta * 0.18
+      return
+    }
+    previousStatus.current = partnerState?.status ?? null
+    if (partnerState?.status === 'escaped') {
       movementRef.current = 0
       group.visible = false
       return
     }
     group.visible = true
+    group.scale.setScalar(1)
+    group.rotation.z = THREE.MathUtils.damp(group.rotation.z, 0, 10, delta)
     const currentFloor = partnerState?.position.floor ?? null
     const previousFloor = previousFloorRef.current
     if (!previousFloor) previousFloorRef.current = currentFloor

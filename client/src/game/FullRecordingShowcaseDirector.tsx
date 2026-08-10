@@ -390,7 +390,15 @@ export default function FullRecordingShowcaseDirector({ playerRef }: {
     }
 
     if (progression.phase === 'field_final' && player.position.floor === 'F1') {
-      if ((followPath(F1_TO_FIELD_PATH, delta) || elapsed >= 24) && now - lastActionAt.current >= 1.2) {
+      if (actionStep.current === 0 && elapsed >= 0.9) {
+        sendAction('showcase_partner_caught', { target_id: 'partner-2' })
+        actionStep.current = 1
+        holdUntil.current = now + 4.2
+        lastActionAt.current = now
+        return
+      }
+      if (now < holdUntil.current) return
+      if ((followPath(F1_TO_FIELD_PATH, delta) || elapsed >= 28) && now - lastActionAt.current >= 1.2) {
         sendAction('use_floor_transition', { route: 'field' })
         lastActionAt.current = now
       }

@@ -8,8 +8,10 @@
 - `Dockerfile`, `.dockerignore`, `client/package-lock.json`
 - `output/pdf/ice-ddaeng-final-game-design.pdf`
 - `output/pdf/ice-ddaeng-final-ai-technology.pdf`
+- `output/pdf/ice-ddaeng-final-submission.pdf`
 - `output/video/ice-ddaeng-gameplay-highlight-final.mp4`
 - `output/video/ice-ddaeng-rooftop-to-final-playthrough.mp4`
+- `output/video/ice-ddaeng-final-submission-60s.mp4`
 - `client/public/audio/music/LICENSES.md`
 - 시연 영상 링크
 - 공개 URL 또는 Docker 실행 안내
@@ -39,21 +41,23 @@
 
 | 시간 | 화면 | 전달할 메시지 |
 |---|---|---|
-| 0~5초 | 옥상 AI 신호 미션과 말버릇 관찰 | 게임이 실제 미션 대화를 학습 |
-| 5~12초 | 3층 방송실 진입과 금기어 발화 | 미션에 얽힌 말이 함정이 됨 |
-| 12~18초 | 얼음 카운트다운, AI 구조 대사 | 실제 빙결과 “땡” 협동 |
-| 18~26초 | 붉은 시야, 술래 근접·추격 | 발견 상황에만 사이렌 경고 |
-| 26~36초 | 2층·1층 음성 협동 | 기호 전달과 CCTV 안내 |
-| 36~52초 | 운동장 동시 장치·주문·탈출 | 한 판의 협동 결말 |
-| 52~56초 | 결과 화면의 금기어 세대 공개 | “게임이 내 말을 배웠다” |
+| 0~3초 | 타이틀 | 작품명과 공포 분위기 |
+| 3~9초 | 옥상 AI 신호 미션과 팀 소개 | 음성으로 협동하는 세 명의 팀 |
+| 9~13초 | 3층 방송실 진입 | 학교 내부 수직 동선과 미션 시작 |
+| 13~24초 | 술래 조우, 금기어 빙결과 AI 구조 | 말이 함정이 되고 동료가 살리는 핵심 루프 |
+| 24~34초 | 2층·1층 음성 협동 | 층마다 이어지는 AI 동료 미션 |
+| 34~38초 | 붉은 선과 `금기어 변경` | 규칙은 바뀌지만 내용은 비공개 |
+| 38~43초 | 변이 사냥개와 AI 동료 포획 | AI도 실제로 죽고 팀 링크가 끊김 |
+| 43~56초 | 운동장 장치·주문·탈출 | 음성 퍼즐로 완성하는 협동 결말 |
+| 56~60초 | 결과 화면의 금기어 세대 공개 | “게임이 내 말을 배웠다” |
 
-최종 파일은 H.264 1280×720 30fps, AAC 48kHz stereo, 56초다. 마이크 권한 팝업이나 서버 터미널은 포함하지 않는다.
+최종 파일은 H.264 1280×720 60fps, AAC 48kHz stereo, 정확히 60.000초다. 실제 Chrome GPU 창을 촬영했으며 마이크 권한 팝업이나 서버 터미널은 포함하지 않았다.
 
 ## 4. 최종 외부 작업
 
 - [ ] production Docker를 실행하고 실제 손으로 한 판 완주
-- [x] 브라우저 자동 완주로 환경별 BGM 전환과 무한 반복·크로스페이드 검증
-- [x] 30~60초 영상 녹화·편집
+- [x] 단일 BGM 무한 반복과 상황 효과음 분리 검증
+- [x] 실제 Chrome GPU 창에서 60fps 최종 영상 녹화·편집
 - [x] 옥상~결과 확인용 플레이스루를 152.8초 H.264/AAC 최신판으로 교체
 - [ ] YouTube 공개 또는 일부 공개 업로드
 - [ ] 공개 URL 배포 또는 실행 패키지 업로드

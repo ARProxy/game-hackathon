@@ -72,6 +72,139 @@ function sampleTraversal(path: HunterTraversal, progress: number, output: THREE.
   return output.copy(path.points.at(-1)!)
 }
 
+/** 귀여운 동물 실루엣을 지우고, 학교 경비견이 비정상적으로 늘어난 SCP형 변이체로 보이게 한다. */
+function MutantHound({ movementRef, hunting }: {
+  movementRef: React.RefObject<number>
+  hunting: boolean
+}) {
+  const bodyRef = useRef<THREE.Group>(null)
+  const headRef = useRef<THREE.Group>(null)
+  const jawRef = useRef<THREE.Group>(null)
+  const legRefs = useRef<(THREE.Group | null)[]>([])
+
+  useFrame(({ clock }, delta) => {
+    const moving = THREE.MathUtils.clamp(movementRef.current ?? 0, 0, 1)
+    const pace = hunting ? 12.5 : 6.2
+    const stride = Math.sin(clock.elapsedTime * pace) * moving
+    legRefs.current.forEach((leg, index) => {
+      if (!leg) return
+      leg.rotation.x = stride * (index % 2 === 0 ? 0.72 : -0.72)
+      leg.rotation.z = hunting ? Math.sin(clock.elapsedTime * 19 + index) * 0.05 : 0
+    })
+    if (bodyRef.current) {
+      bodyRef.current.position.y = Math.abs(stride) * (hunting ? 0.07 : 0.035)
+      bodyRef.current.rotation.z = THREE.MathUtils.damp(
+        bodyRef.current.rotation.z,
+        hunting ? Math.sin(clock.elapsedTime * 9.7) * 0.045 : -0.035,
+        12,
+        delta,
+      )
+    }
+    if (headRef.current) {
+      const snap = hunting && Math.sin(clock.elapsedTime * 7.3) > 0.86
+      headRef.current.rotation.z = THREE.MathUtils.damp(
+        headRef.current.rotation.z,
+        snap ? 0.38 : Math.sin(clock.elapsedTime * 1.2) * 0.06,
+        snap ? 28 : 9,
+        delta,
+      )
+      headRef.current.rotation.x = hunting ? -0.18 + Math.sin(clock.elapsedTime * 11) * 0.06 : 0.08
+    }
+    if (jawRef.current) jawRef.current.rotation.x = hunting
+      ? 0.3 + Math.max(0, Math.sin(clock.elapsedTime * 4.7)) * 0.38
+      : 0.12
+  })
+
+  const legs = [
+    [-0.46, 0.7, 0.54, -0.18], [0.46, 0.7, 0.54, 0.18],
+    [-0.4, 0.68, -0.62, -0.12], [0.4, 0.68, -0.62, 0.12],
+  ] as const
+  return (
+    <group ref={bodyRef} scale={[1.08, 1.08, 1.08]}>
+      <mesh position={[0, 0.92, -0.08]} scale={[0.72, 0.78, 1.48]}>
+        <sphereGeometry args={[0.62, 10, 7]} />
+        <meshStandardMaterial color="#100C0E" roughness={.94} />
+      </mesh>
+      <mesh position={[0, 1.22, 0.18]} scale={[1.18, .8, .92]}>
+        <sphereGeometry args={[0.57, 10, 7]} />
+        <meshStandardMaterial color="#211317" roughness={.9} />
+      </mesh>
+      {[[-.31,1.27,-.17],[-.16,1.34,-.32],[0,1.37,-.38],[.16,1.34,-.32],[.31,1.27,-.17]].map((p, index) => (
+        <mesh key={`rib-${index}`} position={p as [number,number,number]} rotation={[Math.PI / 2, 0, 0]} scale={[1, .42, 1]}>
+          <torusGeometry args={[.37 - Math.abs(index - 2) * .025, .026, 5, 12]} />
+          <meshStandardMaterial color="#5A252D" roughness={.83} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.43, -0.68]} rotation={[.15, 0, 0]}>
+        <coneGeometry args={[.15, .72, 5]} />
+        <meshStandardMaterial color="#190E12" roughness={1} />
+      </mesh>
+      <group ref={headRef} position={[0, 1.34, .82]}>
+        <mesh position={[0, 0, .18]} scale={[.62,.68,1.08]}>
+          <sphereGeometry args={[.48, 10, 7]} />
+          <meshStandardMaterial color="#170D10" roughness={.96} />
+        </mesh>
+        <mesh position={[0, -.06, .62]} scale={[.66,.42,1.05]}>
+          <sphereGeometry args={[.34, 10, 7]} />
+          <meshStandardMaterial color="#2B1419" roughness={.9} />
+        </mesh>
+        <group ref={jawRef} position={[0, -.2, .54]}>
+          <mesh position={[0, -.08, .12]} scale={[.72,.3,1.12]}>
+            <sphereGeometry args={[.36, 9, 6]} />
+            <meshStandardMaterial color="#090608" roughness={1} />
+          </mesh>
+          {[-.22,-.13,-.04,.05,.14,.23].map((x, index) => (
+            <mesh key={`fang-${index}`} position={[x, -.17, .39]} rotation={[0,0,Math.PI]}>
+              <coneGeometry args={[index % 2 ? .035 : .045, index % 2 ? .19 : .25, 5]} />
+              <meshStandardMaterial color="#C8B39A" roughness={.75} />
+            </mesh>
+          ))}
+        </group>
+        {[-.19,.19].map((x) => (
+          <group key={`eye-${x}`} position={[x,.13,.48]}>
+            <mesh scale={[1.35,.72,.5]}>
+              <sphereGeometry args={[.095,8,6]} />
+              <meshStandardMaterial color="#030203" roughness={1} />
+            </mesh>
+            <mesh position={[0,0,.065]}>
+              <sphereGeometry args={[.026,7,5]} />
+              <meshBasicMaterial color="#FF123D" toneMapped={false} />
+            </mesh>
+          </group>
+        ))}
+        <mesh position={[-.28,.34,.02]} rotation={[0,0,-.48]}>
+          <coneGeometry args={[.18,.46,5]} />
+          <meshStandardMaterial color="#0B080A" roughness={1} />
+        </mesh>
+        <mesh position={[.25,.31,.04]} rotation={[0,0,.67]} scale={[.72,1,1]}>
+          <coneGeometry args={[.18,.39,5]} />
+          <meshStandardMaterial color="#0B080A" roughness={1} />
+        </mesh>
+      </group>
+      {legs.map(([x,y,z,rz], index) => (
+        <group key={`leg-${index}`} ref={(leg) => { legRefs.current[index] = leg }} position={[x,y,z]} rotation={[0,0,rz]}>
+          <mesh position={[0,-.29,0]} rotation={[0,0,index < 2 ? rz * 1.4 : -rz]}>
+            <capsuleGeometry args={[.075,.62,4,7]} />
+            <meshStandardMaterial color="#170E11" roughness={.98} />
+          </mesh>
+          <mesh position={[index < 2 ? x * .18 : -x * .14,-.76,.1]} rotation={[.34,0,-rz * 1.8]}>
+            <capsuleGeometry args={[.06,.48,4,7]} />
+            <meshStandardMaterial color="#2C171C" roughness={.95} />
+          </mesh>
+          <mesh position={[index < 2 ? x * .18 : -x * .14,-1.03,.25]} scale={[1.2,.42,1.8]}>
+            <sphereGeometry args={[.13,8,6]} />
+            <meshStandardMaterial color="#080608" roughness={1} />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0,.02,0]} rotation={[-Math.PI / 2,0,0]}>
+        <ringGeometry args={[.28,1.18,24]} />
+        <meshBasicMaterial color="#050106" transparent opacity={.62} depthWrite={false} />
+      </mesh>
+    </group>
+  )
+}
+
 export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requestsThink = true }: SeekerProps) {
   const groupRef = useRef<THREE.Group>(null)
   const moveToward = useCollisionAwarePlanarMotion()
@@ -383,21 +516,23 @@ export default function Seeker({ playerRef, spawn, seekerId = 'seeker', requests
         </mesh>
       </group>
       <group ref={mutationRef}>
-        <CharacterModel id={seekerId === 'seeker-2' ? 'S02' : 'R00'} camo={false} movementRef={movementRef} />
-        <group ref={headJerkRef} position={[0, 1.62, 0.02]}>
+        {seekerId === 'seeker'
+          ? <MutantHound movementRef={movementRef} hunting={dangerLightActive} />
+          : <CharacterModel id="S02" camo={false} movementRef={movementRef} />}
+        {seekerId === 'seeker-2' && <group ref={headJerkRef} position={[0, 1.62, 0.02]}>
           <mesh scale={[0.44, 0.56, 0.42]}>
             <sphereGeometry args={[0.34, 10, 8]} />
             <meshStandardMaterial color="#100A10" roughness={0.9} transparent opacity={0.38} />
           </mesh>
-        </group>
-        <mesh ref={leftArmRef} position={[-0.43, 1.0, 0.02]} scale={[0.11, 0.78, 0.11]}>
+        </group>}
+        {seekerId === 'seeker-2' && <mesh ref={leftArmRef} position={[-0.43, 1.0, 0.02]} scale={[0.11, 0.78, 0.11]}>
           <capsuleGeometry args={[0.5, 1, 4, 7]} />
           <meshStandardMaterial color="#110810" roughness={0.95} transparent opacity={0.62} />
-        </mesh>
-        <mesh ref={rightArmRef} position={[0.43, 0.92, 0.05]} scale={[0.1, 0.91, 0.1]}>
+        </mesh>}
+        {seekerId === 'seeker-2' && <mesh ref={rightArmRef} position={[0.43, 0.92, 0.05]} scale={[0.1, 0.91, 0.1]}>
           <capsuleGeometry args={[0.5, 1, 4, 7]} />
           <meshStandardMaterial color="#0B060C" roughness={0.95} transparent opacity={0.62} />
-        </mesh>
+        </mesh>}
       </group>
       {dangerLightActive && (
         <pointLight ref={redLightRef} position={[0, 1.5, 0]} color="#FF163D" intensity={45} distance={10} decay={2} />
